@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Large / regenerable artifacts (kept outside OneDrive anyway)
+*.pt
+*.pth
+outputs/
+data/
+*.zip
+
+# Local-only context/handoff notes (never push)
+CONTEXT_HANDOFF.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
