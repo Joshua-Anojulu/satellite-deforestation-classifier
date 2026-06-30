@@ -1,0 +1,210 @@
+%% IEEEtran manuscript. Compile on Overleaf (pdfLaTeX) or locally with a TeX
+%% distribution. Figures are in paper/figures/ (relative path: figures/...).
+\documentclass[journal]{IEEEtran}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{url}
+\graphicspath{{figures/}}
+
+\begin{document}
+
+\title{A Lightweight, Reproducible Transfer-Learning Pipeline for Sentinel-2
+Land-Cover Classification and Cross-Frontier Deforestation Detection}
+
+\author{Joshua Anojulu% <-- update affiliation/email before submission
+\thanks{Code and data: \url{https://github.com/Joshua-Anojulu/satellite-deforestation-classifier}}}
+
+\maketitle
+
+\begin{abstract}
+Deforestation monitoring requires automated tools that are accurate,
+reproducible, and cheap to run. We fine-tune a ResNet50 convolutional neural
+network, pretrained on ImageNet, on the EuroSAT Sentinel-2 land-cover dataset,
+then apply the classifier to multi-date Sentinel-2 imagery to detect forest
+loss. The classifier reaches 98.26\% accuracy on a held-out EuroSAT test set
+(macro-F1 0.982), with near-perfect forest recall (0.997). Applied to two
+independent Amazonian deforestation frontiers---Rond\^onia and S\~ao F\'elix do
+Xingu, Brazil---across 2016 and 2024, it detects Forest$\rightarrow$non-Forest
+transitions benchmarked against Global Forest Watch (Hansen Global Forest
+Change). The detector is high-precision and coarse: 82--99\% of detected losses
+are confirmed by Global Forest Watch, and recall for wholesale clearings reaches
+71\%, while recall against all reported loss is low because the 640\,m patch
+resolution cannot resolve sub-patch losses that 30\,m analysis captures. The
+method generalizes across both frontiers, performing better where clearings are
+larger and cleaner. We further report a critical, often-overlooked finding: a
+naive application of the EuroSAT-trained model to modern atmospherically
+corrected imagery fails badly (72\% of rainforest misclassified as water) until
+per-channel radiometric \emph{moment matching} aligns the imagery to EuroSAT's
+statistics.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Remote sensing, land-cover classification, transfer learning, deforestation,
+Sentinel-2, EuroSAT, domain shift, change detection.
+\end{IEEEkeywords}
+
+\section{Introduction}
+\IEEEPARstart{T}{ropical} deforestation is a leading driver of biodiversity loss
+and carbon emissions, with sustained global tree-cover loss over the past two
+decades~\cite{hansen2013}, much of it driven by commodity agriculture and pasture
+expansion~\cite{curtis2018,fao2020}. Authoritative monitoring---most prominently
+Global Forest Watch, built on the Hansen Global Forest Change (GFC)
+product---relies on large-scale pipelines. A complementary question for students
+and small labs is whether a \emph{lightweight, reproducible} convolutional model,
+trainable in under half an hour on a single consumer GPU, can recover a useful
+deforestation signal, and how it compares to the authoritative product.
+
+This work contributes: (1) a reproducible EuroSAT classifier (ResNet50 transfer
+learning) reaching 98.26\% test accuracy with common preprocessing pitfalls
+corrected; (2) an end-to-end, georeferenced change-detection pipeline evaluated
+on \emph{two} independent study areas; and (3) a clear demonstration---and
+fix---of the radiometric domain shift that silently breaks EuroSAT-trained models
+on modern Sentinel-2 Level-2A imagery.
+
+\section{Methods}
+\subsection{Dataset}
+EuroSAT~\cite{helber2019} contains 27{,}000 Sentinel-2 patches (64$\times$64\,px
+at 10\,m/px) in 10 land-cover classes; we use the RGB version. We split 80/10/10
+(seed 42). Transforms are applied \emph{per split}: training receives random
+horizontal/vertical flips (valid for nadir imagery); validation/test receive
+none. A common tutorial error attaches one transform before splitting, leaking
+augmentation into evaluation or denying it to training; we avoid this with a
+per-split wrapper. Images are resized to 224$\times$224 and normalized with
+ImageNet statistics.
+
+\subsection{Model and Training}
+We load ResNet50~\cite{he2016} with ImageNet~\cite{deng2009} weights
+(\texttt{weights=ResNet50\_Weights.DEFAULT}) and replace the final layer with a
+10-way head. Training is two-phase: (i) backbone frozen, head trained 10 epochs
+(Adam, lr $10^{-3}$); (ii) all layers fine-tuned 8 epochs (lr $10^{-4}$). We use
+cross-entropy loss, batch size 64, automatic mixed precision, and retain the best
+checkpoint by validation accuracy. Training took $\sim$20\,min on an NVIDIA RTX
+4060 (8\,GB), CUDA 12.6, PyTorch 2.12, fixed seed.
+
+\subsection{Study Areas and Imagery}
+We selected two documented Amazonian frontiers, confirmed on the Global Forest
+Watch loss layer: Rond\^onia (Ariquemes ``fishbone'' frontier) and S\~ao F\'elix
+do Xingu, Par\'a (a cattle-driven, high-deforestation municipality). For each we
+retrieved cloud-masked ($\leq$20\%) median true-color (B04, B03, B02) Sentinel-2
+Level-2A composites~\cite{drusch2012} for the 2016 and 2024 dry seasons
+(June--September) from the Copernicus Data Space Ecosystem via openEO. The same
+seasonal window each year avoids phenology-driven false change. Scenes are
+$\sim$2743$\times$2433\,px (Rond\^onia, UTM 20S) and $\sim$2770$\times$2439\,px
+(S\~ao F\'elix, UTM 22S).
+
+\subsection{Radiometric Moment Matching}
+EuroSAT derives from hazier, less atmospherically corrected imagery with a blue
+cast (global RGB mean $\approx(86,97,103)$). Modern L2A composites are
+atmospherically corrected, so a naive render is catastrophically misclassified
+(72\% of a rainforest scene labeled water). We correct this by per-channel moment
+matching: each scene channel is linearly rescaled so its mean and standard
+deviation match EuroSAT's global statistics. Each date is matched to the same
+reference, also normalizing the two dates to a common radiometry.
+
+\subsection{Change Detection and Validation}
+Each scene is tiled into georeferenced 64$\times$64 (640\,m) patches, sliding the
+window with a 32\,px stride ($\sim$2$\times$ finer grid) while preserving the
+model's 640\,m footprint. A cell is flagged as deforestation if classified Forest
+in 2016 and \{AnnualCrop, Pasture, Industrial, Residential, PermanentCrop\} in
+2024. An optional softmax-confidence gate ($\geq$0.7 both dates) yields a
+higher-precision variant. We validate against the Hansen GFC-2024-v1.12
+\texttt{lossyear} raster, aggregating it to our grid: a reference cell is ``loss''
+if a fraction $f$ of its 30\,m pixels record loss in $(2016,2024]$; we sweep
+$f\in\{0,0.25,0.5,0.75\}$.
+
+\section{Results}
+\subsection{Classification}
+The classifier reaches 98.26\% test accuracy (2700 images; best validation
+98.52\%; macro-F1 0.982), all per-class F1 $\geq$0.97. Frequent confusions are
+interpretable: River$\rightarrow$Highway (thin linear features), among
+HerbaceousVegetation/AnnualCrop/Pasture (green ground cover), and
+Industrial$\leftrightarrow$Residential. Forest recall is 0.997, essential for the
+downstream task (Fig.~\ref{fig:cm}).
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{confusion_matrix.png}
+\caption{EuroSAT test-set confusion matrix (test accuracy 0.983).}
+\label{fig:cm}
+\end{figure}
+
+\subsection{Deforestation Detection and Validation}
+On the finer grid the detector flagged 152 loss cells in Rond\^onia and 195 in
+S\~ao F\'elix, concentrated at forest edges (Figs.~\ref{fig:rond}--\ref{fig:saof}).
+Validation (Table~\ref{tab:gfw}) shows high precision and resolution-limited
+recall: at any-loss, 82\% (Rond\^onia) and 99\% (S\~ao F\'elix) of detections are
+confirmed; for wholesale clearings ($\geq$75\% of a cell) recall reaches 71\%
+(Rond\^onia). Low recall against all loss is inherent to the 640\,m resolution.
+
+\begin{table}[!t]
+\caption{Global Forest Watch validation (finer grid).}
+\label{tab:gfw}
+\centering
+\begin{tabular}{llccc}
+\toprule
+Site & threshold & precision & recall & F1 \\
+\midrule
+Rond\^onia & any-loss & 0.82 & 0.03 & 0.07 \\
+Rond\^onia & $\geq$25\% & 0.45 & 0.16 & 0.24 \\
+Rond\^onia & $\geq$50\% & 0.24 & 0.26 & 0.25 \\
+S\~ao F\'elix & any-loss & 0.99 & 0.04 & 0.07 \\
+S\~ao F\'elix & $\geq$25\% & 0.65 & 0.15 & 0.25 \\
+S\~ao F\'elix & $\geq$50\% & 0.26 & 0.32 & 0.29 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{rondonia_change_changemap.png}
+\caption{Rond\^onia detected forest loss (red), 2016$\rightarrow$2024. Green:
+forest retained; grey: non-forest.}
+\label{fig:rond}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{sao_felix_change_changemap.png}
+\caption{S\~ao F\'elix do Xingu detected forest loss (red), 2016$\rightarrow$2024.}
+\label{fig:saof}
+\end{figure}
+
+\subsection{Operating Point and Generalization}
+A confidence gate trades recall for precision (e.g., Rond\^onia
+0.45$\rightarrow$0.55 at $\geq$25\%), giving a tunable high-precision alert mode.
+Across both frontiers the pipeline validates against GFW, performing better on
+S\~ao F\'elix's larger, cleaner clearings---evidence of generalization, with
+agreement tracking clearing morphology.
+
+\section{Discussion}
+The more important lesson than benchmark accuracy is that it did not transfer for
+free: without radiometric matching, a 98\%-accurate model produced meaningless
+output. As a detector the system is a high-precision, coarse-resolution screening
+tool---reliable when it flags a location, but under-reporting small or selective
+losses. Limitations: (i) European training applied to tropical Brazil (domain
+shift); (ii) 640\,m patches miss small/linear clearings, capping recall; (iii)
+RGB-only input discards informative spectral bands; (iv) residual cloud and
+phenology can cause false change; (v) moment matching approximates, but does not
+reproduce, EuroSAT radiometry.
+
+\section{Conclusion}
+A lightweight, reproducible ResNet50/EuroSAT pipeline recovers a deforestation
+signal that agrees strongly in precision with Global Forest Watch across two
+independent Amazonian frontiers, once radiometric domain shift is corrected.
+Future work: all 13 Sentinel-2 bands; region-matched fine-tuning; finer patches
+or segmentation for recall; and multi-temporal sequences beyond two snapshots.
+
+\begin{thebibliography}{9}
+\bibitem{hansen2013} M.~C. Hansen \emph{et al.}, ``High-Resolution Global Maps of 21st-Century Forest Cover Change,'' \emph{Science}, vol.~342, no.~6160, pp.~850--853, 2013.
+\bibitem{curtis2018} P.~G. Curtis \emph{et al.}, ``Classifying drivers of global forest loss,'' \emph{Science}, vol.~361, no.~6407, pp.~1108--1111, 2018.
+\bibitem{fao2020} FAO, \emph{Global Forest Resources Assessment 2020}, Rome, 2020.
+\bibitem{helber2019} P.~Helber, B.~Bischke, A.~Dengel, D.~Borth, ``EuroSAT: A Novel Dataset and Deep Learning Benchmark for Land Use and Land Cover Classification,'' \emph{IEEE JSTARS}, vol.~12, no.~7, pp.~2217--2226, 2019.
+\bibitem{he2016} K.~He, X.~Zhang, S.~Ren, J.~Sun, ``Deep Residual Learning for Image Recognition,'' in \emph{CVPR}, 2016.
+\bibitem{deng2009} J.~Deng \emph{et al.}, ``ImageNet: A Large-Scale Hierarchical Image Database,'' in \emph{CVPR}, 2009.
+\bibitem{drusch2012} M.~Drusch \emph{et al.}, ``Sentinel-2: ESA's Optical High-Resolution Mission for GMES Operational Services,'' \emph{Remote Sens. Environ.}, vol.~120, pp.~25--36, 2012.
+\end{thebibliography}
+
+\end{document}

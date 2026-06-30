@@ -10,7 +10,7 @@ Deforestation monitoring requires automated tools that are accurate, reproducibl
 
 ## 1. Introduction
 
-Tropical deforestation is a primary driver of biodiversity loss and carbon emissions [add citation: global forest-loss statistics, e.g. Hansen et al. 2013; FAO/WRI figures]. Authoritative monitoring—most prominently Global Forest Watch, built on the Hansen Global Forest Change (GFC) product—relies on large-scale processing pipelines. A complementary question for students and small labs is whether a *lightweight, reproducible* convolutional model, trainable in under half an hour on a single consumer GPU, can recover a useful deforestation signal and how it compares to the authoritative product.
+Tropical deforestation is a leading driver of biodiversity loss and carbon emissions, and the global tree-cover record shows sustained forest loss over the past two decades (Hansen et al., 2013), the majority of it in the tropics and driven substantially by commodity agriculture and pasture expansion (Curtis et al., 2018; FAO, 2020). Authoritative monitoring—most prominently Global Forest Watch, built on the Hansen Global Forest Change (GFC) product—relies on large-scale processing pipelines. A complementary question for students and small labs is whether a *lightweight, reproducible* convolutional model, trainable in under half an hour on a single consumer GPU, can recover a useful deforestation signal and how it compares to the authoritative product.
 
 This work makes three contributions:
 
@@ -26,7 +26,7 @@ EuroSAT [Helber et al., 2019, IEEE JSTARS] contains 27,000 Sentinel-2 image patc
 We split the data 80/10/10 into train/validation/test with a fixed random seed (42) for reproducibility. **Critically**, transforms are applied *per split*: training images receive random horizontal/vertical flips (valid for nadir imagery, which has no canonical orientation); validation and test images receive none. A common tutorial error attaches a single transform to the dataset *before* splitting, which either leaks augmentation into evaluation or denies it to training; we avoid this with a wrapper that applies each split's transform on the fly. All images are resized to 224×224 and normalized with ImageNet channel statistics.
 
 ### 2.2 Model and training
-We load ResNet50 with ImageNet weights (`weights=ResNet50_Weights.DEFAULT`; the deprecated `pretrained=True` API is avoided) and replace the final fully connected layer with a 10-way classifier. Training proceeds in two phases:
+We load ResNet50 (He et al., 2016) with ImageNet (Deng et al., 2009) weights (`weights=ResNet50_Weights.DEFAULT`; the deprecated `pretrained=True` API is avoided) and replace the final fully connected layer with a 10-way classifier. Training proceeds in two phases:
 
 - **Phase 1 (head only):** the backbone is frozen and only the new classifier head is trained for 10 epochs (Adam, lr = 1×10⁻³).
 - **Phase 2 (fine-tuning):** all layers are unfrozen and trained for 8 epochs at a 10× lower learning rate (lr = 1×10⁻⁴) so pretrained features adapt without being destroyed.
@@ -39,7 +39,7 @@ We selected two documented Amazonian deforestation frontiers, confirmed on the G
 - **Rondônia** (Ariquemes; box 63.10–62.85°W, 10.00–9.78°S), the classic "fishbone" clearing frontier.
 - **São Félix do Xingu, Pará** (52.10–51.85°W, 6.70–6.48°S), one of Brazil's highest-deforestation, cattle-driven municipalities.
 
-For each area we retrieved cloud-masked (≤20%) median true-color (B04, B03, B02) Sentinel-2 Level-2A composites for the **2016** and **2024** dry seasons (June–September) from the Copernicus Data Space Ecosystem via openEO. (The original guide's `scihub.copernicus.eu` was retired in 2023; we use the current service.) The same dry-season window is used both years to avoid false change from crop phenology. Scenes are ~2,743×2,433 px (Rondônia, UTM 20S) and ~2,770×2,439 px (São Félix, UTM 22S) at 10 m/px.
+For each area we retrieved cloud-masked (≤20%) median true-color (B04, B03, B02) Sentinel-2 (Drusch et al., 2012) Level-2A composites for the **2016** and **2024** dry seasons (June–September) from the Copernicus Data Space Ecosystem via openEO. (The original guide's `scihub.copernicus.eu` was retired in 2023; we use the current service.) The same dry-season window is used both years to avoid false change from crop phenology. Scenes are ~2,743×2,433 px (Rondônia, UTM 20S) and ~2,770×2,439 px (São Félix, UTM 22S) at 10 m/px.
 
 ### 2.4 Radiometric moment matching (a necessary step)
 EuroSAT was derived from hazier, less atmospherically corrected Sentinel-2 imagery with a pronounced blue cast (measured global RGB mean ≈ (86, 97, 103)). Modern Level-2A composites are atmospherically corrected, so a naive reflectance-to-8-bit render appears washed-out and is catastrophically misclassified—**72% of a Rondônia rainforest scene was labeled "SeaLake" (water)**. We correct this by per-channel *moment matching*: each scene channel is linearly rescaled so its mean and standard deviation match EuroSAT's global statistics. Each date is matched to the same EuroSAT reference, which additionally normalizes the two dates to a common radiometry for fair comparison. After matching, the forest scene classified sensibly (forest-dominant, ~1% water).
@@ -86,10 +86,13 @@ As a deforestation detector the system is best understood as a **high-precision,
 A lightweight, fully reproducible ResNet50/EuroSAT pipeline can recover a deforestation signal that agrees strongly (in precision) with Global Forest Watch across two independent Amazonian frontiers, once radiometric domain shift is corrected. Natural next steps: (1) use all 13 Sentinel-2 spectral bands rather than RGB; (2) fine-tune on region-matched tropical labels to reduce domain shift; (3) reduce patch size or use a segmentation model for finer recall; and (4) extend from two snapshots to multi-temporal sequences for more robust change detection.
 
 ## References
-1. P. Helber, B. Bischke, A. Dengel, D. Borth. "EuroSAT: A Novel Dataset and Deep Learning Benchmark for Land Use and Land Cover Classification." *IEEE JSTARS*, 2019.
+1. P. Helber, B. Bischke, A. Dengel, D. Borth. "EuroSAT: A Novel Dataset and Deep Learning Benchmark for Land Use and Land Cover Classification." *IEEE JSTARS*, 12(7):2217–2226, 2019.
 2. M. C. Hansen et al. "High-Resolution Global Maps of 21st-Century Forest Cover Change." *Science*, 342(6160):850–853, 2013. (Global Forest Watch data source.)
 3. K. He, X. Zhang, S. Ren, J. Sun. "Deep Residual Learning for Image Recognition." *CVPR*, 2016.
-4. [add citation] Global forest-loss statistics for the Introduction.
+4. P. G. Curtis, C. M. Slay, N. L. Harris, A. Tyukavina, M. C. Hansen. "Classifying drivers of global forest loss." *Science*, 361(6407):1108–1111, 2018.
+5. FAO. *Global Forest Resources Assessment 2020: Main report.* Food and Agriculture Organization of the United Nations, Rome, 2020.
+6. M. Drusch et al. "Sentinel-2: ESA's Optical High-Resolution Mission for GMES Operational Services." *Remote Sensing of Environment*, 120:25–36, 2012.
+7. J. Deng et al. "ImageNet: A Large-Scale Hierarchical Image Database." *CVPR*, 2009.
 
 ---
 
