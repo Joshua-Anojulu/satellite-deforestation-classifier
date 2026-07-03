@@ -2,10 +2,16 @@
 
 A lightweight, reproducible pipeline that fine-tunes **ResNet50** (ImageNet) on the
 **EuroSAT** Sentinel-2 dataset, then applies the classifier to two-date Sentinel-2
-imagery to **detect deforestation**, validated against **Global Forest Watch** —
-demonstrated on **two** Amazon frontiers.
+imagery to **detect deforestation**, validated against **Global Forest Watch** across
+**five frontiers in three biomes** — with a **label-free domain adaptation (AdaBN)** and
+a classical **NDVI baseline** for a fair, rigorous comparison.
 
 Trains locally on a single consumer GPU in ~20 minutes. No Google Colab required.
+
+> **TL;DR of the science:** benchmark accuracy (98%) does **not** transfer for free. The
+> classifier fails *catastrophically* out-of-biome (Congo Basin, F1 0.001) — a genuine
+> domain-shift failure on a verifiably clean image — and a simple label-free **AdaBN** pass
+> **rescues it** (F1 0.001 → 0.395). Across biomes, robustness beats peak in-biome F1.
 
 ![Python](https://img.shields.io/badge/python-3.14-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.12%20%2B%20CUDA-ee4c2c)
@@ -19,20 +25,31 @@ all per-class F1 ≥ 0.97, Forest recall 0.997.
 
 ![Confusion matrix](paper/figures/confusion_matrix.png)
 
-**Deforestation detection vs Global Forest Watch** (Hansen GFC-2024, 2016→2024, finer grid):
+**RGB vs 13-band multispectral:** a multispectral ResNet50 scores **98.22%** — no gain over
+RGB. The extra spectral bands don't help; RGB already saturates EuroSAT (justifying the
+RGB-only deforestation pipeline).
 
-| Study area | Loss cells | Precision (any-loss) | F1 (≥50% cell) |
-|---|---|---|---|
-| Rondônia (fishbone frontier) | 152 | 0.82 | 0.25 |
-| São Félix do Xingu (cattle frontier) | 195 | **0.99** | **0.29** |
+**Cross-biome deforestation detection vs Global Forest Watch** (Hansen GFC-2024, 2016→2024,
+finer grid). Three detectors compared — CNN, CNN+AdaBN (domain-adapted), and an NDVI
+baseline — each validated with 95% bootstrap CIs (F1 at GFW loss-frac ≥ 25%):
 
-The European-trained model generalizes to two distinct tropical frontiers, performing
-better on São Félix's larger, cleaner clearings. Detected forest loss (red) clusters at
-forest edges adjacent to cleared land:
+| Site | Biome | CNN | CNN+AdaBN | NDVI |
+|---|---|---|---|---|
+| Rondônia | Amazon | 0.241 | 0.245 | **0.495** |
+| São Félix do Xingu | Amazon | 0.233 | 0.224 | **0.304** |
+| Riau, Sumatra | Peat / palm oil | **0.244** | 0.227 | 0.181 |
+| Tshopo | Congo Basin | 0.001 | **0.395** | 0.220 |
+| Santa Cruz | Dry forest | **0.154** | 0.123 | 0.010 |
+| **mean ± sd** | | 0.174 ± 0.093 | **0.243 ± 0.087** | 0.242 ± 0.158 |
 
-Rondônia | São Félix do Xingu
-:---:|:---:
-![Rondônia change](paper/figures/rondonia_change_changemap.png) | ![São Félix change](paper/figures/sao_felix_change_changemap.png)
+![Cross-biome comparison](paper/figures/multisite_f1_comparison.png)
+
+**No method dominates across biomes** — each fails somewhere for an explainable reason. The
+plain CNN collapses in the Congo Basin (domain shift); **AdaBN recovers it with no labels**
+and is the most *consistent* (lowest variance, no catastrophic failure). NDVI is strongest on
+wet Amazon forest but fails on dry forest, where its NDVI-drop assumption breaks. With n=5
+sites, across-site differences are not statistically significant (Wilcoxon p > 0.4); the
+robust effects are per-site (non-overlapping bootstrap CIs).
 
 ## Key finding: radiometric domain shift
 
@@ -60,21 +77,29 @@ accuracy does not transfer for free.
 config.py              Central paths + hyper-parameters + class names
 download_data.py       Fetch + arrange EuroSAT (~90 MB)
 src/
-  data.py              Seeded split + per-split transforms
-  model.py             ResNet50 transfer-learning model
-  train.py             Two-phase training (freeze head -> fine-tune)
-  evaluate.py          Test metrics + confusion matrix
-  utils.py             Seeding / device helpers
+  data.py / data_ms.py     Seeded split + per-split transforms (RGB / 13-band)
+  model.py / model_ms.py   ResNet50 transfer model (RGB / multispectral conv1 inflation)
+  train.py / train_ms.py   Two-phase training (freeze head -> fine-tune)
+  evaluate.py / evaluate_ms.py  Test metrics + confusion matrix
+  utils.py                 Seeding / device helpers
 deforestation/
-  download_sentinel.py Two-date Sentinel-2 via Copernicus Data Space (openEO)
+  sites.py             Registry of 5 study areas (bbox + Hansen GFC tile + biome)
+  download_sentinel.py Single two-date Sentinel-2 grab via Copernicus (openEO)
+  download_sites.py    Batch RGB+NIR composite download for all sites
+  diagnose_composites.py  Per-scene data-quality diagnostics (cloud/nodata/NDVI)
   patchify.py          Georeferenced 64x64 tiling + EuroSAT moment-matching
-  classify_patches.py  Per-patch classification -> land-cover grid
+  classify_patches.py  Per-patch classification -> grid (--adabn domain adaptation)
   change_detection.py  Forest -> non-Forest change map + event list
+  ndvi_baseline.py     NDVI-difference baseline (per-scene Otsu threshold)
   validate_gfw.py      Validate vs Hansen Global Forest Change
+  run_all_sites.py     Full multi-site eval: CNN/AdaBN/NDVI + bootstrap CIs + Wilcoxon
+  plot_multisite.py    Cross-biome comparison figure
+experiments/
+  da_ablation.py       Controlled domain-adaptation ablation (moment/hist/AdaBN)
 paper/
-  paper.md             Full research-paper draft
-  results_summary.md   All numerical results
-  figures/             Confusion matrix + change maps
+  paper.md / paper.tex Full research-paper draft (Markdown + IEEE LaTeX)
+  results_summary.md   All numerical results (6 parts)
+  figures/             Confusion matrices + change maps + cross-biome comparison
 ```
 
 ## Setup
@@ -93,20 +118,28 @@ python download_data.py          # one-time EuroSAT download
 python -m src.train              # two-phase training -> best checkpoint
 python -m src.evaluate           # test metrics + confusion_matrix.png
 
+python -m src.train_ms          # optional: 13-band multispectral variant
+python -m src.evaluate_ms        # multispectral test metrics
+
 # Deforestation (needs a free Copernicus Data Space account):
-python deforestation/download_sentinel.py                       # interactive login
+python -m deforestation.download_sites          # batch download all 5 sites (RGB+NIR)
+python -m deforestation.diagnose_composites     # data-quality check
+python -m deforestation.run_all_sites           # full CNN/AdaBN/NDVI eval + stats + CIs
+python -m deforestation.plot_multisite          # cross-biome comparison figure
+
+# ...or a single scene, step by step:
 python deforestation/patchify.py <scene_A.tif> patches_A.npz --stride 32
-python deforestation/classify_patches.py patches_A.npz grid_A.npz
-# ...repeat for scene B, then:
+python deforestation/classify_patches.py patches_A.npz grid_A.npz --adabn
 python deforestation/change_detection.py grid_A.npz grid_B.npz out/change
 python -m deforestation.validate_gfw out/change_mask.npz --year-a 2016 --year-b 2024
 ```
 
 ## Limitations
 
-European training imagery applied to tropical Brazil (domain shift, partly mitigated by
-moment matching); 640 m patches miss small/linear clearings (caps recall); RGB-only drops
-informative spectral bands; cloud/seasonal phenology can cause false change. See
+European training imagery applied to the tropics (domain shift — severe out-of-biome, e.g.
+Congo Basin; mitigated by moment matching + AdaBN); n=5 sites limits across-site statistical
+power; 640 m patches miss small/linear clearings (caps recall); the NDVI baseline uses an
+absolute-drop rule (unfair in dry forest); AdaBN adapts only BatchNorm statistics. See
 `paper/paper.md` §4 for full discussion.
 
 ## Citation / data sources

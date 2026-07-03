@@ -24,6 +24,19 @@ FIGURE_DIR = PROJECT_ROOT / "paper" / "figures"
 
 BEST_CKPT = OUTPUT_DIR / "resnet50_eurosat_best.pt"
 
+# --- Multispectral (13-band) EuroSAT ---------------------------------------
+MS_DATA_DIR = Path(r"C:\Users\josha\ml-data\EuroSAT_MS\ds\images\remote_sensing\otherDatasets\sentinel_2\tif")
+MS_BEST_CKPT = OUTPUT_DIR / "resnet50_eurosat_ms_best.pt"
+# Sentinel-2 13-band order in EuroSAT all-bands GeoTIFFs.
+MS_BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07",
+            "B08", "B08A", "B09", "B10", "B11", "B12"]
+MS_NUM_BANDS = len(MS_BANDS)
+# Per-band mean/std measured over a 1,500-tif sample of EuroSAT all-bands.
+MS_BAND_MEAN = [1361.4, 1123.3, 1047.8, 946.5, 1203.0, 2036.0, 2417.1,
+                2341.5, 735.2, 12.0, 1837.5, 1124.6, 2645.9]
+MS_BAND_STD = [248.0, 332.8, 390.9, 588.6, 554.3, 858.0, 1090.6,
+               1123.1, 397.6, 4.3, 980.1, 748.5, 1234.2]
+
 # --- Reproducibility -------------------------------------------------------
 SEED = 42
 

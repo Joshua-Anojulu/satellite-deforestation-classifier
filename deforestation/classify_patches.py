@@ -22,7 +22,31 @@ from src.data import build_transforms
 from src.utils import get_device
 
 
-def classify(patches_npz: str, out_npz: str, batch_size: int = 128) -> None:
+def _adabn_adapt(model, patches, eval_transform, device, batch_size):
+    """AdaBN: recompute BatchNorm running stats on the TARGET scene's patches.
+
+    Puts every BatchNorm layer into cumulative-average mode (momentum=None) and
+    does label-free forward passes over the scene so the normalization statistics
+    match the target domain instead of EuroSAT. This is the Part-5 ablation winner
+    (recovered ~99% of a controlled domain-shift gap) applied to the real pipeline.
+    Each scene/date is adapted independently, so both change-detection dates are
+    normalized to their own radiometry.
+    """
+    for m in model.modules():
+        if isinstance(m, torch.nn.BatchNorm2d):
+            m.reset_running_stats()
+            m.momentum = None            # cumulative moving average -> exact stats
+    model.train()
+    with torch.no_grad():
+        for start in range(0, len(patches), batch_size):
+            chunk = patches[start:start + batch_size]
+            tensors = torch.stack([eval_transform(Image.fromarray(p)) for p in chunk]).to(device)
+            with torch.autocast(device_type=device.type, enabled=(device.type == "cuda")):
+                model(tensors)
+    model.eval()
+
+
+def classify(patches_npz: str, out_npz: str, batch_size: int = 128, adabn: bool = False) -> None:
     device = get_device()
     if not config.BEST_CKPT.exists():
         raise FileNotFoundError(f"No checkpoint at {config.BEST_CKPT}. Train the classifier first.")
@@ -37,6 +61,10 @@ def classify(patches_npz: str, out_npz: str, batch_size: int = 128) -> None:
     data = np.load(patches_npz, allow_pickle=True)
     patches = data["patches"]            # (N,64,64,3) uint8
     n_rows, n_cols = data["grid_shape"]
+
+    if adabn:
+        _adabn_adapt(model, patches, eval_transform, device, batch_size)
+        print(f"  [AdaBN] recomputed BatchNorm stats on {len(patches)} target patches")
 
     preds = np.empty(len(patches), dtype=np.int64)
     confs = np.empty(len(patches), dtype=np.float32)
@@ -75,5 +103,7 @@ if __name__ == "__main__":
     ap.add_argument("patches_npz", help="Output of patchify.py")
     ap.add_argument("out", help="Output land-cover .npz")
     ap.add_argument("--batch-size", type=int, default=128)
+    ap.add_argument("--adabn", action="store_true",
+                    help="Adapt BatchNorm stats to the target scene (domain adaptation).")
     args = ap.parse_args()
-    classify(args.patches_npz, args.out, args.batch_size)
+    classify(args.patches_npz, args.out, args.batch_size, adabn=args.adabn)

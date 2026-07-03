@@ -34,7 +34,10 @@ DEFAULT_GFC = ("/vsicurl/https://storage.googleapis.com/earthenginepartners-hans
 
 
 def align_and_score(change_mask_npz: str, gfc_path: str, year_a: int, year_b: int,
-                    out_json: str = None, min_loss_frac: float = 0.0) -> dict:
+                    out_json: str = None, min_loss_frac: float = 0.0,
+                    return_masks: bool = False):
+    """Score a change mask against GFW. Returns a metrics dict; if return_masks is
+    True, returns (dict, change_bool_2d, ref_bool_2d) so callers can bootstrap CIs."""
     data = np.load(change_mask_npz, allow_pickle=True)
     change = data["change"].astype(bool)
     n_rows, n_cols = int(data["grid_shape"][0]), int(data["grid_shape"][1])
@@ -94,6 +97,8 @@ def align_and_score(change_mask_npz: str, gfc_path: str, year_a: int, year_b: in
         with open(out_json, "w") as f:
             json.dump(result, f, indent=2)
         print(f"\nSaved -> {out_json}")
+    if return_masks:
+        return result, change, ref
     return result
 
 
