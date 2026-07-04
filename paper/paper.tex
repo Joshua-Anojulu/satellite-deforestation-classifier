@@ -14,7 +14,8 @@
 \title{Cross-Biome Deforestation Detection with a Lightweight EuroSAT Transfer
 Classifier: Domain Shift, Label-Free Adaptation, and a Spectral-Index Baseline}
 
-\author{Joshua Anojulu% <-- update affiliation/email before submission
+\author{Joshua Anojulu% co-author / mentor to be added before submission
+\thanks{J.~Anojulu is with the University of North Texas, Denton, TX, USA (e-mail: joshanojulu@gmail.com).}%
 \thanks{Code and data: \url{https://github.com/Joshua-Anojulu/satellite-deforestation-classifier}}}
 
 \maketitle
@@ -27,24 +28,26 @@ classifier behaves when pushed out of its training distribution and across biome
 We fine-tune a ResNet50 (ImageNet-pretrained) on EuroSAT, reaching 98.26\% test
 accuracy (macro-F1 0.982), and show a 13-band multispectral variant gives no
 measurable gain (98.22\%)---RGB already saturates the benchmark. We then apply the
-classifier to two-date (2016 vs 2024) Sentinel-2 imagery at \emph{five}
-deforestation frontiers across \emph{three} biomes and four countries (Amazon:
+classifier to two-date (2016 vs 2024) Sentinel-2 imagery at \emph{seven}
+deforestation frontiers across \emph{three} biomes and five countries (Amazon:
 Rond\^onia, S\~ao F\'elix do Xingu; Indonesian peat/palm: Riau; Congo Basin:
-Tshopo; dry forest: Santa Cruz), validating Forest$\rightarrow$non-Forest change
-against Global Forest Watch with bootstrap confidence intervals. Two findings
-drive the paper. First, benchmark accuracy does not transfer for free: a naive
-application to Level-2A imagery misclassifies 72\% of rainforest as water until
-radiometric \emph{moment matching} is applied, and even after matching the
-classifier \emph{fails catastrophically in the Congo Basin} (F1 0.001) despite a
-verifiably clean composite---a genuine domain-shift failure. Second, a simple
+Tshopo, Mai-Ndombe; dry forest: Santa Cruz, Gran Chaco), validating
+Forest$\rightarrow$non-Forest change against Global Forest Watch with bootstrap
+confidence intervals. Two findings drive the paper. First, benchmark accuracy does
+not transfer for free: a naive application to Level-2A imagery misclassifies 72\%
+of rainforest as water until radiometric \emph{moment matching} is applied, and
+even after matching the classifier \emph{fails catastrophically at 3 of 7 sites}
+(both Congo sites and Gran Chaco, with zero or all-wrong detections on verifiably
+clean composites)---a reproducible domain-shift failure. Second, a simple
 label-free adaptation---\emph{AdaBN}, recomputing BatchNorm statistics on each
-target scene---recovers this failure (Congo F1 0.001$\rightarrow$0.395, precision
-0.02$\rightarrow$0.70, non-overlapping bootstrap CIs) and yields the most
-consistent detector across biomes (mean F1 0.243$\pm$0.087). Against a classical
-NDVI-difference baseline (per-scene Otsu threshold) no method dominates: NDVI is
-strongest on wet evergreen forest but collapses on dry forest, while the adapted
-CNN is the most robust. We argue that cross-biome robustness, not peak in-biome
-F1, is the metric that matters.
+target scene---eliminates every catastrophic failure (e.g. Congo/Tshopo F1
+0.001$\rightarrow$0.395, precision 0.02$\rightarrow$0.70, non-overlapping bootstrap
+CIs) and yields the most consistent detector across biomes (lowest variance, mean
+F1 0.215$\pm$0.089), though recovery quality is site-dependent. Against a classical
+NDVI-difference baseline (per-scene Otsu threshold) no method dominates: NDVI has
+the highest mean F1 (0.283) but is itself site-fragile, while the adapted CNN never
+fails catastrophically. We argue that cross-biome robustness, not peak in-biome F1,
+is the metric that matters.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -67,7 +70,7 @@ generalizes across biomes}, and how it compares to both an authoritative referen
 and a classical spectral baseline.
 
 Most student and tutorial treatments stop at a single favorable study area. We do
-the opposite: we deploy the \emph{same} classifier across five frontiers spanning
+the opposite: we deploy the \emph{same} classifier across seven frontiers spanning
 three biomes, look for where it breaks, diagnose why, and test a cheap fix. This
 turns a ``does it work?'' demonstration into a small but rigorous robustness and
 domain-adaptation study. We contribute: (1) a reproducible EuroSAT classifier
@@ -104,21 +107,22 @@ inflation (each channel seeded with the mean of the pretrained RGB filters, scal
 $3/13$) and normalize per band; training is otherwise identical.
 
 \subsection{Study Areas and Imagery}
-We selected five documented frontiers across three biomes (Table~\ref{tab:sites}),
-confirmed on the GFW loss layer. For each we retrieved cloud-filtered
-($\leq$25\%) median composites of B04, B03, B02 (RGB) plus B08 (NIR) Sentinel-2
-Level-2A~\cite{drusch2012} for the 2016 and 2024 dry seasons (June--September) from
-the Copernicus Data Space Ecosystem via openEO. The same seasonal window each year
-avoids phenology-driven false change. Scenes are $\sim$2{,}700--2{,}800\,px per
-side at 10\,m/px in their local UTM zones (20S--47N), confirming the pipeline is
-not tied to one projection or hemisphere. Composite diagnostics (valid-pixel
-fraction, nodata, saturation, mean NDVI) confirm all ten scenes are clean (100\%
-valid, $\sim$0\% nodata, $<$2.5\% saturated); the Congo scene has healthy mean
-NDVI 0.66 and 75\% high-vegetation cover, so its classifier failure
-(Sec.~\ref{sec:crossbiome}) is domain shift, not data.
+We selected seven documented frontiers across three biomes, each biome replicated
+(Table~\ref{tab:sites}), confirmed on the GFW loss layer. For each we retrieved
+cloud-filtered ($\leq$25\%) median composites of B04, B03, B02 (RGB) plus B08 (NIR)
+Sentinel-2 Level-2A~\cite{drusch2012} for the 2016 and 2024 dry seasons
+(June--September) from the Copernicus Data Space Ecosystem via openEO. The same
+seasonal window each year avoids phenology-driven false change. Scenes are
+$\sim$2{,}700--2{,}800\,px per side at 10\,m/px in their local UTM zones (20S--47N),
+confirming the pipeline is not tied to one projection or hemisphere. Composite
+diagnostics (valid-pixel fraction, nodata, saturation, mean NDVI) confirm all 14
+scenes are clean (100\% valid, $\sim$0\% nodata, $<$3.5\% saturated); the Congo
+scenes have healthy mean NDVI (Tshopo 0.66, Mai-Ndombe 0.58--0.61) and 58--75\%
+high-vegetation cover, so their classifier failures (Sec.~\ref{sec:crossbiome}) are
+domain shift, not data.
 
 \begin{table}[!t]
-\caption{Study areas: five frontiers, three biomes, four countries.}
+\caption{Study areas: seven frontiers, three biomes, five countries.}
 \label{tab:sites}
 \centering
 \begin{tabular}{lll}
@@ -129,7 +133,9 @@ Rond\^onia & Amazon (Brazil) & 00N\_070W \\
 S\~ao F\'elix do Xingu & Amazon (Brazil) & 00N\_060W \\
 Riau, Sumatra & Peat / palm oil (Indonesia) & 10N\_100E \\
 Tshopo & Congo Basin (DRC) & 10N\_020E \\
+Mai-Ndombe & Congo Basin (DRC) & 00N\_010E \\
 Santa Cruz & Dry forest / soy (Bolivia) & 10S\_070W \\
+Gran Chaco & Dry forest (Paraguay) & 20S\_070W \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -150,7 +156,7 @@ Industrial, Residential, PermanentCrop\} in 2024. We validate against the Hansen
 GFC-2024-v1.12 \texttt{lossyear} raster: a reference cell is ``loss'' if a fraction
 $f$ of its 30\,m pixels record loss in $(2016,2024]$; we report $f\in\{0.25,0.5\}$.
 Each per-site F1 carries a 95\% bootstrap CI (1{,}000 cell resamples, seed 42);
-across-site differences use a Wilcoxon signed-rank test ($n{=}5$).
+across-site differences use a Wilcoxon signed-rank test ($n{=}7$).
 
 \subsection{Domain Adaptation: AdaBN}
 Domain shift moves intermediate activation distributions, which BatchNorm
@@ -210,20 +216,22 @@ Shifted, \textbf{AdaBN} & \textbf{0.979} & \textbf{99\%} \\
 
 \subsection{Cross-Biome Detection: CNN vs AdaBN vs NDVI}
 \label{sec:crossbiome}
-We evaluate three detectors at all five sites against GFW
+We evaluate three detectors at all seven sites against GFW
 (Fig.~\ref{fig:multisite}, Table~\ref{tab:crossbiome}). Four findings: (a) the
-plain CNN \emph{fails catastrophically} in the Congo Basin (F1 0.001, precision
-0.022), labeling dense rainforest as non-forest---genuine domain shift, given the
-clean composite; (b) \emph{AdaBN recovers it}, lifting Congo to F1 0.395, precision
-0.699, with non-overlapping bootstrap CIs ($[0.00,0.00]$ vs $[0.37,0.42]$); (c)
-AdaBN buys \emph{robustness}, raising cross-biome mean F1 0.174$\rightarrow$0.243
-and precision 0.32$\rightarrow$0.49 while reducing variance, though mildly negative
-on three already-working sites; (d) NDVI is strongest on wet forest but
-\emph{fails on dry forest} (0.010, even with adaptive $\tau$) because its
-absolute-drop assumption breaks when deciduous NDVI is already low. With $n{=}5$
-sites no across-site difference is significant (Wilcoxon $p>0.4$); the robust
-effects are per-site (non-overlapping CIs). We therefore claim robustness and
-biome-dependence, not a single winner.
+plain CNN \emph{fails catastrophically at 3 of 7 sites} (F1 $\leq$0.001 at Tshopo,
+Mai-Ndombe, and Gran Chaco---zero or all-wrong detections), labeling non-European
+forest as non-forest; both independent Congo sites fail, so this is a reproducible
+domain-shift failure on clean composites; (b) \emph{AdaBN eliminates every
+catastrophic failure}, e.g. Congo/Tshopo to F1 0.395, precision 0.699, with
+non-overlapping bootstrap CIs ($[0.00,0.00]$ vs $[0.37,0.42]$); recovery is
+site-dependent (full at Tshopo, noisier at Mai-Ndombe, which over-detects); (c)
+AdaBN buys \emph{robustness}: it is the most consistent detector (lowest variance,
+never zero) though its mean F1 (0.215) trails NDVI; (d) NDVI has the highest mean F1
+(0.283) and wins 4/7 sites but is itself \emph{site-fragile}---it wins Gran Chaco
+dry forest yet collapses at Santa Cruz (0.010), where the low NDVI dynamic range
+defeats the absolute-drop rule. With $n{=}7$ sites no across-site difference is
+significant (Wilcoxon $p>0.10$); the robust effects are per-site (non-overlapping
+CIs). We therefore claim robustness and biome-dependence, not a single winner.
 
 \begin{table}[!t]
 \caption{Per-site F1 vs GFW (loss-frac $\geq$25\%), 95\% bootstrap CI.}
@@ -237,10 +245,12 @@ Rond\^onia & Amazon & 0.241 & 0.245 & \textbf{0.495} \\
 S\~ao F\'elix & Amazon & 0.233 & 0.224 & \textbf{0.304} \\
 Riau & Peat/palm & \textbf{0.244} & 0.227 & 0.181 \\
 Tshopo & Congo & 0.001 & \textbf{0.395} & 0.220 \\
+Mai-Ndombe & Congo & 0.000 & 0.194 & \textbf{0.378} \\
 Santa Cruz & Dry forest & \textbf{0.154} & 0.123 & 0.010 \\
+Gran Chaco & Dry forest & 0.000 & 0.100 & \textbf{0.392} \\
 \midrule
-mean $\pm$ sd & & 0.174 & \textbf{0.243} & 0.242 \\
-              & & $\pm$.093 & $\pm$.087 & $\pm$.158 \\
+mean $\pm$ sd & & 0.125 & 0.215 & \textbf{0.283} \\
+              & & $\pm$.111 & $\pm$.089 & $\pm$.149 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -265,14 +275,17 @@ forest retained; grey: non-forest.}
 \section{Discussion}
 The headline lesson is that in-benchmark accuracy poorly predicts cross-biome
 behavior. A 98\%-accurate classifier fails two ways in the wild---silently
-(radiometric shift) and catastrophically out-of-biome (Congo)---and single-site
-evaluation hides both. The fix is cheap: AdaBN needs no labels, no retraining, and
-one forward pass, yet converts the worst site into a solid one and makes the
-detector the most consistent across biomes---a favorable trade for a screening
-tool, where a catastrophic blind spot is far worse than a few points of F1. The
-NDVI comparison keeps the CNN honest: a classical index beats it on wet evergreen
-forest; the two are complementary. \textbf{Limitations:} (i) $n{=}5$ sites limits
-across-site statistical power; (ii) 640\,m patches miss small/linear clearings,
+(radiometric shift) and catastrophically out-of-biome, at nearly half our sites and
+reproducibly across two independent Congo frontiers---and single-site evaluation
+hides both. The fix is cheap: AdaBN needs no labels, no retraining, and one forward
+pass, yet eliminates every catastrophic failure and makes the detector the most
+consistent across biomes---a favorable trade for a screening tool, where a
+catastrophic blind spot is far worse than a few points of mean F1 (even though NDVI's
+mean F1 is higher here). The NDVI comparison keeps the CNN honest: a classical index
+has the highest mean F1, but is itself site-fragile (it collapses at one dry-forest
+site), so the methods are complementary and none is safe alone. \textbf{Limitations:}
+(i) $n{=}7$ sites still limits across-site statistical power (two further sites were
+blocked by Copernicus availability); (ii) 640\,m patches miss small/linear clearings,
 capping recall; (iii) the NDVI baseline uses an absolute-drop rule (a relative
 variant might be fairer in dry forest); (iv) AdaBN adapts only BatchNorm (second
 -order) statistics---deeper shift is unaddressed; (v) European training applied to
@@ -281,10 +294,11 @@ the tropics; region-matched labels would reduce the underlying shift.
 \section{Conclusion}
 A lightweight, reproducible ResNet50/EuroSAT pipeline recovers a deforestation
 signal that agrees with Global Forest Watch---but only within its comfort zone.
-Pushed across biomes it fails outright in the Congo Basin, a failure we attribute
-to genuine domain shift and repair with a label-free AdaBN pass, yielding the most
-consistent detector across three biomes while a classical NDVI baseline remains
-strongest on wet evergreen forest. Robustness across biomes, not peak in-biome F1,
+Pushed across seven frontiers it fails outright at three of them (both Congo Basin
+sites and a dry-forest site), a reproducible failure we attribute to genuine domain
+shift and repair with a label-free AdaBN pass, yielding the most consistent detector
+across three biomes while a classical NDVI baseline has the highest mean F1 yet is
+itself site-fragile; no detector dominates. Robustness across biomes, not peak in-biome F1,
 is the metric that matters. Future work: more sites per biome for power; a
 shift-magnitude gate for selective adaptation; region-matched fine-tuning and
 deeper adaptation beyond BatchNorm; finer patches for sub-patch recall; and

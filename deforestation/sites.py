@@ -30,6 +30,23 @@ SITES = {
         "bbox": {"west": -61.90, "south": -16.90, "east": -61.65, "north": -16.70},
         "gfc_tile": "10S_070W", "biome": "Chiquitano dry forest / soy (Bolivia)",
     },
+    # --- second-round sites (added to raise across-site statistical power) ---
+    "mato_grosso": {
+        "bbox": {"west": -55.40, "south": -12.55, "east": -55.15, "north": -12.30},
+        "gfc_tile": "10S_060W", "biome": "Amazon (Brazil)",
+    },
+    "kalimantan": {
+        "bbox": {"west": 113.00, "south": -2.55, "east": 113.25, "north": -2.30},
+        "gfc_tile": "00N_110E", "biome": "Tropical peat / palm oil (Indonesia)",
+    },
+    "mai_ndombe_drc": {
+        "bbox": {"west": 18.40, "south": -2.55, "east": 18.65, "north": -2.30},
+        "gfc_tile": "00N_010E", "biome": "Congo Basin rainforest (DRC)",
+    },
+    "gran_chaco_paraguay": {
+        "bbox": {"west": -60.35, "south": -22.30, "east": -60.10, "north": -22.05},
+        "gfc_tile": "20S_070W", "biome": "Dry forest / Gran Chaco (Paraguay)",
+    },
 }
 
 

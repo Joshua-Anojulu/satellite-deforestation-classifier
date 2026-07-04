@@ -30,7 +30,9 @@ SITE_LABELS = {
     "sao_felix_xingu": "Sao Felix\n(Amazon)",
     "riau_sumatra": "Riau\n(peat/palm)",
     "tshopo_drc": "Tshopo\n(Congo)",
+    "mai_ndombe_drc": "Mai-Ndombe\n(Congo)",
     "santa_cruz_bolivia": "Santa Cruz\n(dry forest)",
+    "gran_chaco_paraguay": "Gran Chaco\n(dry forest)",
 }
 
 
@@ -41,7 +43,7 @@ def main():
     x = np.arange(len(sites))
     width = 0.26
 
-    fig, ax = plt.subplots(figsize=(10, 5.2))
+    fig, ax = plt.subplots(figsize=(13, 5.4))
     for i, (mk, label, color) in enumerate(METHODS):
         f1 = np.array([ps[s][mk][HEADLINE]["f1"] for s in sites])
         ci = np.array([ps[s][mk][HEADLINE].get("f1_ci95", [f, f])

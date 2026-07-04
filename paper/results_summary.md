@@ -125,10 +125,12 @@ accuracy over moment-matching alone - **confirmed on real target imagery in Part
 AdaBN rescues the Congo Basin site from F1 0.001 to 0.395. Metrics: da_ablation.json.
 
 ## Part 6 - Multi-biome robustness, domain adaptation, and a spectral baseline
-The pipeline was extended from two Amazon sites to **five deforestation frontiers spanning
-three biomes / four countries**, each with a matched two-date (2016 vs 2024) dry-season
-Sentinel-2 L2A composite (RGB+NIR, finer 32px-stride grid). Three detectors were evaluated
-head-to-head at every site, each validated against Global Forest Watch:
+The pipeline was extended from two Amazon sites to **seven deforestation frontiers spanning
+three biomes / five countries**, each with a matched two-date (2016 vs 2024) dry-season
+Sentinel-2 L2A composite (RGB+NIR, finer 32px-stride grid). Biomes are replicated: Amazon x2
+(Rondonia, Sao Felix), peat/palm x1 (Riau), Congo Basin x2 (Tshopo, Mai-Ndombe), dry forest
+x2 (Santa Cruz, Gran Chaco). Three detectors were evaluated head-to-head at every site,
+each validated against Global Forest Watch:
 - **CNN** - EuroSAT model + moment-matching, no target adaptation.
 - **CNN+AdaBN** - same model but BatchNorm running stats recomputed on each target scene
   (label-free domain adaptation; the Part-5 winner, now applied in-pipeline).
@@ -137,13 +139,17 @@ head-to-head at every site, each validated against Global Forest Watch:
 
 Rigor: results are reported at GFW loss-frac thresholds of **>=25% and >=50%**; each per-site
 F1 carries a **95% bootstrap CI** (1,000 resamples over grid cells, seed 42); across-site
-differences use a **Wilcoxon signed-rank** test (n=5).
+differences use a **Wilcoxon signed-rank** test (n=7).
+
+(Two further sites - Mato Grosso, Amazon, and Kalimantan, palm - were attempted but one date
+each is missing: Copernicus timeouts on Mato Grosso 2024, and no <=25%-cloud scene available
+for the persistently cloudy Kalimantan 2016. Left as future work to reach n=9.)
 
 ### Data quality first (rules out a confound)
-Composite diagnostics (deforestation/diagnose_composites.py) show all 10 scenes are clean:
-100% valid pixels, ~0% nodata, <2.5% saturated/bright. Tshopo/Congo specifically has healthy
-mean NDVI 0.66 and 75% high-vegetation cover - so the CNN's Congo failure below is **genuine
-domain shift, not cloud/data degradation**.
+Composite diagnostics (deforestation/diagnose_composites.py) show all scenes are clean:
+100% valid pixels, ~0% nodata, <3.5% saturated/bright. The Congo scenes have healthy mean NDVI
+(Tshopo 0.66, Mai-Ndombe 0.58-0.61) with 58-75% high-vegetation cover - so the CNN failures
+below are **genuine domain shift, not cloud/data degradation**.
 
 ### Headline table - F1 with 95% bootstrap CI (GFW loss-frac >= 25%)
 
@@ -153,56 +159,60 @@ domain shift, not cloud/data degradation**.
 | Sao Felix do Xingu | Amazon (Brazil) | 0.233 [0.20-0.27] | 0.224 [0.19-0.26] | **0.304 [0.27-0.34]** |
 | Riau, Sumatra | Peat / palm oil (Indonesia) | **0.244 [0.22-0.27]** | 0.227 [0.20-0.25] | 0.181 [0.16-0.20] |
 | Tshopo | Congo Basin rainforest (DRC) | 0.001 [0.00-0.00] | **0.395 [0.37-0.42]** | 0.220 [0.20-0.24] |
+| Mai-Ndombe | Congo Basin rainforest (DRC) | 0.000 [0.00-0.00] | 0.194 [0.17-0.22] | **0.378 [0.34-0.42]** |
 | Santa Cruz | Chiquitano dry forest / soy (Bolivia) | **0.154 [0.12-0.19]** | 0.123 [0.09-0.15] | 0.010 [0.00-0.03] |
+| Gran Chaco | Dry forest (Paraguay) | 0.000 [0.00-0.00] | 0.100 [0.06-0.14] | **0.392 [0.32-0.45]** |
 
 **Aggregate (mean +/- sd across sites):**
 
 | method | F1@25% | P@25% | R@25% | F1@50% |
 |---|---|---|---|---|
-| CNN | 0.174 +/- 0.093 | 0.321 | 0.130 | 0.154 +/- 0.110 |
-| **CNN+AdaBN** | **0.243 +/- 0.087** | **0.488** | 0.169 | 0.217 +/- 0.077 |
-| NDVI (Otsu) | 0.242 +/- 0.158 | 0.583 | 0.178 | 0.240 +/- 0.152 |
+| CNN | 0.125 +/- 0.111 | 0.230 | 0.093 | 0.110 +/- 0.116 |
+| CNN+AdaBN | 0.215 +/- 0.089 | 0.394 | 0.184 | 0.179 +/- 0.089 |
+| **NDVI (Otsu)** | **0.283 +/- 0.149** | **0.606** | 0.205 | 0.284 +/- 0.158 |
 
-Per-site wins @25%: CNN 2, CNN+AdaBN 1, NDVI 2. Wilcoxon (n=5): all pairwise p > 0.4
-(adabn-vs-cnn p=0.81, cnn-vs-ndvi p=0.44) - **no method is significantly better on average**
-at this site count. The significant, unambiguous effects live at the per-site cell level
-(non-overlapping bootstrap CIs), below.
+Per-site wins @25%: NDVI 4, CNN 2, CNN+AdaBN 1. Wilcoxon (n=7): all pairwise p > 0.10
+(adabn-vs-cnn p=0.47, cnn-vs-ndvi p=0.11, adabn-vs-ndvi p=0.38) - **no method is significantly
+better on average** at this site count, though plain-CNN-vs-NDVI trends toward NDVI. The
+significant, unambiguous effects live at the per-site cell level (non-overlapping bootstrap
+CIs), below.
 
 ### Findings
-1. **AdaBN fixes the catastrophic Congo failure (the key result).** Plain CNN in the Congo
-   Basin: F1 **0.001**, precision 0.022 (46 detections, essentially all wrong) - it labels
-   most dense rainforest as non-forest. AdaBN, recomputing BatchNorm stats on the Congo scene
-   with **no labels**, lifts this to F1 **0.395**, **precision 0.699**, recall 0.275 (958
-   detections). The bootstrap CIs do not overlap ([0.00-0.00] vs [0.37-0.42]): the recovery
-   is unambiguous. Congo goes from the worst site to AdaBN's best. This is Part 5's controlled
-   result reproduced on real target imagery.
-2. **AdaBN buys robustness, not a universal win.** It raises the cross-biome mean F1 0.174 ->
-   0.243 and mean precision 0.32 -> 0.49 while *reducing* variance, and eliminates the
-   catastrophic failure. But it is mildly negative on three already-working sites (Sao Felix
-   0.233->0.224, Riau 0.244->0.227, Santa Cruz 0.154->0.123). AdaBN helps most exactly where
-   domain shift is most severe.
-3. **NDVI is the strongest single method on wet evergreen forest but the most biome-fragile.**
-   It wins both Amazon sites (0.50, 0.30) yet **fails on dry forest** (Santa Cruz F1 0.010) -
-   *even with the adaptive Otsu threshold* - because NDVI-difference assumes a large absolute
-   NDVI drop on clearing, which does not hold when deciduous/dry-forest NDVI is already low
-   (scene mean ~0.42). This is a fundamental limitation of the spectral-difference baseline in
-   low-dynamic-range biomes, not just a threshold-tuning issue. NDVI also has the highest
-   variance (+/-0.158).
-4. **The CNN (even unadapted) degrades more gracefully than NDVI on dry forest** (0.154 vs
-   0.010) because it is not tied to a greenness cutoff.
+1. **The plain CNN fails catastrophically out-of-biome - and it is reproducible.** At 3 of 7
+   sites the unadapted CNN scores F1 <= 0.001: Tshopo (precision 0.022, 46 all-wrong
+   detections), Mai-Ndombe (**0 detections**), and Gran Chaco (**0 detections**). It classifies
+   most non-European forest as non-forest, so it finds no Forest->non-Forest transitions. Two
+   independent Congo sites both fail, so this is a systematic domain-shift failure, not a fluke.
+2. **AdaBN reliably eliminates the catastrophic failures (the key result).** Recomputing
+   BatchNorm stats on each target scene with **no labels** lifts all three zero-failures to
+   positive F1: Tshopo 0.001->**0.395** (precision 0.02->0.70; non-overlapping CIs
+   [0.00-0.00] vs [0.37-0.42]), Mai-Ndombe 0.000->0.194, Gran Chaco 0.000->0.100. Recovery
+   quality is *site-dependent* - full at Tshopo, but noisier at Mai-Ndombe (over-detects: 1626
+   cells vs 568 GFW, precision 0.13) and modest at Gran Chaco. AdaBN is the **most consistent**
+   detector (lowest variance, +/-0.089) and never fails catastrophically. It costs a little on
+   the already-working sites (Sao Felix, Riau, Santa Cruz each drop ~0.01-0.03).
+3. **NDVI has the highest mean F1 (0.283) and wins 4/7 sites, but is itself fragile.** It is
+   strongest on the Amazon (0.50, 0.30) and, notably, wins **both** Congo sites and Gran Chaco
+   dry forest - yet **collapses at Santa Cruz** (F1 0.010). So NDVI's dry-forest behavior is
+   *site-specific, not biome-uniform*: it works at Gran Chaco (clearing produces a large NDVI
+   drop the Otsu-thresholded rule catches) but fails at Santa Cruz (low dynamic range defeats
+   the absolute >=0.2-drop rule). Highest variance (+/-0.149).
+4. **On dry forest the two methods trade wins** (Santa Cruz: CNN 0.154 > NDVI 0.010; Gran Chaco:
+   NDVI 0.392 > CNN 0.000), underscoring that no single detector is safe across sites.
 
-**Central conclusion (arXiv thesis):** across three biomes no detector dominates; the useful
-findings are (a) a domain-shifted RGB CNN is *not* a free upgrade over a classical spectral
-index and can fail catastrophically out-of-biome, (b) that failure is genuine domain shift
-(clean composites), and (c) a simple, label-free **AdaBN** pass removes the catastrophic
-failure and yields the most *consistent* detector across biomes. Robustness, not peak F1, is
-the story.
+**Central conclusion (arXiv thesis):** across three biomes and seven frontiers **no detector
+dominates**; the useful, honest findings are (a) a domain-shifted RGB CNN is *not* a free
+upgrade over a classical spectral index and **fails catastrophically out-of-biome at nearly
+half the sites**, reproducibly; (b) those failures are genuine domain shift (verified clean
+composites); (c) a simple, label-free **AdaBN** pass removes every catastrophic failure and
+gives the most *consistent* detector, though not always to parity; and (d) the NDVI baseline,
+while strongest on average, is itself site-fragile. **Robustness, not peak F1, is the story.**
 
-Remaining honest caveats: n=5 sites limits across-site significance; the NDVI baseline could
-be made relative-drop-based to be fairer in dry forest (but the absolute-drop version is the
-textbook method); AdaBN's slight regressions on easy sites suggest a per-scene "adapt only if
-shift is large" gate is worth exploring. Data: multi_site_results.json; diagnostics in
-diagnose_composites.py; change maps in ml-data/deforestation/multi/.
+Remaining honest caveats: n=7 sites still limits across-site significance (target n=9+); the
+NDVI baseline could use a relative-drop rule to be fairer in low-NDVI biomes (but absolute-drop
+is the textbook method); AdaBN's regressions on easy sites and over-detection at Mai-Ndombe
+suggest a per-scene "adapt only if shift is large" gate. Data: multi_site_results.json;
+diagnostics in diagnose_composites.py; change maps in ml-data/deforestation/multi/.
 
 ## Critical note: radiometric domain shift (important methodological finding)
 EuroSAT was built from hazier, less-atmospherically-corrected Sentinel-2 (blue-cast;
