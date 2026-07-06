@@ -73,6 +73,8 @@ def _score(mask_npz, key, tag):
 
 
 def run_site(key):
+    if SITES[key].get("exclude"):
+        print(f"[skip] {key}: excluded (see sites.py)"); return None
     a_tif = SITES_DIR / f"{key}_2016.tif"
     b_tif = SITES_DIR / f"{key}_2024.tif"
     if not (a_tif.exists() and b_tif.exists()):

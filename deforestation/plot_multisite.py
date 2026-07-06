@@ -28,6 +28,7 @@ METHODS = [("cnn", "CNN", "#D55E00"),
 SITE_LABELS = {
     "rondonia": "Rondonia\n(Amazon)",
     "sao_felix_xingu": "Sao Felix\n(Amazon)",
+    "mato_grosso": "Mato Grosso\n(Amazon)",
     "riau_sumatra": "Riau\n(peat/palm)",
     "tshopo_drc": "Tshopo\n(Congo)",
     "mai_ndombe_drc": "Mai-Ndombe\n(Congo)",
@@ -60,7 +61,7 @@ def main():
     ax.set_xticks(x)
     ax.set_xticklabels([SITE_LABELS[s] for s in sites], fontsize=9)
     ax.set_ylabel("F1 vs Global Forest Watch (loss-frac ≥ 25%)")
-    ax.set_ylim(0, 0.62)
+    ax.set_ylim(0, 0.85)
     ax.set_title("Cross-biome deforestation detection: CNN vs AdaBN vs NDVI baseline\n"
                  "(bars = F1, whiskers = 95% bootstrap CI)", fontsize=11)
     ax.legend(frameon=False, ncol=3, loc="upper center", fontsize=9)

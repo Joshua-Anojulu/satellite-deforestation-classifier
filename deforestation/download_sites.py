@@ -35,9 +35,10 @@ def download(only=None):
             out = os.path.join(OUT_DIR, f"{key}_{tag}.tif")
             if os.path.exists(out) and os.path.getsize(out) > 0:
                 print(f"skip (exists): {out}"); continue
+            max_cloud = SITES[key].get("max_cloud", MAX_CLOUD)  # per-site override for cloudy biomes
             cube = con.load_collection(
                 "SENTINEL2_L2A", spatial_extent=bbox, temporal_extent=list(period),
-                bands=BANDS, max_cloud_cover=MAX_CLOUD)
+                bands=BANDS, max_cloud_cover=max_cloud)
             result = cube.reduce_dimension(dimension="t", reducer="median")
             for attempt in range(1, 5):  # retry transient 5xx errors
                 try:

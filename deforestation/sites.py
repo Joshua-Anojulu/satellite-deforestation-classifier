@@ -38,6 +38,16 @@ SITES = {
     "kalimantan": {
         "bbox": {"west": 113.00, "south": -2.55, "east": 113.25, "north": -2.30},
         "gfc_tile": "00N_110E", "biome": "Tropical peat / palm oil (Indonesia)",
+        # Equatorial Borneo is persistently cloudy with no strong dry season; the
+        # default <=25% cloud filter finds no 2016 scene, so allow more cloud and
+        # let the median-over-time composite suppress the residual.
+        "max_cloud": 65,
+        # EXCLUDED from the evaluation on data-quality grounds. The 65%-cloud 2016
+        # composite is radiometrically non-comparable to 2024 (mean NDVI 0.54 vs
+        # 0.77; forest 55% -> 90%, an implausible *increase* at a clearing frontier)
+        # - residual haze and/or recovery from the 2015 El Nino peat fires. Kept in
+        # the registry for the record; skipped by run_all_sites.
+        "exclude": True,
     },
     "mai_ndombe_drc": {
         "bbox": {"west": 18.40, "south": -2.55, "east": 18.65, "north": -2.30},
