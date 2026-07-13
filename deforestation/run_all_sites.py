@@ -8,20 +8,22 @@ For each study area (deforestation/sites.py) and both dates (2016, 2024):
     NDVI       - NDVI-difference baseline with a per-scene Otsu forest threshold
 
 Validation is reported at two GFW loss-fraction thresholds (>=25%, >=50%). Each
-per-site F1 gets a 95% bootstrap CI (resampling grid cells). Across sites we report
-mean +/- sd, a per-site "wins" tally, and Wilcoxon signed-rank tests (CNN+AdaBN vs
-CNN, and best-CNN vs NDVI). n=5 sites -> low inferential power, reported honestly.
+per-site F1 gets a 95% BLOCK-bootstrap CI (see bootstrap_f1) and across sites we
+report mean +/- sample sd, a per-site "wins" tally, and Wilcoxon signed-rank tests.
+With a handful of sites the across-site tests have little power; we report them anyway.
 
 Run:  python -m deforestation.run_all_sites
+      python -m deforestation.run_all_sites --rescore   # reuse existing masks, re-score only
 """
+import argparse
 import json
 from pathlib import Path
-from statistics import mean, pstdev
+from statistics import mean, stdev
 
 import numpy as np
 
 from deforestation import patchify, classify_patches, change_detection, ndvi_baseline
-from deforestation.validate_gfw import align_and_score
+from deforestation.validate_gfw import align_and_score, build_reference
 from deforestation.sites import SITES, gfc_url
 
 try:
@@ -37,42 +39,79 @@ HEADLINE = 0.25                # threshold used for the summary table / tests
 N_BOOT = 1000
 BOOT_SEED = 42
 
+STRIDE = 32                    # cell spacing for every detector in this study
 
-def bootstrap_f1(change, ref, n=N_BOOT, seed=BOOT_SEED):
-    """95% bootstrap CI on F1 by resampling grid cells with replacement."""
-    ch = np.asarray(change).ravel()
-    rf = np.asarray(ref).ravel()
-    N = ch.size
-    if N == 0:
+# Patches are PATCH px wide but stepped STRIDE px, so each ground pixel falls in up
+# to BLOCK x BLOCK cells. Cells are therefore NOT independent samples, and an i.i.d.
+# bootstrap over them understates the CI (we measured ~1.9x too narrow at Tshopo).
+# Resampling BLOCK x BLOCK tiles of cells restores the independent unit.
+BLOCK = patchify.PATCH // STRIDE   # == 2 for the 64px/32px grid used throughout
+
+# The CNN and NDVI detectors must land on the SAME cell grid: we build one GFW
+# reference per site (from the CNN mask) and score all three detectors against it,
+# which is only valid if their grids coincide. ndvi_baseline hardcodes its own
+# PATCH/STRIDE, so pin them together here rather than let them drift apart silently.
+assert (ndvi_baseline.PATCH, ndvi_baseline.STRIDE) == (patchify.PATCH, STRIDE), (
+    f"NDVI grid ({ndvi_baseline.PATCH}px/{ndvi_baseline.STRIDE}px) does not match the CNN "
+    f"grid ({patchify.PATCH}px/{STRIDE}px); the shared GFW reference would be invalid.")
+
+
+def bootstrap_f1(change, ref, n=N_BOOT, seed=BOOT_SEED, block=BLOCK):
+    """95% bootstrap CI on F1, resampling spatially disjoint BLOCKxBLOCK cell tiles.
+
+    tp/fp/fn are additive over disjoint tiles, so we precompute each tile's counts
+    and bootstrap over the tiles -- equivalent to resampling their cells together,
+    which is what respecting the overlap requires. block=1 reduces to the naive
+    (over-confident) i.i.d. cell bootstrap.
+    """
+    ch = np.asarray(change, dtype=bool)
+    rf = np.asarray(ref, dtype=bool)
+    if ch.size == 0:
         return (0.0, 0.0)
+    R, C = ch.shape
+
+    tps, fps, fns = [], [], []
+    for r0 in range(0, R, block):
+        for c0 in range(0, C, block):
+            c_t = ch[r0:r0 + block, c0:c0 + block]
+            r_t = rf[r0:r0 + block, c0:c0 + block]
+            tps.append(np.count_nonzero(c_t & r_t))
+            fps.append(np.count_nonzero(c_t & ~r_t))
+            fns.append(np.count_nonzero(~c_t & r_t))
+    tps = np.array(tps); fps = np.array(fps); fns = np.array(fns)
+
     rng = np.random.default_rng(seed)
-    f1s = np.empty(n)
-    for i in range(n):
-        idx = rng.integers(0, N, N)
-        c, r = ch[idx], rf[idx]
-        tp = np.count_nonzero(c & r)
-        fp = np.count_nonzero(c & ~r)
-        fn = np.count_nonzero(~c & r)
-        p = tp / (tp + fp) if (tp + fp) else 0.0
-        rr = tp / (tp + fn) if (tp + fn) else 0.0
-        f1s[i] = 2 * p * rr / (p + rr) if (p + rr) else 0.0
+    B = len(tps)
+    idx = rng.integers(0, B, size=(n, B))
+    tp = tps[idx].sum(1).astype(float)
+    fp = fps[idx].sum(1).astype(float)
+    fn = fns[idx].sum(1).astype(float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        p = np.where(tp + fp > 0, tp / (tp + fp), 0.0)
+        r = np.where(tp + fn > 0, tp / (tp + fn), 0.0)
+        f1s = np.where(p + r > 0, 2 * p * r / (p + r), 0.0)
     return (round(float(np.percentile(f1s, 2.5)), 4),
             round(float(np.percentile(f1s, 97.5)), 4))
 
 
-def _score(mask_npz, key, tag):
-    """Validate a change mask at all FRACS; attach a bootstrap F1 CI at HEADLINE."""
+def _score(mask_npz, key, refs):
+    """Validate a change mask at all FRACS; attach a block-bootstrap F1 CI at HEADLINE.
+
+    `refs` maps frac -> precomputed GFW reference grid for this site (built once and
+    shared across detectors, since it depends only on the cell grid).
+    """
     out = {}
     for frac in FRACS:
         res, change, ref = align_and_score(mask_npz, gfc_url(key), 2016, 2024,
-                                           min_loss_frac=frac, return_masks=True)
+                                           min_loss_frac=frac, return_masks=True,
+                                           ref=refs[frac], verbose=False)
         if frac == HEADLINE:
             res["f1_ci95"] = bootstrap_f1(change, ref)
         out[f"{frac:.2f}"] = res
     return out
 
 
-def run_site(key):
+def run_site(key, rescore=False):
     if SITES[key].get("exclude"):
         print(f"[skip] {key}: excluded (see sites.py)"); return None
     a_tif = SITES_DIR / f"{key}_2016.tif"
@@ -80,40 +119,56 @@ def run_site(key):
     if not (a_tif.exists() and b_tif.exists()):
         print(f"[skip] {key}: scenes missing"); return None
 
-    pa, pb = WORK / f"{key}_pA.npz", WORK / f"{key}_pB.npz"
-    patchify.patchify(str(a_tif), str(pa), stride=32)
-    patchify.patchify(str(b_tif), str(pb), stride=32)
+    masks = {m: WORK / f"{key}_{m}_mask.npz" for m in ("cnn", "adabn", "ndvi")}
 
-    # --- CNN (no adaptation) ---
-    ga, gb = WORK / f"{key}_gA.npz", WORK / f"{key}_gB.npz"
-    classify_patches.classify(str(pa), str(ga))
-    classify_patches.classify(str(pb), str(gb))
-    change_detection.detect(str(ga), str(gb), str(WORK / f"{key}_cnn"))
-    cnn = _score(str(WORK / f"{key}_cnn_mask.npz"), key, "cnn")
+    if rescore and all(p.exists() for p in masks.values()):
+        print(f"[rescore] {key}: reusing existing masks")
+    else:
+        pa, pb = WORK / f"{key}_pA.npz", WORK / f"{key}_pB.npz"
+        patchify.patchify(str(a_tif), str(pa), stride=STRIDE)
+        patchify.patchify(str(b_tif), str(pb), stride=STRIDE)
 
-    # --- CNN + AdaBN (domain adaptation) ---
-    gaz, gbz = WORK / f"{key}_gA_bn.npz", WORK / f"{key}_gB_bn.npz"
-    classify_patches.classify(str(pa), str(gaz), adabn=True)
-    classify_patches.classify(str(pb), str(gbz), adabn=True)
-    change_detection.detect(str(gaz), str(gbz), str(WORK / f"{key}_adabn"))
-    adabn = _score(str(WORK / f"{key}_adabn_mask.npz"), key, "adabn")
+        # --- CNN (no adaptation) ---
+        ga, gb = WORK / f"{key}_gA.npz", WORK / f"{key}_gB.npz"
+        classify_patches.classify(str(pa), str(ga))
+        classify_patches.classify(str(pb), str(gb))
+        change_detection.detect(str(ga), str(gb), str(WORK / f"{key}_cnn"))
 
-    # --- NDVI baseline (per-scene Otsu threshold) ---
-    ndvi_baseline.baseline(str(a_tif), str(b_tif), str(WORK / f"{key}_ndvi_mask.npz"))
-    ndvi = _score(str(WORK / f"{key}_ndvi_mask.npz"), key, "ndvi")
+        # --- CNN + AdaBN (domain adaptation) ---
+        gaz, gbz = WORK / f"{key}_gA_bn.npz", WORK / f"{key}_gB_bn.npz"
+        classify_patches.classify(str(pa), str(gaz), adabn=True)
+        classify_patches.classify(str(pb), str(gbz), adabn=True)
+        change_detection.detect(str(gaz), str(gbz), str(WORK / f"{key}_adabn"))
 
-    return {"biome": SITES[key]["biome"], "cnn": cnn, "adabn": adabn, "ndvi": ndvi}
+        # --- NDVI baseline (per-scene Otsu threshold) ---
+        ndvi_baseline.baseline(str(a_tif), str(b_tif), str(masks["ndvi"]))
+
+    # The GFW reference depends only on the cell grid, which all three detectors
+    # share, so read the (remote) GFC tile once per threshold instead of six times.
+    print(f"  building GFW reference for {key} ...", flush=True)
+    refs = {frac: build_reference(str(masks["cnn"]), gfc_url(key), 2016, 2024,
+                                  min_loss_frac=frac) for frac in FRACS}
+
+    return {"biome": SITES[key]["biome"],
+            "cnn": _score(str(masks["cnn"]), key, refs),
+            "adabn": _score(str(masks["adabn"]), key, refs),
+            "ndvi": _score(str(masks["ndvi"]), key, refs)}
 
 
 def _f1(site_res, method, frac=HEADLINE):
     return site_res[method][f"{frac:.2f}"]["f1"]
 
 
-def main():
+def _sd(xs):
+    """Sample sd (n-1). The population sd understates spread on a site sample."""
+    return stdev(xs) if len(xs) > 1 else 0.0
+
+
+def main(rescore=False):
     results = {}
     for key in SITES:
         print(f"\n========== {key} ==========")
-        r = run_site(key)
+        r = run_site(key, rescore=rescore)
         if r:
             results[key] = r
 
@@ -137,8 +192,8 @@ def main():
                 f1s = [_f1(results[k], mm, frac) for k in keys]
                 ps = [results[k][mm][f"{frac:.2f}"]["precision"] for k in keys]
                 rs = [results[k][mm][f"{frac:.2f}"]["recall"] for k in keys]
-                print(f"{label:10s} @{frac:.0%}  F1 {mean(f1s):.3f}+/-{pstdev(f1s):.3f}  "
-                      f"P {mean(ps):.3f}+/-{pstdev(ps):.3f}  R {mean(rs):.3f}+/-{pstdev(rs):.3f}")
+                print(f"{label:10s} @{frac:.0%}  F1 {mean(f1s):.3f}+/-{_sd(f1s):.3f}  "
+                      f"P {mean(ps):.3f}+/-{_sd(ps):.3f}  R {mean(rs):.3f}+/-{_sd(rs):.3f}")
 
         # Per-site wins at headline threshold
         wins = {m[0]: 0 for m in methods}
@@ -147,7 +202,7 @@ def main():
             wins[best[0]] += 1
         print(f"\nPer-site wins @{HEADLINE:.0%}: " + ", ".join(f"{k}={v}" for k, v in wins.items()))
 
-        # Paired signed-rank tests across sites (n=5 -> low power; reported honestly)
+        # Paired signed-rank tests across sites (few sites -> low power; reported honestly)
         def paired(a_m, b_m):
             a = [_f1(results[k], a_m) for k in keys]
             b = [_f1(results[k], b_m) for k in keys]
@@ -170,12 +225,24 @@ def main():
             print(f"  {name:16s} mean_diff={t['mean_diff']:+.4f}  "
                   f"W={t['wilcoxon_stat']}  p={t['wilcoxon_p']}")
 
+        summary = {}
+        for label, mm in methods:
+            f1s = [_f1(results[k], mm) for k in keys]
+            summary[mm] = {"mean_f1": round(mean(f1s), 4), "sd_f1": round(_sd(f1s), 4)}
+
         out = {"headline_frac": HEADLINE, "n_sites": len(keys),
-               "per_site": results, "wins_at_headline": wins, "paired_tests": tests}
+               "bootstrap": {"n_resamples": N_BOOT, "seed": BOOT_SEED,
+                             "unit": f"{BLOCK}x{BLOCK} cell block (stride-32 overlap)"},
+               "per_site": results, "summary_at_headline": summary,
+               "wins_at_headline": wins, "paired_tests": tests}
         with open(WORK / "multi_site_results.json", "w") as f:
             json.dump(out, f, indent=2)
         print(f"\nSaved -> {WORK / 'multi_site_results.json'}")
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser(description="Multi-site cross-biome evaluation.")
+    ap.add_argument("--rescore", action="store_true",
+                    help="Reuse existing change masks; recompute scores/CIs only.")
+    args = ap.parse_args()
+    main(rescore=args.rescore)

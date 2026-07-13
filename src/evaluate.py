@@ -50,7 +50,9 @@ def main():
     model = build_model().to(device)
     ckpt = torch.load(config.BEST_CKPT, map_location=device)
     model.load_state_dict(ckpt["model_state"])
-    print(f"Loaded checkpoint (val_acc={ckpt.get('val_acc'):.4f})")
+    val_acc = ckpt.get("val_acc")
+    print(f"Loaded checkpoint (val_acc={val_acc:.4f})" if val_acc is not None
+          else "Loaded checkpoint (no val_acc recorded)")
 
     labels, preds = collect_predictions(model, test_loader, device)
     acc = (labels == preds).mean()

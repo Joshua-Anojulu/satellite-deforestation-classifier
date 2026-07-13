@@ -29,7 +29,7 @@ MS_DATA_DIR = Path(r"C:\Users\josha\ml-data\EuroSAT_MS\ds\images\remote_sensing\
 MS_BEST_CKPT = OUTPUT_DIR / "resnet50_eurosat_ms_best.pt"
 # Sentinel-2 13-band order in EuroSAT all-bands GeoTIFFs.
 MS_BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07",
-            "B08", "B08A", "B09", "B10", "B11", "B12"]
+            "B08", "B8A", "B09", "B10", "B11", "B12"]
 MS_NUM_BANDS = len(MS_BANDS)
 # Per-band mean/std measured over a 1,500-tif sample of EuroSAT all-bands.
 MS_BAND_MEAN = [1361.4, 1123.3, 1047.8, 946.5, 1203.0, 2036.0, 2417.1,

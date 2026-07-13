@@ -16,9 +16,16 @@ We then evaluate the RGB classifier under five conditions:
   shifted, hist    - per-channel histogram (CDF) matching to an EuroSAT reference
   shifted, adabn   - recompute BatchNorm running stats on the shifted domain
 
+Note on a deliberate asymmetry: the moment-match and histogram-match conditions get
+their reference statistics from the CLEAN version of the very images being scored,
+which is strictly more information than they would have in deployment. That favors
+those two baselines, so AdaBN's margin over them is if anything understated. We keep
+the leak rather than removing it because it makes the AdaBN result conservative.
+
 Run:  python -m experiments.da_ablation
 """
 import copy
+import json
 
 import numpy as np
 import torch
@@ -134,10 +141,14 @@ def main():
     print("\nDomain-adaptation ablation (EuroSAT RGB classifier, controlled shift):")
     print(f"  {'condition':28s}  accuracy   recovery")
     base_acc = results["clean (upper bound)"]; low = results["shifted, no adaptation"]
-    import json
+    gap = base_acc - low
     for k, v in results.items():
-        rec = "" if k.startswith("clean") else f"{(v-low)/(base_acc-low)*100:5.1f}% of gap"
+        if k.startswith("clean") or gap <= 0:
+            rec = ""
+        else:
+            rec = f"{(v - low) / gap * 100:5.1f}% of gap"
         print(f"  {k:28s}   {v:.4f}    {rec}")
+    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     with open(config.OUTPUT_DIR / "da_ablation.json", "w") as f:
         json.dump({k: float(v) for k, v in results.items()}, f, indent=2)
     print(f"\nSaved -> {config.OUTPUT_DIR / 'da_ablation.json'}")

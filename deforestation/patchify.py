@@ -37,13 +37,23 @@ EUROSAT_STD = np.array([49.7, 34.0, 29.2], dtype=np.float32)
 
 
 def _moment_match(scene: np.ndarray) -> np.ndarray:
-    """scene: (3,H,W) raw reflectance, natural R,G,B order. Return matched (3,H,W) uint8."""
+    """scene: (3,H,W) raw reflectance, natural R,G,B order. Return matched (3,H,W) uint8.
+
+    Source statistics are measured over VALID pixels only. Compositing gaps are
+    encoded as zero in every band, and folding them into the mean/std would drag
+    the whole scene's match toward black in proportion to how gappy it is. (Our
+    eight composites are ~100% valid, so this is currently a no-op; it matters for
+    any future scene that is not.)
+    """
+    valid = ~np.all(scene == 0, axis=0)          # (H,W)
+    if not valid.any():
+        raise ValueError("Scene is entirely nodata.")
     out = np.empty_like(scene, dtype=np.float32)
-    flat = scene.reshape(3, -1)
-    src_mean = flat.mean(1)
-    src_std = flat.std(1)
     for c in range(3):
-        out[c] = (scene[c] - src_mean[c]) / (src_std[c] + 1e-6) * EUROSAT_STD[c] + EUROSAT_MEAN[c]
+        band = scene[c]
+        src_mean = band[valid].mean()
+        src_std = band[valid].std()
+        out[c] = (band - src_mean) / (src_std + 1e-6) * EUROSAT_STD[c] + EUROSAT_MEAN[c]
     return np.clip(out, 0, 255).astype(np.uint8)
 
 

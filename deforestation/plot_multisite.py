@@ -69,11 +69,14 @@ def main():
     ax.grid(axis="y", color="#e6e6e6", lw=0.8)
     ax.set_axisbelow(True)
 
-    # Annotate the headline AdaBN recovery at Congo.
+    # Annotate the headline AdaBN recovery at Congo. Numbers are read from the
+    # results JSON, not hardcoded, so the caption cannot drift from the data.
     if "tshopo_drc" in sites:
         xi = sites.index("tshopo_drc")
-        ax.annotate("AdaBN rescues\nCongo (0.00→0.40)",
-                    xy=(xi + 0 * width, 0.40), xytext=(xi - 0.15, 0.55),
+        cnn_f1 = ps["tshopo_drc"]["cnn"][HEADLINE]["f1"]
+        ada_f1 = ps["tshopo_drc"]["adabn"][HEADLINE]["f1"]
+        ax.annotate(f"AdaBN rescues\nCongo ({cnn_f1:.2f}→{ada_f1:.2f})",
+                    xy=(xi + 0 * width, ada_f1), xytext=(xi - 0.15, ada_f1 + 0.15),
                     fontsize=8, color="#0072B2", ha="center",
                     arrowprops=dict(arrowstyle="->", color="#0072B2", lw=1))
 

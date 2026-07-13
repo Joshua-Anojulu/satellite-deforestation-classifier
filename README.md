@@ -8,10 +8,10 @@ a classical **NDVI baseline** for a fair, rigorous comparison.
 
 Trains locally on a single consumer GPU in ~20 minutes. No Google Colab required.
 
-> **TL;DR of the science:** benchmark accuracy (98%) does **not** transfer for free. The
-> classifier fails *catastrophically* out-of-biome (Congo Basin, F1 0.001) — a genuine
-> domain-shift failure on a verifiably clean image — and a simple label-free **AdaBN** pass
-> **rescues it** (F1 0.001 → 0.395). Across biomes, robustness beats peak in-biome F1.
+> **TL;DR of the science:** benchmark accuracy (98%) does not transfer for free. The
+> classifier collapses out of biome (Congo Basin, F1 0.001), a domain-shift failure on a
+> composite our diagnostics show to be clean, and a label-free **AdaBN** pass rescues it
+> (F1 0.001 to 0.397). Across biomes, robustness beats peak in-biome F1.
 
 ![Python](https://img.shields.io/badge/python-3.14-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.12%20%2B%20CUDA-ee4c2c)
@@ -29,32 +29,36 @@ all per-class F1 ≥ 0.97, Forest recall 0.997.
 RGB. The extra spectral bands don't help; RGB already saturates EuroSAT (justifying the
 RGB-only deforestation pipeline).
 
-**Cross-biome deforestation detection vs Global Forest Watch** (Hansen GFC-2024, 2016→2024,
-finer grid). Three detectors compared — CNN, CNN+AdaBN (domain-adapted), and an NDVI
-baseline — across **8 frontiers / 3 biomes**, each validated with 95% bootstrap CIs (F1 at
+**Cross-biome deforestation detection vs Global Forest Watch** (Hansen GFC-2024, 2016 to 2024,
+finer grid). Three detectors go head to head: CNN, CNN+AdaBN (domain-adapted), and an NDVI
+baseline, across **8 frontiers / 3 biomes**, each carrying a 95% block-bootstrap CI (F1 at
 GFW loss-frac ≥ 25%):
 
 | Site | Biome | CNN | CNN+AdaBN | NDVI |
 |---|---|---|---|---|
-| Rondônia | Amazon | 0.241 | 0.245 | **0.495** |
-| São Félix do Xingu | Amazon | 0.233 | 0.224 | **0.304** |
-| Mato Grosso | Amazon | 0.480 | 0.492 | **0.712** |
-| Riau, Sumatra | Peat / palm oil | **0.244** | 0.227 | 0.181 |
-| Tshopo | Congo Basin | 0.001 | **0.395** | 0.220 |
-| Mai-Ndombe | Congo Basin | 0.000 | 0.194 | **0.378** |
-| Santa Cruz | Dry forest | **0.154** | 0.123 | 0.010 |
+| Rondônia | Amazon | 0.234 | 0.242 | **0.495** |
+| São Félix do Xingu | Amazon | 0.232 | 0.229 | **0.304** |
+| Mato Grosso | Amazon | 0.479 | 0.486 | **0.711** |
+| Riau, Sumatra | Peat / palm oil | **0.248** | 0.222 | 0.177 |
+| Tshopo | Congo Basin | 0.001 | **0.397** | 0.220 |
+| Mai-Ndombe | Congo Basin | 0.000 | 0.198 | **0.384** |
+| Santa Cruz | Dry forest | **0.156** | 0.126 | 0.010 |
 | Gran Chaco | Dry forest | 0.000 | 0.100 | **0.392** |
-| **mean ± sd** | | 0.169 ± 0.157 | 0.250 ± 0.124 | **0.336 ± 0.199** |
+| **mean ± sd** | | 0.169 ± 0.168 | 0.250 ± 0.130 | **0.337 ± 0.213** |
 
 ![Cross-biome comparison](paper/figures/multisite_f1_comparison.png)
 
-**No method dominates across biomes** — each fails somewhere for an explainable reason. The
-plain CNN is **bimodal**: it fails catastrophically at 3 of 8 sites (both Congo sites + Gran
-Chaco: zero/all-wrong detections — reproducible domain shift) yet scores its best in-domain
-(Mato Grosso, 0.48). **AdaBN eliminates every catastrophic failure with no labels** and is the
-most *consistent* (lowest variance). NDVI has the highest mean F1 but is itself site-fragile
-(wins Gran Chaco dry forest, yet collapses at Santa Cruz). Across sites the plain CNN is now
-marginally significantly worse than NDVI (Wilcoxon p=0.055); other pairs aren't significant.
+No method dominates across biomes, and each one fails somewhere for a reason we can name. The
+plain CNN is bimodal: it collapses at 3 of 8 sites (both Congo sites and Gran Chaco return zero
+or all-wrong detections, a reproducible domain shift) yet scores its best in-domain at Mato
+Grosso (0.479). AdaBN clears every collapse without labels and gives the steadiest detector
+(lowest spread). NDVI takes the highest mean F1 and still breaks on its own, winning Gran Chaco
+dry forest and collapsing at Santa Cruz. Across sites the plain CNN trails NDVI at the edge of
+significance (Wilcoxon p=0.055); no other pair separates.
+
+Cells overlap by half (64 px patches on a 32 px stride), so the intervals resample 2×2 cell
+blocks rather than individual cells. A naive i.i.d. cell bootstrap reports intervals about
+1.9× too narrow.
 
 ## Key finding: radiometric domain shift
 
@@ -97,7 +101,8 @@ deforestation/
   change_detection.py  Forest -> non-Forest change map + event list
   ndvi_baseline.py     NDVI-difference baseline (per-scene Otsu threshold)
   validate_gfw.py      Validate vs Hansen Global Forest Change
-  run_all_sites.py     Full multi-site eval: CNN/AdaBN/NDVI + bootstrap CIs + Wilcoxon
+  run_all_sites.py     Full multi-site eval: CNN/AdaBN/NDVI + block-bootstrap CIs + Wilcoxon
+                       (--rescore reuses existing masks, re-scores only)
   plot_multisite.py    Cross-biome comparison figure
 experiments/
   da_ablation.py       Controlled domain-adaptation ablation (moment/hist/AdaBN)

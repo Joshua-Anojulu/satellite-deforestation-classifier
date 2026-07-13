@@ -55,7 +55,9 @@ def main():
     model = build_ms_model(in_channels=config.MS_NUM_BANDS).to(device)
     ckpt = torch.load(config.MS_BEST_CKPT, map_location=device)
     model.load_state_dict(ckpt["model_state"])
-    print(f"Loaded MS checkpoint (val_acc={ckpt.get('val_acc'):.4f})")
+    val_acc = ckpt.get("val_acc")
+    print(f"Loaded MS checkpoint (val_acc={val_acc:.4f})" if val_acc is not None
+          else "Loaded MS checkpoint (no val_acc recorded)")
 
     labels, preds = collect_predictions(model, test_loader, device)
     acc = (labels == preds).mean()
