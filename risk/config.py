@@ -96,7 +96,19 @@ FRAME_GROUP_ORDER = ("amazon_moist", "congo_moist", "dry_forest", "sea_peat")
 FRAME_SITES_PER_GROUP = 3
 FRAME_MIN_SEPARATION_KM = 50.0
 FRAME_VALID_LAND_MIN = 0.95
-FRAME_ELIGIBLE_FOREST_MIN = 0.50
+# AMENDMENT-1 (2026-07-13, disclosed protocol deviation -- see PLAN.md).
+# The original box-level rule was FRAME_ELIGIBLE_FOREST_MIN = 0.50. It excluded 5 of the 8
+# legacy boxes -- all three Amazon sites, Riau and Gran Chaco -- purely for being ALREADY
+# heavily cleared (23.5-38.1% eligible forest), while every one of them cleared the activity
+# criteria comfortably. That bar selects for EARLY-stage frontiers, which is perverse for a
+# study of active ones, and it would have biased the 12 unseen frame boxes identically.
+#
+# Replaced by a minimum at-risk-cell count. NOTE HONESTLY: this is NOT a redundancy fix --
+# it CHANGES THE ESTIMAND from "forest-dominated frontiers" to "active-frontier landscapes
+# with residual at-risk forest". 300 is a permissive OPERATIONAL SUPPORT FLOOR ONLY: it makes
+# no bootstrap or AP-viability guarantee (L7's usable-block-placement rule decides that), and
+# it was chosen after observing the legacy count range, so it is not prespecified.
+FRAME_MIN_AT_RISK_CELLS = 300
 FRAME_CUMULATIVE_LOSS_MIN = 0.02
 FRAME_RECENT_LOSS_MIN = 0.005
 FRAME_REQUIRED = 12

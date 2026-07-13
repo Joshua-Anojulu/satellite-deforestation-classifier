@@ -24,7 +24,9 @@ from .config import (
     DRY_BIOME_NAME,
     FRAME_CUMULATIVE_LOSS_MIN,
     FRAME_DIR,
-    FRAME_ELIGIBLE_FOREST_MIN,
+    FRAME_MIN_AT_RISK_CELLS,
+    AT_RISK_LAND_FRACTION,
+    CELL_SIZE_M,
     FRAME_GROUP_ORDER,
     FRAME_MIN_SEPARATION_KM,
     FRAME_RECENT_LOSS_MIN,
@@ -60,6 +62,7 @@ class Candidate:
     eligible_forest_share: float | None = None
     cumulative_loss_share: float | None = None
     recent_loss_share: float | None = None
+    at_risk_cells: int | None = None
 
     @property
     def bounds(self) -> tuple[float, float, float, float]:
@@ -147,6 +150,30 @@ def candidate_universe(group_geometries: Mapping[str, object]) -> list[Candidate
     return candidates
 
 
+def count_at_risk_cells(data: FrameHansenWindow, inside: np.ndarray) -> int:
+    """Count L5 at-risk cells in a box: cells whose eligible forest >= 25% of their valid land.
+
+    Uses ONLY <=2020 information (treecover2000, datamask, and the firewalled prior-loss
+    boolean). It counts AT-RISK cells, never POSITIVE cells -- gating eligibility on future
+    positives would be outcome-informed site selection and would breach the L13.1 firewall.
+    """
+    land = inside & (data.datamask == 1)
+    eligible = land & (data.treecover2000 >= 30) & ~data.prior_loss_2001_2020
+    # Hansen is ~30 m; a 640 m analysis cell is ~21x21 native pixels.
+    block = max(1, round(CELL_SIZE_M / 30.0))
+    rows, cols = data.datamask.shape
+    n_rows, n_cols = rows // block, cols // block
+    if n_rows == 0 or n_cols == 0:
+        return 0
+    trim_land = land[:n_rows * block, :n_cols * block]
+    trim_elig = eligible[:n_rows * block, :n_cols * block]
+    land_per_cell = trim_land.reshape(n_rows, block, n_cols, block).sum(axis=(1, 3))
+    elig_per_cell = trim_elig.reshape(n_rows, block, n_cols, block).sum(axis=(1, 3))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        share = np.where(land_per_cell > 0, elig_per_cell / land_per_cell, 0.0)
+    return int(((land_per_cell > 0) & (share >= AT_RISK_LAND_FRACTION)).sum())
+
+
 def screen_candidate(candidate: Candidate,
                      reader: Callable[[tuple[float, float, float, float]], FrameHansenWindow]
                      = read_frame_hansen) -> Candidate | None:
@@ -168,9 +195,15 @@ def screen_candidate(candidate: Candidate,
     forest_share = float(eligible.sum()) / denominator
     cumulative_share = float(prior.sum()) / denominator
     recent_share = float(recent.sum()) / denominator
+    # AMENDMENT-1: the binding box-level criterion is now a minimum AT-RISK CELL count,
+    # not an eligible-forest share. Counts AT-RISK cells (a <=2020 quantity), NEVER positive
+    # cells -- gating on positives would be outcome-informed selection and would breach the
+    # L13.1 temporal firewall. forest_share is still RECORDED (the original >=50% rule is a
+    # prespecified sensitivity) but no longer gates inclusion.
+    at_risk_cells = count_at_risk_cells(data, inside)
     if not (
         valid_share >= FRAME_VALID_LAND_MIN
-        and forest_share >= FRAME_ELIGIBLE_FOREST_MIN
+        and at_risk_cells >= FRAME_MIN_AT_RISK_CELLS
         and cumulative_share >= FRAME_CUMULATIVE_LOSS_MIN
         and recent_share >= FRAME_RECENT_LOSS_MIN
     ):
@@ -179,7 +212,8 @@ def screen_candidate(candidate: Candidate,
         **{**asdict(candidate), "valid_land_share": valid_share,
            "eligible_forest_share": forest_share,
            "cumulative_loss_share": cumulative_share,
-           "recent_loss_share": recent_share}
+           "recent_loss_share": recent_share,
+           "at_risk_cells": at_risk_cells}
     )
 
 

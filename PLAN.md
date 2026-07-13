@@ -33,6 +33,14 @@ resolution, from these bands") is a useful finding and is what we report if we g
   already-active frontier *as of 2020* — **established** by the L13.3 eligibility criteria, which
   **L13.5b applies to the legacy boxes as well as the frame boxes**, so this is a screened fact rather
   than an assumption. We cannot claim to predict which intact forest *becomes* a frontier.
+- **The target population is NOT "forest-dominated frontiers" (AMENDMENT-1 changed this).** It is
+  **active-frontier landscapes containing ≥300 residual at-risk cells — explicitly including advanced,
+  heavily-cleared and fragmented frontiers** (the legacy Amazon boxes retain only 35–38% eligible
+  forest; Gran Chaco 23.5%). Results are reported both under this population and, as a prespecified
+  sensitivity, under the original forest-dominated (≥50%) definition.
+- **The FRAME-ONLY analysis is the primary generalization analysis. The combined/legacy analysis is
+  SECONDARY**, because legacy cohort inclusion was revised (AMENDMENT-1) with outcome-aware sites in
+  view. This is a protocol deviation and is disclosed as one.
 - **Two strata, and the distinction is load-bearing.** The **8 legacy boxes** were purposively selected
   and *confirmed on GFW* — outcome-informed, and on their own they would be a case study, not inference.
   The **12 new boxes** are randomly drawn from the L13 pre-2021 frame and are NOT outcome-informed.
@@ -245,8 +253,16 @@ Implemented as nearest-neighbour sampling of the **boolean** mask (for a boolean
   8-cell bootstrap and an overconfident CI.)*
 - **If the measured range exceeds 12 cells (≈7.7 km, ~30% of a site's linear extent), the block is too
   large for a meaningful within-site bootstrap → that site's CI is UNRELIABLE.**
+- **Usable-block-placement rule (added by AMENDMENT-1).** Cell *count* does not establish block-bootstrap
+  adequacy: 300 at-risk cells with `L=12` is ~2 block-equivalents, and a **fragmented** support yields
+  fewer usable placements than a compact one. So compute, per site, the number of **distinct block
+  origins whose L×L window contains ≥1 at-risk cell** (`usable_placements`). **If
+  `usable_placements < 20`, that site's CI is `UNRELIABLE`.** Report `usable_placements` for every site
+  alongside at-risk area and support dispersion.
 - **Any evaluable site whose CI is `UNRELIABLE` *or* `undefined` (zero-positive resamples) forces the
   L4 headline verdict to `INCONCLUSIVE`.** Locked now, so it cannot be waived later.
+- **Inferential adequacy is decided HERE, not by AMENDMENT-1's ≥300 support floor**, which makes no
+  bootstrap or AP guarantee whatsoever.
 
 **Geometry:**
 - **Moving-block bootstrap** on the 2-D cell grid — `L × L` cell squares at **random origins** (overlap
@@ -406,7 +422,7 @@ a hash does not match on a later run:
 | Criterion | Threshold |
 |---|---|
 | Valid land (`datamask == 1`) share of box | **≥ 95%** — excludes coastal/water boxes |
-| `GFC_eligible_forest_2020` (L5) / valid land | **≥ 50%** — there must be forest left to lose |
+| **At-risk cells in the box (per L5)** | **≥ 300** — a permissive **operational support floor** (see AMENDMENT-1). *Replaces the original `eligible forest ≥ 50% of valid land`.* |
 | **Cumulative** loss 2001–2020 / valid land | **≥ 2%** — the box has a clearing history |
 | **Recent loss 2016–2020 / valid land** | **≥ 0.5%** — **the box is still active as of 2020** |
 
@@ -418,6 +434,81 @@ round-1 draft. The 2016–2020 window is what makes "active as of 2020" true, an
 stand-replacement clearing regimes**. They under-sample diffuse degradation, brand-new low-rate fronts,
 and smallholder mosaics that GFC resolves poorly. That is a property of the generalization population
 (L13.7), not a bug we can threshold our way out of.
+
+#### AMENDMENT-1 (2026-07-13) — the box-level forest criterion was changed AFTER seeing data
+
+**This is a protocol deviation, disclosed as such. It is NOT prespecified, and the paper will not
+present it as though it were.**
+
+**What was originally locked:** `GFC_eligible_forest_2020 / valid land ≥ 50%`.
+
+**What triggered the change.** L13.5b requires the 8 legacy boxes to pass L13.3. Running that screen,
+**5 of 8 failed, every one of them on that single criterion:**
+
+| Site | eligible forest % | at-risk cells | cumulative loss % | recent loss % |
+|---|---|---|---|---|
+| gran_chaco_paraguay | 23.5 | 632 | 12.67 | 1.08 |
+| riau_sumatra | 28.9 | 1100 | 34.03 | 8.86 |
+| sao_felix_xingu | 35.1 | 1086 | 31.14 | 7.49 |
+| mato_grosso | 37.8 | 1053 | 36.73 | 2.01 |
+| rondonia | 38.1 | 1000 | 15.37 | 4.55 |
+| tshopo_drc | 62.2 | 1978 | 37.32 | 12.84 |
+| santa_cruz_bolivia | 87.9 | 1779 | 9.04 | 4.61 |
+| mai_ndombe_drc | 94.4 | 2186 | 5.36 | 2.80 |
+
+All 8 clear the activity criteria comfortably. The ≥50% bar was excluding precisely the **most
+advanced** frontiers — all three Amazon sites, the peat/palm site, and the Chaco — and it would have
+biased the 12 unseen frame boxes the same way, producing a "deforestation frontier" study that
+systematically avoids active frontiers.
+
+**What the change actually is — stated honestly.** It is **NOT** a redundancy fix. L5 governs which
+*cells* are evaluated; L13.3 governs which *landscapes* constitute the study population. Removing the
+50% rule therefore **changes the estimand**:
+
+> from **forest-dominated frontiers** → to **active-frontier landscapes containing at least 300
+> residual at-risk cells, including advanced and fragmented frontiers.**
+
+Every scope claim in the paper must use the new wording. "Forest-dominated" is no longer true.
+
+**On the ≥300 figure — what it does and does NOT justify.** It is a **permissive operational support
+floor only.** It carries **no** claim to guarantee bootstrap or AP viability:
+- L7 has **no upper clamp** on block size, so a site with `L=12` has 144-cell blocks and 300 cells is
+  ~2 block-equivalents, not the ~5 an earlier draft of this amendment wrongly claimed.
+- `N/L²` is a crude ratio anyway; a **fragmented** at-risk support yields fewer usable block
+  placements than a compact one with the same count.
+- Cell count says **nothing** about future positive prevalence, so it cannot guarantee AP is defined.
+
+**Inferential adequacy is decided by L7/L4, not by this floor** — see L7's added
+usable-block-placement rule. And **300 was chosen after observing the legacy count range** (min 632).
+No threshold chosen now can honestly be called prespecified; its credibility rests on disclosure and
+on being frozen *before* the frame is drawn.
+
+**Outcome-awareness — the honest position.** No 2021–24 value was used computationally: both
+eligible-forest share and at-risk-cell count are ≤2020 quantities, and the criterion counts **at-risk**
+cells, never **positive** cells. **But the project cannot claim outcome blindness for the legacy
+cohort**, because these 8 sites and their outcomes were analyzed in the prior paper — the site
+identities themselves carry remembered outcome information.
+
+**Consequences, locked:**
+1. The **amended rule is frozen and SHA-256 hashed BEFORE any frame candidate, candidate count, or
+   spatial distribution is inspected.** This is what keeps the 12-site frame prospectively clean.
+2. **The frame-only analysis is the PRIMARY generalization analysis.** The combined/legacy analysis is
+   **SECONDARY**, because legacy inclusion was revised with outcome-aware sites in view.
+3. **Prespecified sensitivity: re-run everything under the ORIGINAL ≥50% rule.** This distinguishes
+   conclusions about forest-rich frontiers from conclusions driven by admitting advanced, fragmented
+   landscapes.
+4. Report **candidate counts and exclusions by biome under BOTH the original and amended rules.**
+5. Report per site: at-risk **area, connectedness/dispersion, and usable block placements** — not the
+   raw count alone.
+6. **São Félix's valid-land failure (94.9% vs 95%) is NOT revisited.** Moving a second threshold by
+   0.1 pp immediately after observing a failure would be indefensible. It fails the primary screen on
+   the locked, unrounded calculation and may appear only in a labeled sensitivity. If 94.9% proves to
+   be a rasterization defect, the *measurement* is fixed universally — the threshold is not lowered.
+7. **Box-level activity does not prove the residual at-risk forest itself sits on an active edge**
+   (prior loss can lie away from the remaining forest). Stated as a limitation and checked
+   descriptively using pre-2021 data only.
+8. Cohort size is now **at most 19** (12 frame + 7 legacy, São Félix excluded). Every hard-coded
+   "20 sites" / "19 training sites" / fold count / floor must use **actual surviving counts**.
 
 #### L13.4 — The legacy-contamination fix (the frame must not be shaped by outcome-informed boxes)
 
@@ -480,8 +571,10 @@ lattice box is an *approximation*, and we say so rather than quietly assuming it
 
 The defensible generalization population is **not "active deforestation frontiers" in general.** It is:
 
-> spatially separated (≥50 km), high-remaining-forest (≥50%), GFC-loss-affected-by-2020 (≥2% cumulative
-> **and** ≥0.5% in 2016–2020), optically QC-passing 0.25°×0.22° boxes in the four target biome groups.
+> spatially separated (≥50 km), GFC-loss-affected-by-2020 (≥2% cumulative **and** ≥0.5% in 2016–2020),
+> optically QC-passing 0.25°×0.22° boxes containing **≥300 residual at-risk cells**, in the four target
+> biome groups. **(AMENDMENT-1: the original "high-remaining-forest ≥50%" clause is removed; the
+> population now includes advanced and fragmented frontiers.)**
 
 Every generalization sentence in the paper is bounded by that definition.
 
