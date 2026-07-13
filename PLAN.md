@@ -65,11 +65,15 @@ Sentinel-2 L2A ships as integer DN, **not** reflectance. The existing pipeline t
 
 `ρ = (DN + BOA_ADD_OFFSET) / BOA_QUANTIFICATION_VALUE`
 
-- `BOA_QUANTIFICATION_VALUE = 10000`. `BOA_ADD_OFFSET = −1000` for processing baseline ≥ 04.00 and
-  `0` before it. CDSE's reprocessed archive applies the newer baseline to 2016–2020 scenes, so the
-  offset **does** apply — but openEO may already have applied it.
-- **Phase 0 must determine empirically which convention is in force** (inspect the value histogram of
-  one composite) and record it. Getting this wrong silently shifts every index and every QC bound.
+- **RESOLVED BY PHASE 0 (2026-07-13, measured against live CDSE — see `results/phase0.json`):**
+  the composites arrive **already offset**. The conversion is **`ρ = value / 10000`**, and
+  **`BOA_ADD_OFFSET` must NOT be re-applied.**
+  Evidence: measured Rondônia-2016 forest medians were red(B04)=884, NIR(B08)=2784. Under `v/10000`
+  this gives NDVI = 0.518 (plausible Amazon forest). Re-applying −1000 gives a **negative red band**
+  and NDVI = 1.139, which is **physically impossible** (NDVI ≤ 1). The measured convention is the only
+  possible one.
+  *This section is why the plan refused to guess: had we assumed the offset applied, every index and
+  every QC bound in the study would have been silently wrong.*
 - **Order of operations (the round-4 draft was self-contradictory — it clipped to `[0,1.5]` then
   claimed features lived in `[0,1]`):**
   1. Convert DN → ρ.
@@ -381,7 +385,7 @@ composite is downloaded**, and the hash is recorded in the results artifact. Thi
 |---|---|
 | Amazon moist | `BIOME_NAME = Tropical & Subtropical Moist Broadleaf Forests` ∩ `REALM = Neotropic` ∩ **HydroBASINS v1.0 level-3 Amazon basin polygon** |
 | Congo moist | same BIOME ∩ `REALM = Afrotropic` |
-| SE-Asian peat/palm | same BIOME ∩ `REALM = Indomalayan` ∩ **Miettinen, Shi & Liew (2016) SE-Asia peatland extent, 2015 vintage** |
+| SE-Asian peat/palm | same BIOME ∩ `REALM = Indomalayan` ∩ **PEATMAP (Xu, Morris, Liu & Holden 2018) Asia peat extent** |
 | Tropical dry forest | `BIOME_NAME = Tropical & Subtropical Dry Broadleaf Forests` ∩ `REALM = Neotropic`, **plus the Gran Chaco ecoregion explicitly** (it straddles the dry-forest/savanna boundary in RESOLVE) |
 
 **Every external layer is pinned — no "e.g.", no substitutions at build time.** Phase 0 downloads each,
@@ -392,7 +396,7 @@ a hash does not match on a later run:
 |---|---|
 | Ecoregions | RESOLVE Ecoregions 2017, `Ecoregions2017.shp` |
 | Amazon basin | HydroBASINS v1.0, level 3 — **record the exact feature IDs** composing the polygon, not just the dataset version |
-| SE-Asia peatland | Miettinen, Shi & Liew (2016), 2015 extent |
+| SE-Asia peatland | **PEATMAP** (Xu, Morris, Liu & Holden 2018, *Catena*), `Asia.zip` → `EA_Peatland.shp`, SHA-256 `8767e9ba8250770420cc555250f80b79b67410d00ae13ac629f4fe2ae9b8724e` |
 | Precipitation climatology (L1) | CHIRPS v2.0 monthly, **1991–2020 only** |
 
 - **Geodesic distances:** WGS84 geodesic (`pyproj.Geod.inv`), centre-to-centre. Not Euclidean degrees.

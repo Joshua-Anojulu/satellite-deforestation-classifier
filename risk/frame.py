@@ -391,7 +391,7 @@ def main() -> None:
                         "amazon_hybas_ids": args.amazon_hybas_id},
         "peatland": {"path": str(args.peatland_source or args.peatland),
                      "sha256": sha256_file(args.peatland_source or args.peatland),
-                     "version": "Miettinen, Shi & Liew (2016), 2015 extent"},
+                     "version": "PEATMAP (Xu, Morris, Liu & Holden 2018, Catena) -- Asia peat extent"},
     }
     result = write_and_hash_frame(eligible, args.output_dir, manifest)
     print(json.dumps(result, indent=2))
