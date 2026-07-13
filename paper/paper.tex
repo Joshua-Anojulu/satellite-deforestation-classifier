@@ -385,6 +385,36 @@ past BatchNorm to feature alignment and region-matched fine-tuning; move to fine
 patches or segmentation for sub-patch clearings; and swap the two-snapshot design
 for multi-temporal sequences.
 
+\section*{Data Availability}
+Every dataset behind this paper is public, and none of it originates with us.
+EuroSAT~\cite{helber2019} supplies the 27{,}000 labeled Sentinel-2 patches we train
+on, in both the RGB and 13-band forms, under the MIT license. Sentinel-2 Level-2A
+imagery comes from the Copernicus Data Space Ecosystem
+(\url{https://dataspace.copernicus.eu}) through the openEO API: this paper contains
+modified Copernicus Sentinel data (2016, 2024), which we processed into per-site
+median composites. Copernicus Sentinel data are free and open under the ESA and
+European Union terms of use, which ask for that attribution and disclaim ESA
+liability for the processing we performed. The Hansen Global Forest Change record
+v1.12 (GFC-2024, \texttt{lossyear} band) provides our validation
+reference~\cite{hansen2013}; we stream the relevant 10-degree tiles from the
+University of Maryland public mirror, and the product carries a CC BY 4.0 license
+with credit to Hansen, the University of Maryland, Google, USGS, and NASA. Code for
+the full pipeline, with the configuration and seeds that produce every number and
+figure here, is at
+\url{https://github.com/Joshua-Anojulu/satellite-deforestation-classifier} under the
+MIT license. Checkpoints and intermediate composites run to several gigabytes, so we
+do not archive them; the scripts regenerate them from the public sources above. The
+aggregate results file, holding every per-site metric, confidence interval, and test
+statistic in Table~\ref{tab:crossbiome}, ships with the repository.
+
+\section*{Acknowledgments}
+We thank the teams who built and give away the data this work rests on: the EuroSAT
+authors, ESA and the European Commission for the Copernicus programme, and the
+University of Maryland GLAD laboratory for the Global Forest Change record. Global
+Forest Watch made the site selection possible by letting us confirm active clearing
+at each frontier before we spent compute on it. The author declares no competing
+interests. This work received no external funding and ran on a single consumer GPU.
+
 \begin{thebibliography}{11}
 \bibitem{hansen2013} M.~C. Hansen \emph{et al.}, ``High-Resolution Global Maps of 21st-Century Forest Cover Change,'' \emph{Science}, vol.~342, no.~6160, pp.~850--853, 2013.
 \bibitem{curtis2018} P.~G. Curtis \emph{et al.}, ``Classifying drivers of global forest loss,'' \emph{Science}, vol.~361, no.~6407, pp.~1108--1111, 2018.

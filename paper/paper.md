@@ -157,6 +157,24 @@ A lightweight ResNet50/EuroSAT pipeline recovers a deforestation signal that agr
 
 Five directions follow. Add sites per biome for statistical power. Gate adaptation on a measured shift magnitude. Push past BatchNorm to feature alignment and region-matched fine-tuning. Move to finer patches or segmentation to recover sub-patch clearings. Replace the two-snapshot design with multi-temporal sequences.
 
+## Data Availability
+
+Every dataset behind this paper is public, and none of it originates with us.
+
+**EuroSAT** (Helber et al., 2019) supplies the 27,000 labeled Sentinel-2 patches we train on, in both the RGB and 13-band forms, and is distributed under the MIT license. `download_data.py` fetches it.
+
+**Sentinel-2 Level-2A** imagery comes from the Copernicus Data Space Ecosystem (https://dataspace.copernicus.eu) and reaches us through the openEO API. This paper contains modified Copernicus Sentinel data (2016, 2024), processed into per-site median composites by `deforestation/download_sites.py`. Copernicus Sentinel data are free and open under the ESA and European Union terms of use, which ask for that attribution and disclaim ESA liability for any processing we performed.
+
+**Hansen Global Forest Change** v1.12 (GFC-2024, `lossyear` band) provides our validation reference (Hansen et al., 2013). We stream the relevant 10-degree tiles from the University of Maryland's public mirror, and the product carries a CC BY 4.0 license, with credit to Hansen, the University of Maryland, Google, USGS, and NASA. The specific tile per site is listed in §2.3 and pinned in `deforestation/sites.py`.
+
+**Code** for the full pipeline, including the exact configuration and seeds that produce every number and figure here, lives at https://github.com/Joshua-Anojulu/satellite-deforestation-classifier under the MIT license. Model checkpoints and intermediate composites run to several gigabytes, so we do not archive them; `download_data.py`, `python -m src.train`, and `python -m deforestation.run_all_sites` regenerate them from the public sources above. The aggregate results file (`multi_site_results.json`), which holds every per-site metric, confidence interval, and test statistic in Table 1, is in the repository.
+
+## Acknowledgments
+
+We thank the teams who built and give away the data this work rests on: the EuroSAT authors, ESA and the European Commission for the Copernicus programme, and the University of Maryland GLAD laboratory for the Global Forest Change record. Global Forest Watch made the site selection possible by letting us confirm active clearing at each frontier before we spent compute on it.
+
+The author declares no competing interests. This work received no external funding and ran on a single consumer GPU.
+
 ## References
 1. P. Helber, B. Bischke, A. Dengel, D. Borth. "EuroSAT: A Novel Dataset and Deep Learning Benchmark for Land Use and Land Cover Classification." *IEEE JSTARS*, 12(7):2217–2226, 2019.
 2. M. C. Hansen et al. "High-Resolution Global Maps of 21st-Century Forest Cover Change." *Science*, 342(6160):850–853, 2013. (Global Forest Watch data source.)
