@@ -83,7 +83,15 @@ def build_cubes(connection: Any, bbox: Mapping[str, float], period: tuple[str, s
     masked = reflectance.mask(mask_10m)
 
     clear = dilated.apply(lambda value: value.not_())
-    clear_count = clear.reduce_dimension("t", "sum")
+    # SIGN GUARD. The CDSE backend sums boolean True as -1, so a raw sum of the "clear"
+    # mask returns NEGATIVE counts (measured: -16..-8 where the true counts are 8..16).
+    # Unguarded, EVERY site would have failed the L2 clear-observation gate (>= 8), the
+    # cohort would have dropped below the floor of 14, and the study would have been
+    # declared unviable -- on a sign error. The magnitudes were plausible and correctly
+    # ORDERED, so only "a count cannot be negative" caught it.
+    # abs() is correct under BOTH encodings (True=+1 and True=-1), so this cannot silently
+    # break if the backend changes.
+    clear_count = clear.reduce_dimension("t", "sum").apply(lambda value: value.absolute())
     composite = masked.reduce_dimension("t", "median")
     dispersion = masked.reduce_dimension("t", "sd")
 
