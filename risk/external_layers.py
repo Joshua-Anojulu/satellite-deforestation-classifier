@@ -108,19 +108,21 @@ def acquire(destination: str | Path = EXTERNAL_DIR, peatland: str | Path | None 
         if layer.name == "chirps":
             import xarray as xr
 
-            pinned_path = destination / "chirps-v2.0.monthly.1991-2020.nc"
-            if not pinned_path.exists():
-                with xr.open_dataset(path) as source:
-                    pinned = source.sel(time=slice("1991-01-01", "2020-12-31"))
-                    if pinned.sizes.get("time") != 360:
-                        raise ValueError(
-                            f"Expected 360 CHIRPS months for 1991-2020, got {pinned.sizes.get('time')}"
-                        )
-                    pinned.to_netcdf(pinned_path)
+            # Pin the SOURCE file by hash plus the documented slice, rather than
+            # materializing a ~5.5 GB derivative that contains exactly the same numbers.
+            # `seasons.chirps_point_climatology` applies the 1991-2020 slice itself and
+            # asserts it sees exactly 360 months, so the subset file bought nothing but a
+            # second hash -- and writing it was the step that kept dying.
+            # Reproducibility is preserved: source hash + slice fully determine the input.
+            with xr.open_dataset(path) as source:
+                months = int(source.sel(time=slice("1991-01-01", "2020-12-31")).sizes.get("time", 0))
+            if months != 360:
+                raise ValueError(f"Expected 360 CHIRPS months for 1991-2020, got {months}")
             records[layer.name] = {
-                "status": "downloaded", "path": str(pinned_path), "version": layer.version,
-                "source_url": layer.source_url, "sha256": sha256_file(pinned_path),
-                "source_download_sha256": sha256_file(path),
+                "status": "downloaded", "path": str(path), "version": layer.version,
+                "source_url": layer.source_url, "sha256": sha256_file(path),
+                "slice": "1991-01-01..2020-12-31", "months_in_slice": months,
+                "note": "Source pinned by hash; the 1991-2020 slice is applied at read time.",
             }
             continue
         records[layer.name] = {

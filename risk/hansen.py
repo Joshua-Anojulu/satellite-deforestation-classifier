@@ -13,6 +13,8 @@ from math import ceil, floor
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
 
+import threading
+
 import numpy as np
 import rasterio
 from affine import Affine
@@ -97,14 +99,50 @@ def _clipped_window(dataset: rasterio.io.DatasetReader,
     return intersection(requested, full)
 
 
+_LOCAL = threading.local()
+_MAX_CACHED_DATASETS = 24
+
+
+def _cached_dataset(band: str, tile: str):
+    """Reuse an open /vsicurl dataset instead of re-fetching its header per read.
+
+    A Hansen tile is 40,000 x 40,000 px, so OPENING it over HTTP costs far more than the
+    ~900 x 800 px window we actually want. The original code opened and closed each band
+    per candidate box; screening 16,244 boxes therefore paid ~29 s/box in header fetches
+    and would have taken 8+ hours. Caching the handles turns that into one open per tile.
+
+    THREAD-LOCAL BY CONSTRUCTION: GDAL datasets are NOT thread-safe for concurrent reads,
+    and screen_universe is threaded. A shared handle could silently return corrupt pixels
+    -- far worse than being slow -- so each worker keeps its own handles.
+    """
+    cache = getattr(_LOCAL, "datasets", None)
+    if cache is None:
+        cache = _LOCAL.datasets = {}
+    key = (band, tile)
+    dataset = cache.get(key)
+    if dataset is None:
+        if len(cache) >= _MAX_CACHED_DATASETS:  # crude bound on open handles per thread
+            for handle in cache.values():
+                handle.close()
+            cache.clear()
+        dataset = cache[key] = rasterio.open(hansen_url(band, tile))
+    return dataset
+
+
 def _read_tile_band(band: str, tile: str,
                     bounds: tuple[float, float, float, float],
                     opener: Callable[..., object] = rasterio.open
                     ) -> tuple[np.ndarray, Affine, str]:
-    with opener(hansen_url(band, tile)) as dataset:
-        window = _clipped_window(dataset, bounds)
-        array = dataset.read(1, window=window)
-        return array, dataset.window_transform(window), str(dataset.crs)
+    # Tests inject fake openers; only the real rasterio path is cached.
+    if opener is not rasterio.open:
+        with opener(hansen_url(band, tile)) as dataset:
+            window = _clipped_window(dataset, bounds)
+            array = dataset.read(1, window=window)
+            return array, dataset.window_transform(window), str(dataset.crs)
+    dataset = _cached_dataset(band, tile)
+    window = _clipped_window(dataset, bounds)
+    array = dataset.read(1, window=window)
+    return array, dataset.window_transform(window), str(dataset.crs)
 
 
 def _place_parts(parts: Iterable[tuple[np.ndarray, Affine]], fill: int | bool = 0

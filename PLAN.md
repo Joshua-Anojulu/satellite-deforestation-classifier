@@ -400,7 +400,7 @@ composite is downloaded**, and the hash is recorded in the results artifact. Thi
 | Group | Definition |
 |---|---|
 | Amazon moist | `BIOME_NAME = Tropical & Subtropical Moist Broadleaf Forests` ∩ `REALM = Neotropic` ∩ **HydroBASINS v1.0 level-3 Amazon basin polygon** |
-| Congo moist | same BIOME ∩ `REALM = Afrotropic` |
+| Congo moist | same BIOME ∩ `REALM = Afrotropic` ∩ **HydroBASINS v1.0 level-3 Congo basin (`HYBAS_ID = 1030020040`)** — **basin-restricted, symmetric with Amazon (AMENDMENT-2)** |
 | SE-Asian peat/palm | same BIOME ∩ `REALM = Indomalayan` ∩ **PEATMAP (Xu, Morris, Liu & Holden 2018) Asia peat extent** |
 | Tropical dry forest | `BIOME_NAME = Tropical & Subtropical Dry Broadleaf Forests` ∩ `REALM = Neotropic`, **plus the Gran Chaco ecoregion explicitly** (it straddles the dry-forest/savanna boundary in RESOLVE) |
 
@@ -416,6 +416,36 @@ a hash does not match on a later run:
 | Precipitation climatology (L1) | CHIRPS v2.0 monthly, **1991–2020 only** |
 
 - **Geodesic distances:** WGS84 geodesic (`pyproj.Geod.inv`), centre-to-centre. Not Euclidean degrees.
+
+#### AMENDMENT-2 (2026-07-13) — the Congo stratum was not actually the Congo
+
+**Caught by inspecting the first draw, BEFORE any imagery was downloaded.**
+
+L13.2 restricted the **Amazon** group by an explicit basin polygon (HydroBASINS `6030007000`) but
+defined the **Congo** group as merely `BIOME = moist broadleaf ∩ REALM = Afrotropic` — **with no basin
+restriction at all.** That set spans West Africa, East Africa, Madagascar and the Seychelles, not the
+Congo Basin. (The one HTTP-404 candidate in the screen was a box at 55.5°E — the *Seychelles*.)
+
+The first draw therefore returned, in a stratum the paper would label "Congo Basin":
+- `F2_P005.680_P0006.250` at **6.25°E — Ghana** (Upper Guinean forest)
+- `F2_P008.320_M0012.250` at **−12.25°E — Guinea**
+
+Both are ~3,000–4,000 km from the Congo Basin. The draw machinery was correct; **the stratum
+definition was wrong**, and the asymmetry with the Amazon group was mine.
+
+**Fix:** `congo_moist` = Afrotropic moist broadleaf **∩ HydroBASINS level-3 Congo basin
+`HYBAS_ID = 1030020040`** (3.7M km²; verified to contain both legacy Congo sites, Tshopo and
+Mai-Ndombe, and to exclude the Ghana and Guinea boxes). The four strata are now definitionally
+consistent: two basin-restricted, one peatland-restricted, one ecoregion-defined.
+
+**Integrity of the redraw.** The restricted Congo universe is a strict **subset** of the previous one,
+so every box in it was already screened under the frozen L13.3 rule — no re-screen, no new
+information. The candidate frame and ordered draw are re-hashed and re-frozen, still **before any
+imagery is downloaded and with no 2021–24 data touched**, so the draw remains outcome-blind. The
+superseded frame hashes are recorded below for audit.
+
+- Superseded candidate_frame sha256: `3fbebc8bb2804b4b11ffc933ad1d66098336e2571f1c0a73fde2264f2d25b33e`
+- Superseded ordered_draw    sha256: `e23c2bca4e92cf37874d4e8c435553ca57170e743185ca2e7f8710119e6cc9f6`
 
 #### L13.3 — Eligibility (every criterion from ≤2020 data ONLY)
 

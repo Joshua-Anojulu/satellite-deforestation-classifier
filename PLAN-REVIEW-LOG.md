@@ -375,3 +375,57 @@ the locked spatially-inhibited design, not uniform over lattice boxes.
 
 **APPROVED after 8 total Codex rounds** (5 on the core design, 3 on the n=20 expansion). Codex was
 read-only throughout and never modified a file. Proceeding to Act 3 — build.
+
+## Act 3 — Build (Codex writes, Claude verifies)
+
+### Round 1 — Codex build
+
+Implemented the `risk/` package (24 modules + 6 test files) against the frozen PLAN.md. Reported
+honestly: refused to fabricate a frame hash, refused to invent results, and explicitly listed what it
+could not execute.
+
+**Phase 0 — actually executed, results real:**
+- Hansen GFC v1.12 URL pattern works for all three bands on a live Rondônia window:
+  `lossyear` (uint8, 0–24), `treecover2000` (uint8, 0–100), **`datamask` (uint8) — confirmed to exist**,
+  which the plan had only assumed.
+- Live CDSE openEO (API 1.2.0, backend 0.73.0a13): `SENTINEL2_L2A` exposes **SCL, B11, B12**; `mask`,
+  `apply_kernel`, `median` all available. All four generated process graphs validated with zero errors.
+- **L0 reflectance convention measured: `already_offset_integer_scaled` → ρ = value / 10000.**
+  The BOA_ADD_OFFSET of −1000 must NOT be re-applied. This is L0 working exactly as designed — the plan
+  refused to guess and made it a Phase-0 measurement.
+
+### Claude's verdict — Round 1: ACCEPTED (with two blockers escalated to Josh)
+
+Verified independently, not taken on trust:
+- **Ran pytest myself: 14/14 pass.**
+- **No forbidden path touched** — `git status` on `deforestation/`, `paper/`, `config.py` is empty. Only
+  `risk/` is new, as required.
+- **Read the four load-bearing guards in the source, not just their tests:**
+  - *Label-leak guard* — REAL. `prior = values[(values >= 1) & (values <= 20)]` masks **before** `max()`,
+    so a 2021–24 year cannot be selected, plus a post-assertion. Correct.
+  - *Fixed support* — REAL. `fixed_support_mask` raises `AssertionError` if the mask differs across any
+    of the five years. Cannot silently drift.
+  - *L13 temporal firewall* — REAL and structural. `read_frame_hansen` returns **only booleans**
+    (`prior_loss_2001_2020`, `recent_loss_2016_2020`); raw `lossyear` never escapes it, and `frame.py`
+    imports only that reader — never the unfirewalled `read_hansen_window`. The frame code path is
+    *incapable* of seeing the label window.
+  - *L4 concordance* — all four verdict rows tested, plus UNRELIABLE/undefined → INCONCLUSIVE.
+- **Independently re-derived the L0 finding:** with red=884, NIR=2784, ρ=v/10000 gives NDVI=0.518
+  (plausible Amazon forest). Re-applying −1000 gives a **negative red band** and NDVI=1.139, which is
+  physically impossible. The measured convention is the only possible one. Confirmed.
+
+**Deviations reported by Codex (all judged acceptable):**
+1. L13.1 firewall now builds **two** booleans (`[1,20]` and `[16,20]`) rather than one, because L13.3's
+   recent-loss criterion needs the second. Both are ≤2020; no future year reaches selection. Faithful.
+2. Skew estimator and the "within-composite dispersion" scalar were undefined in the spec; Codex chose
+   bias-corrected `scipy.stats.skew` and the median of the per-band temporal-SD raster. Recorded as new
+   locked choices.
+
+**BLOCKERS — escalated to Josh, not worked around:**
+- The pinned **Miettinen, Shi & Liew (2016) SE-Asia peat extent** is not obtainable from the cited
+  source. Codex **rejected an adjacent substitute rather than silently swapping it** — correct behaviour;
+  the layer is pinned, and swapping it is a *plan* change requiring sign-off.
+- **CHIRPS monthly NetCDF is 7.7 GB** and was not downloaded, so the L1 windows and the L13 draw have not
+  run. No frame hash was invented.
+
+Consequence: **the L13 frame draw has NOT run**, so no sites are selected and no composites downloaded.

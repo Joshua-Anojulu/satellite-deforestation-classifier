@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Mapping, Sequence
@@ -96,33 +97,50 @@ def _candidate(group: str, lon: float, lat: float) -> Candidate:
     )
 
 
+def _select_basins(path: str | Path, hybas_ids: Sequence[str | int], label: str):
+    import geopandas as gpd
+
+    if not hybas_ids:
+        raise ValueError(f"Exact HydroBASINS level-3 {label} HYBAS_ID values are required.")
+    basins = gpd.read_file(path).to_crs("EPSG:4326")
+    id_column = next((name for name in basins.columns if name.upper() == "HYBAS_ID"), None)
+    if id_column is None:
+        raise ValueError(f"{label} HydroBASINS layer has no HYBAS_ID field.")
+    wanted = {str(value) for value in hybas_ids}
+    selected = basins[basins[id_column].astype(str).isin(wanted)]
+    missing = wanted - set(selected[id_column].astype(str))
+    if missing:
+        raise ValueError(f"Missing {label} HydroBASINS IDs: {sorted(missing)}")
+    return selected
+
+
 def build_group_geometries(ecoregions_path: str | Path, amazon_basins_path: str | Path,
                            peatland_path: str | Path,
-                           amazon_hybas_ids: Sequence[str | int]) -> dict[str, object]:
+                           amazon_hybas_ids: Sequence[str | int],
+                           congo_basins_path: str | Path | None = None,
+                           congo_hybas_ids: Sequence[str | int] | None = None) -> dict[str, object]:
     """Construct exactly the four L13.2 polygon intersections.
 
-    Amazon feature IDs are mandatory so the result artifact records which
-    level-3 HydroBASINS features constitute the basin rather than guessing from
-    a bounding box.
+    Basin IDs are mandatory so the result artifact records which level-3 HydroBASINS
+    features constitute each basin rather than guessing from a bounding box.
+
+    CONGO IS BASIN-RESTRICTED, SYMMETRICALLY WITH AMAZON. The original spec restricted the
+    Amazon group by basin polygon but defined the Congo group as merely "Afrotropic moist
+    broadleaf" -- which spans West Africa, East Africa, Madagascar and the Seychelles. The
+    first draw duly returned Ghana (6.25E) and Guinea (-12.25E) boxes in a stratum the paper
+    would call "Congo Basin". That asymmetry was a spec bug, not a draw bug.
     """
     import geopandas as gpd
 
-    if not amazon_hybas_ids:
-        raise ValueError("Exact HydroBASINS level-3 Amazon HYBAS_ID values are required.")
     eco = gpd.read_file(ecoregions_path).to_crs("EPSG:4326")
-    basins = gpd.read_file(amazon_basins_path).to_crs("EPSG:4326")
+    selected_basins = _select_basins(amazon_basins_path, amazon_hybas_ids, "Amazon")
     peat = gpd.read_file(peatland_path).to_crs("EPSG:4326")
+    if congo_basins_path is None or not congo_hybas_ids:
+        raise ValueError("Congo basin path and HYBAS_ID(s) are required (L13.2).")
+    congo_basins = _select_basins(congo_basins_path, congo_hybas_ids, "Congo")
     required = {"BIOME_NAME", "REALM", "ECO_NAME"}
     if not required.issubset(eco.columns):
         raise ValueError(f"Ecoregions layer lacks {sorted(required - set(eco.columns))}")
-    id_column = next((name for name in basins.columns if name.upper() == "HYBAS_ID"), None)
-    if id_column is None:
-        raise ValueError("HydroBASINS layer has no HYBAS_ID field.")
-    wanted_ids = {str(value) for value in amazon_hybas_ids}
-    selected_basins = basins[basins[id_column].astype(str).isin(wanted_ids)]
-    found = set(selected_basins[id_column].astype(str))
-    if found != wanted_ids:
-        raise ValueError(f"Missing Amazon HydroBASINS IDs: {sorted(wanted_ids - found)}")
 
     moist = eco[eco["BIOME_NAME"] == MOIST_BIOME_NAME]
     amazon_eco = unary_union(moist[moist["REALM"] == "Neotropic"].geometry)
@@ -134,18 +152,42 @@ def build_group_geometries(ecoregions_path: str | Path, amazon_basins_path: str 
     chaco = eco[eco["ECO_NAME"].str.contains("Chaco", case=False, na=False)]
     return {
         "amazon_moist": amazon_eco.intersection(unary_union(selected_basins.geometry)),
-        "congo_moist": congo,
+        "congo_moist": congo.intersection(unary_union(congo_basins.geometry)),
         "dry_forest": unary_union(list(dry.geometry) + list(chaco.geometry)),
         "sea_peat": indomalayan.intersection(unary_union(peat.geometry)),
     }
 
 
 def candidate_universe(group_geometries: Mapping[str, object]) -> list[Candidate]:
+    """Lattice centres falling inside each group polygon (L13.2 centre-membership rule).
+
+    The naive form -- 308,374 lattice points x 4 groups of unioned multipolygons, tested
+    one `covers()` call at a time -- is ~1.2M exact point-in-polygon tests against very
+    large geometries and does not finish. This is purely an implementation optimization:
+    a numpy bounding-box prefilter (which cannot change the answer, since a point outside
+    the bbox is outside the polygon) followed by shapely `prepared` geometries for the
+    exact test. Same lattice, same polygons, same membership rule, same candidates --
+    only the constant factor changes. Order is preserved (group-major, then lattice order)
+    so the seeded draw is unaffected.
+    """
+    from shapely.prepared import prep
+
+    centres = np.array(list(lattice_centres()), dtype=np.float64)
+    lons, lats = centres[:, 0], centres[:, 1]
+
     candidates: list[Candidate] = []
-    for lon, lat in lattice_centres():
-        point = Point(lon, lat)
-        for group in FRAME_GROUP_ORDER:
-            if group_geometries[group].covers(point):
+    for group in FRAME_GROUP_ORDER:
+        geometry = group_geometries[group]
+        if geometry.is_empty:
+            continue
+        west, south, east, north = geometry.bounds
+        in_bbox = np.flatnonzero(
+            (lons >= west) & (lons <= east) & (lats >= south) & (lats <= north)
+        )
+        ready = prep(geometry)
+        for index in in_bbox:
+            lon, lat = float(lons[index]), float(lats[index])
+            if ready.covers(Point(lon, lat)):
                 candidates.append(_candidate(group, lon, lat))
     return candidates
 
@@ -219,15 +261,109 @@ def screen_candidate(candidate: Candidate,
 
 def screen_universe(candidates: Iterable[Candidate],
                     reader: Callable[[tuple[float, float, float, float]], FrameHansenWindow]
-                    = read_frame_hansen) -> list[Candidate]:
-    eligible = []
-    for index, candidate in enumerate(candidates, 1):
-        screened = screen_candidate(candidate, reader)
-        if screened is not None:
-            eligible.append(screened)
-        if index % 100 == 0:
-            print(f"screened {index:,} candidates; eligible {len(eligible):,}", flush=True)
-    return eligible
+                    = read_frame_hansen,
+                    workers: int = 16,
+                    checkpoint: Path | None = None,
+                    checkpoint_every: int = 200) -> list[Candidate]:
+    """Screen every candidate against L13.3, resumably.
+
+    Each candidate needs a windowed Hansen read. Hansen GeoTIFFs are STRIPED
+    (block_shapes == (1, 40000)), so a 0.25-degree window still decompresses ~900
+    full-width LZW strips per band and costs ~30 s of thread time; 16k candidates is
+    ~10 h. Threading hides the latency but cannot remove that waste, and a tile-major
+    rewrite was tried, measured, found NOT faster on real tiles, and found to disagree
+    with this function's statistics -- so it was discarded rather than shipped.
+
+    What actually makes a 10-hour sweep practical is RESUMABILITY: results are appended to
+    a JSONL checkpoint, so an interrupted run restarts from where it stopped instead of
+    from zero.
+
+    Threading and resumption change throughput only. Results are returned in the ORIGINAL
+    candidate order, because the seeded permutation and the deterministic round-robin draw
+    depend on it.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    ordered = list(candidates)
+    results: list[Candidate | None] = [None] * len(ordered)
+    position = {candidate.candidate_id: index for index, candidate in enumerate(ordered)}
+    completed: set[str] = set()
+
+    if checkpoint and checkpoint.exists():
+        errored: set[str] = set()
+        for line in checkpoint.read_text().splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            identifier = record["candidate_id"]
+            index = position.get(identifier)
+            if index is None:
+                continue
+            # A read ERROR is NOT a screening verdict. Treating a transient RasterioIOError
+            # as "ineligible" would silently delete boxes from the sampling frame -- exactly
+            # the quiet bias this whole design exists to prevent. Errored candidates are
+            # therefore NOT marked complete, so a resume re-attempts them.
+            if record.get("error"):
+                errored.add(identifier)
+                continue
+            completed.add(identifier)
+            if record.get("eligible"):
+                results[index] = Candidate(**record["candidate"])
+        print(f"resumed from checkpoint: {len(completed):,} screened, "
+              f"{sum(1 for r in results if r is not None):,} eligible, "
+              f"{len(errored):,} to retry after read errors", flush=True)
+
+    todo = [(i, c) for i, c in enumerate(ordered) if c.candidate_id not in completed]
+    if not todo:
+        return [item for item in results if item is not None]
+
+    def work(pair: tuple[int, Candidate]) -> tuple[int, Candidate, Candidate | None, bool]:
+        index, candidate = pair
+        # Retry transient network failures before giving up. An unretried read error would
+        # be recorded as a screening verdict and silently drop the box from the frame.
+        last: Exception | None = None
+        for attempt in range(3):
+            try:
+                return index, candidate, screen_candidate(candidate, reader), False
+            except Exception as exc:
+                last = exc
+                if attempt < 2:
+                    time.sleep(2 * (attempt + 1))
+        print(f"  {candidate.candidate_id} ERRORED after 3 tries: "
+              f"{type(last).__name__}: {last}", flush=True)
+        return index, candidate, None, True
+
+    done = 0
+    pending: list[str] = []
+    handle = open(checkpoint, "a") if checkpoint else None
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for index, candidate, screened, errored_flag in pool.map(work, todo):
+                results[index] = screened
+                done += 1
+                if handle:
+                    pending.append(json.dumps({
+                        "candidate_id": candidate.candidate_id,
+                        "eligible": screened is not None,
+                        "error": errored_flag,
+                        "candidate": asdict(screened) if screened is not None else None,
+                    }))
+                    if len(pending) >= checkpoint_every:
+                        handle.write("\n".join(pending) + "\n")
+                        handle.flush()
+                        pending.clear()
+                if done % 250 == 0:
+                    found = sum(1 for item in results if item is not None)
+                    print(f"screened {len(completed) + done:,}/{len(ordered):,}; "
+                          f"eligible {found:,}", flush=True)
+        if handle and pending:
+            handle.write("\n".join(pending) + "\n")
+            handle.flush()
+    finally:
+        if handle:
+            handle.close()
+
+    return [item for item in results if item is not None]
 
 
 def distance_km(first: Candidate, second: Candidate) -> float:
