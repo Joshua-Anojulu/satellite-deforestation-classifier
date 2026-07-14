@@ -22,9 +22,39 @@ PROCESSED_DIR = DATA_ROOT / "processed"
 RESULTS_DIR = DATA_ROOT / "results"
 
 SEED = 42
-FEATURE_YEARS = (2016, 2017, 2018, 2019, 2020)
+# AMENDMENT-3 (2026-07-14, forced by the archive -- see PLAN.md and
+# results/product_census.md). The original window was FEATURE_YEARS =
+# (2016, 2017, 2018, 2019, 2020).
+#
+# The L2 gate needs a median per-pixel clear-observation count >= 8, and a pixel's
+# clear count CANNOT EXCEED the number of Sentinel-2 L2A products overlapping it.
+# Sentinel-2B launched in March 2017 and the early L2A archive is thin, so in the
+# locked 2016 window many sites have only 2-7 products: an unrecoverable failure no
+# mask or cloud threshold can lift. Measured against the live catalogue, only 12/19
+# sites cleared the floor in all five years (an UPPER bound -- real clear counts fall
+# further after masking), against a required frame of 12/12 and a cohort floor of 14.
+# Per year: 2016 -> 12/19, 2017 -> 16/19, 2018-2020 -> 19/19.
+#
+# Restricting the window to 2018-2020 is the smallest change that makes the study
+# viable: every site clears the floor, the frame can reach 12/12, the 2021-2024 label
+# years are untouched, and the <=2020 temporal firewall and the already-drawn pre-2021
+# frame both stand unchanged.
+#
+# NOTE HONESTLY: this is not a free fix. The condition history shrinks from 5 annual
+# points to 3, so every trend feature (_slope, Theil-Sen normalization) is fit on 3
+# points. The paper cannot claim "five years of trajectory". It weakens exactly the
+# quantity under test, and a null result is now harder to attribute (genuinely no
+# signal, vs. too short a history to see one). That must be said in Limitations.
+FEATURE_YEARS = (2018, 2019, 2020)
 REFERENCE_YEAR = 2020
 LABEL_YEARS = (2021, 2022, 2023, 2024)
+
+# The Hansen loss-count trend (feature b_trend) is computed from Hansen lossyear codes
+# 16..20, NOT from Sentinel-2 imagery. Hansen covers those years regardless of the
+# optical archive, and this window also defines frontier activity (recent_loss_2016_2020)
+# used to draw the frame. It is therefore INDEPENDENT of FEATURE_YEARS and must not
+# shrink with it -- block B is the contagion baseline the study measures against.
+HANSEN_TREND_YEARS = (2016, 2017, 2018, 2019, 2020)
 
 REFLECTANCE_BANDS = ("B02", "B03", "B04", "B08", "B11", "B12")
 VISIBLE_NIR_BANDS = ("B02", "B03", "B04", "B08")

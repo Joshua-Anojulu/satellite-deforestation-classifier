@@ -14,9 +14,15 @@ clearing that already happened?"* (answer: no detector dominates — robustness,
 asks the forward-looking question:
 
 > Within an already-active deforestation frontier, does a forest cell's **condition history**
-> (5 years of spectral trajectory, 2016–2020) carry **incremental predictive information** about
-> Hansen-detected tree-cover loss in 2021–2024, **conditional on** what we already know from prior
-> clearing (contagion) and a single 2020 snapshot?
+> (~~5 years~~ **3 years** of spectral trajectory, ~~2016–2020~~ **2018–2020** — see **AMENDMENT-3**)
+> carry **incremental predictive information** about Hansen-detected tree-cover loss in 2021–2024,
+> **conditional on** what we already know from prior clearing (contagion) and a single 2020 snapshot?
+
+**AMENDMENT-3 (2026-07-14) shortened the history window from 5 years to 3.** The 2016/2017 Sentinel-2
+L2A archive is too thin to reach the L2 clear-observation gate at most sites, so the original window
+made the study unviable (only 12 of 19 sites survived, against a floor of 14). The shortened history is
+**noisier and biased toward the null on exactly the block under test**, so a null result no longer
+cleanly separates "history carries no signal" from "three years is too short to see it." See L1.
 
 **The estimand is explicitly predictive, not causal.** Roads, tenure, access, and fragmentation drive
 both blocks; a performance delta is evidence of *incremental predictive information conditional on
@@ -91,7 +97,7 @@ Sentinel-2 L2A ships as integer DN, **not** reflectance. The existing pipeline t
 - **Every** downstream quantity — QC bounds, Theil–Sen coefficients, NDVI/NDMI/NBR, brightness — is
   computed on `ρ ∈ [0,1]`, never on DN and never on unclipped values. There is no `[0,1.5]` regime.
 
-### L1 — Compositing windows (per site, identical across all 5 years)
+### L1 — Compositing windows (per site, identical across every feature year)
 
 Set from published monthly-precipitation climatology (CHIRPS/WorldClim), verified and recorded in the
 paper **before fitting any risk model**. (Not "before any outcome is inspected" — the prior study
@@ -123,6 +129,79 @@ is **derived per site by a deterministic algorithm**, applied uniformly to **all
 Fixed 4-month length removes another free parameter. Computed **at draw time, before any imagery is
 downloaded**, then frozen. If the algorithm disagrees with the legacy table above for some site, **the
 algorithm wins** — the table was hand-set and the algorithm is the locked rule.
+
+#### AMENDMENT-3 (2026-07-14) — the feature window is 2018–2020; 2016–2017 do not exist
+
+**Caught by measuring the live archive after the first composite downloaded, before any model was fit.**
+Evidence: `results/product_census.md`.
+
+The plan locked a feature window of **2016–2020** and, in L2, a gate of **median per-pixel
+clear-observation count ≥ 8**. Those two are incompatible, and no code change can reconcile them.
+
+A pixel's clear-observation count **cannot exceed the number of Sentinel-2 L2A products that overlap
+it** in the window. Sentinel-2B did not launch until **March 2017**, and the early L2A archive is thin.
+Measured against the live CDSE catalogue over the locked L1 windows:
+
+| year | sites with ≥ 8 products (of 19) |
+|---|---|
+| 2016 | 12 |
+| 2017 | 16 |
+| 2018 | **19** |
+| 2019 | **19** |
+| 2020 | **19** |
+
+Because L2 drops a **site whole** if **any** of its site-years fails, only **12 of 19** sites survived —
+and that is an **upper bound**, since realized clear counts fall further after SCL masking. The frame
+needs **12/12** and the combined cohort floor is **14**. **The study as locked was not viable.**
+
+This was not visible before download. Phase 0 verified the reflectance convention and band availability
+against live CDSE, but it **never counted acquisitions per site-year** — it checked that the data was
+*correct*, not that enough of it *existed*. That is the gap this amendment closes.
+
+**Fix: `FEATURE_YEARS = (2018, 2019, 2020)`.** It is the smallest change that makes the study viable:
+
+- Every one of the 19 sites clears the product floor in every remaining year, so the frame can reach
+  12/12 and the cohort floor of 14 is met.
+- **Nothing else moves.** Label years stay **2021–2024**. The **≤ 2020 temporal firewall** is untouched.
+  The pre-2021 sampling frame is **not redrawn** — its candidate/draw hashes still stand, and the
+  cohort, box geometry, strata and CHIRPS seasonal windows are **byte-identical** (verified). The
+  surviving 2018/2019/2020 periods are the *same* month-of-year windows as before; only 2016 and 2017
+  were removed.
+- **Block B is deliberately NOT shortened.** `b_trend` is fit on Hansen lossyear codes 16–20, and Hansen
+  covers 2016–2020 regardless of the optical archive. The imagery axis (`FEATURE_YEARS`) and the Hansen
+  axis (`HANSEN_TREND_YEARS`) are now separate constants. They were previously one shared implicit axis
+  inside `_slope()`, so shrinking the window would have fit 3 x-values against block B's 5 y-values and
+  **silently corrupted the contagion baseline** — the very control the headline estimand is measured
+  against. Regression test: `risk/tests/test_trend_axes.py`.
+
+**State the cost honestly. This is not a free fix, and it cuts at the question.**
+
+The condition history drops from **5 annual points to 3**. Every trend feature (the block-D `_slope`
+features, and the Theil–Sen PIF normalization) is now fit on three points. Consequences that go in the
+paper, not in a footnote:
+
+1. The paper **cannot claim "five years of trajectory."** The estimand becomes: does a **three-year**
+   (2018–2020) condition history add incremental predictive information beyond contagion?
+2. **A null result is now harder to interpret.** "Condition history carries no incremental signal" and
+   "three years is too short a history to detect the signal" become **harder to separate**, and the
+   design can no longer cleanly distinguish them. The deflationary reading was always an acceptable
+   outcome of this study; it is now a **weaker** claim than the one originally planned.
+3. The trend features are noisier: a 3-point slope has far less leverage than a 5-point slope, which
+   **biases the study toward the null** on exactly the block under test (C/D), while block B (contagion)
+   keeps its full 5-point Hansen trend. **The comparison is therefore conservative against the
+   hypothesis** — if history still wins, that is strong; if it loses, the shortened window is a live
+   alternative explanation and must be named as one.
+
+**Rejected alternatives** (and why):
+
+- *Relax the L2 gate for 2016/2017 only.* Keeps 5 years, but a 2–3 observation median composite is
+  noisy, and a per-year gate destroys the "identical treatment in every year" property L1 exists to
+  guarantee. A trend fit across years of unequal quality is precisely the artifact this plan was built
+  to exclude.
+- *Shift the design to 2018–2022 features → 2023–2024 labels.* Keeps 5 years, but collapses the label
+  window to 2 years (far fewer positives) and **invalidates the already-drawn pre-2021 frame**, which
+  would have to be redrawn — reopening outcome-blindness.
+- *Accept a 12-site cohort.* Sits below the locked floor of 14, and 12 is an upper bound.
 
 ### L2 — QC gate (per site-year; failing ANY → the **site** is dropped whole, never interpolated)
 

@@ -1,4 +1,9 @@
-"""Locked PIF/Theil--Sen mapping of every feature year onto 2020."""
+"""Locked PIF/Theil--Sen mapping of every feature year onto the reference year.
+
+AMENDMENT-3 shortens FEATURE_YEARS to 2018--2020, so the Theil--Sen fit now runs on
+three annual points rather than five. Theil--Sen is defined for three points, but it
+is a weaker fit; this is disclosed in the paper's Limitations.
+"""
 
 from __future__ import annotations
 
@@ -37,7 +42,7 @@ def build_pif_mask(datamask: np.ndarray, treecover2000: np.ndarray,
                    pixel_size_m: tuple[float, float]) -> np.ndarray:
     years = assert_feature_years(clearobs_by_year)
     if set(years) != set(FEATURE_YEARS):
-        raise ValueError("PIF clear criterion requires all five locked feature years.")
+        raise ValueError(f"PIF clear criterion requires exactly the locked feature years {FEATURE_YEARS}.")
     shapes = {np.asarray(value).shape for value in clearobs_by_year.values()}
     shapes.update({datamask.shape, treecover2000.shape, prior_loss_2001_2020.shape})
     if len(shapes) != 1:
@@ -57,7 +62,7 @@ def fit_transforms(reflectance_by_year: Mapping[int, np.ndarray], pif_mask: np.n
                    band_names: tuple[str, ...]) -> dict[int, dict[str, BandTransform]]:
     years = assert_feature_years(reflectance_by_year)
     if set(years) != set(FEATURE_YEARS):
-        raise ValueError("Normalization requires exactly 2016--2020.")
+        raise ValueError(f"Normalization requires exactly the locked feature years {FEATURE_YEARS}.")
     pif_indices = np.flatnonzero(np.asarray(pif_mask, dtype=bool).ravel())
     if pif_indices.size < MIN_PIF_PIXELS:
         raise ValueError(f"PIF count {pif_indices.size} is below locked minimum {MIN_PIF_PIXELS}.")

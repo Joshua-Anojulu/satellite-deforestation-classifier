@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from risk.config import FEATURE_YEARS
 from risk.features import condition_features, fixed_support_mask
 
 
@@ -9,7 +10,7 @@ BANDS = ("B02", "B03", "B04", "B08", "B11", "B12")
 
 def _trajectory():
     data = {}
-    for offset, year in enumerate(range(2016, 2021)):
+    for offset, year in enumerate(FEATURE_YEARS):
         array = np.zeros((6, 5, 5), dtype=np.float32)
         array[0] = 0.05
         array[1] = 0.06
@@ -22,12 +23,12 @@ def _trajectory():
     return data
 
 
-def test_fixed_support_must_be_bit_identical_in_all_five_years():
+def test_fixed_support_must_be_bit_identical_in_every_feature_year():
     base = np.ones((5, 5), dtype=bool)
     base[4, :] = False
-    supports = {year: base.copy() for year in range(2016, 2021)}
+    supports = {year: base.copy() for year in FEATURE_YEARS}
     assert np.array_equal(fixed_support_mask(supports), base)
-    supports[2018][0, 0] = False
+    supports[FEATURE_YEARS[-1]][0, 0] = False
     with pytest.raises(AssertionError, match="support changed"):
         fixed_support_mask(supports)
 
@@ -36,14 +37,13 @@ def test_condition_extraction_uses_one_support_for_every_year():
     support = np.ones((5, 5), dtype=bool)
     support[4, :] = False
     medians = {year: {name: 0.5 for name in ("ndvi", "ndmi", "nbr")}
-               for year in range(2016, 2021)}
+               for year in FEATURE_YEARS}
     result = condition_features(
         _trajectory(), BANDS, support,
         pixel_windows=np.array([[0, 0, 5, 5]]), pif_index_medians=medians,
     )
     assert not result.loc[0, "excluded_support_lt20"]
     # NIR rises by exactly .01 each year on the fixed set; outside 0.99 values
-    # never enter any of the five annual summaries.
+    # never enter any annual summary.
     assert result.loc[0, "d_ndvi_slope_mean"] > 0
     assert result.loc[0, "c_ndvi_mean"] < 0.75
-

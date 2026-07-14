@@ -1,4 +1,8 @@
-"""Build and execute the locked SCL-masked 2016--2020 openEO graphs.
+"""Build and execute the locked SCL-masked openEO graphs for FEATURE_YEARS.
+
+AMENDMENT-3 restricted the window to 2018--2020: the 2016/2017 Sentinel-2 L2A archive
+is too thin to reach the L2 clear-observation gate at most sites (see
+results/product_census.md).
 
 Tile cloud cover is only a permissive metadata prefilter.  The real mask is the
 union of the eight locked SCL classes, dilated once with a 5x5 square at native
@@ -126,7 +130,10 @@ def validate_pre_download_manifest(manifest: Mapping[str, Any]) -> None:
         raise RuntimeError("Pre-download manifest does not contain the locked 3x4 frame cohort.")
     for site in manifest["sites"]:
         if set(site["periods"]) != {str(year) for year in FEATURE_YEARS}:
-            raise RuntimeError(f"{site['candidate_id']} lacks one of the five feature periods.")
+            raise RuntimeError(
+                f"{site['candidate_id']} periods {sorted(site['periods'])} do not match "
+                f"the locked feature years {FEATURE_YEARS}."
+            )
         for year, period in site["periods"].items():
             if int(year) > 2020 or int(period[1][:4]) > 2020:
                 raise AssertionError(f"Post-2020 imagery reached download manifest: {site['candidate_id']} {period}")

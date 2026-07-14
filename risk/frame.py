@@ -23,6 +23,7 @@ from shapely.ops import unary_union
 
 from .config import (
     DRY_BIOME_NAME,
+    FEATURE_YEARS,
     FRAME_CUMULATIVE_LOSS_MIN,
     FRAME_DIR,
     FRAME_MIN_AT_RISK_CELLS,
@@ -506,7 +507,7 @@ def finalize_analysis_sites(frame_payload: Mapping[str, object], chirps_netcdf: 
             sites.append({
                 **asdict(item), "cohort": cohort, "window_start_month": start_month,
                 "periods": {str(year): feature_period(year, start_month)
-                            for year in (2016, 2017, 2018, 2019, 2020)},
+                            for year in FEATURE_YEARS},
             })
             if cohort == "legacy":
                 expected = EXPECTED_LEGACY_WINDOWS[item.candidate_id]

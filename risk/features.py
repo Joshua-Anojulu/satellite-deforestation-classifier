@@ -1,8 +1,13 @@
-"""Exact S/B/C/D feature blocks with a single five-year condition support.
+"""Exact S/B/C/D feature blocks over a single fixed condition support.
 
 Condition extraction accepts one support mask (or verifies that a supplied
 year mapping is bit-identical) and applies it unchanged to every annual array.
 This API makes the anti-circularity invariant hard to violate accidentally.
+
+Two DISTINCT time axes live here and must not be conflated. The condition blocks
+(C/D) span FEATURE_YEARS, shortened to 2018--2020 by AMENDMENT-3. Block B's Hansen
+loss trend spans HANSEN_TREND_YEARS (2016--2020), which Hansen covers regardless of
+the Sentinel-2 archive, so it does NOT shrink with the imagery window.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from .config import (
     CELL_SIZE_M,
     DISTANCE_CAP_M,
     FEATURE_YEARS,
+    HANSEN_TREND_YEARS,
     MIN_SUPPORT_PIXELS,
     NEIGHBORHOOD_RADIUS_M,
     REFERENCE_YEAR,
@@ -72,8 +78,20 @@ def _distribution(values: np.ndarray, pif_median: float) -> tuple[dict[str, floa
     return result, degenerate
 
 
-def _slope(values: Sequence[float]) -> float:
-    return float(np.polyfit(np.asarray(FEATURE_YEARS, dtype=float), np.asarray(values, dtype=float), 1)[0])
+def _slope(values: Sequence[float], years: Sequence[int]) -> float:
+    """Least-squares slope of `values` against `years`.
+
+    The x-axis is explicit because the two callers live on DIFFERENT time axes:
+    the condition blocks run on FEATURE_YEARS (Sentinel-2, shortened to 2018--2020
+    by AMENDMENT-3), while b_trend runs on HANSEN_TREND_YEARS (Hansen lossyear
+    16..20, unaffected by the optical archive). Sharing one implicit axis would
+    have silently mis-fit block B, the contagion baseline.
+    """
+    x = np.asarray(years, dtype=float)
+    y = np.asarray(values, dtype=float)
+    if x.size != y.size:
+        raise ValueError(f"slope needs one year per value; got {x.size} years and {y.size} values.")
+    return float(np.polyfit(x, y, 1)[0])
 
 
 def condition_features(reflectance_by_year: Mapping[int, np.ndarray], band_names: Sequence[str],
@@ -82,7 +100,7 @@ def condition_features(reflectance_by_year: Mapping[int, np.ndarray], band_names
                        pif_index_medians: Mapping[int, Mapping[str, float]]) -> pd.DataFrame:
     years = assert_feature_years(reflectance_by_year)
     if set(years) != set(FEATURE_YEARS):
-        raise ValueError("Condition history requires all five locked years.")
+        raise ValueError(f"Condition history requires exactly the locked years {FEATURE_YEARS}.")
     fixed = fixed_support_mask(support)
     indices = {year: spectral_indices(reflectance_by_year[year], band_names) for year in FEATURE_YEARS}
     band_lookup = {name: index for index, name in enumerate(band_names)}
@@ -119,9 +137,9 @@ def condition_features(reflectance_by_year: Mapping[int, np.ndarray], band_names
             means = [annual[year][name]["mean"] for year in FEATURE_YEARS]
             stds = [annual[year][name]["std"] for year in FEATURE_YEARS]
             p10s = [annual[year][name]["p10"] for year in FEATURE_YEARS]
-            record[f"d_{name}_slope_mean"] = _slope(means)
-            record[f"d_{name}_slope_std"] = _slope(stds)
-            record[f"d_{name}_slope_p10"] = _slope(p10s)
+            record[f"d_{name}_slope_mean"] = _slope(means, FEATURE_YEARS)
+            record[f"d_{name}_slope_std"] = _slope(stds, FEATURE_YEARS)
+            record[f"d_{name}_slope_p10"] = _slope(p10s, FEATURE_YEARS)
             record[f"d_{name}_tstd_mean"] = float(np.std(means, ddof=1))
             record[f"d_{name}_delta"] = float(means[-1] - means[0])
         rows.append(record)
@@ -210,7 +228,12 @@ def contagion_grid_features(l20: np.ndarray, u_counts: np.ndarray, max_prior_yea
 def neighborhood_hansen_features(lossyear: np.ndarray, datamask: np.ndarray,
                                  x_coordinates_m: np.ndarray, y_coordinates_m: np.ndarray,
                                  cell_centres_m: np.ndarray) -> dict[str, np.ndarray]:
-    """Circular 1,920 m native-pixel densities and five-point loss-count slope."""
+    """Circular 1,920 m native-pixel densities and the Hansen loss-count slope.
+
+    The slope is fit over HANSEN_TREND_YEARS (lossyear codes 16..20), which stays a
+    five-point series under AMENDMENT-3: Hansen covers 2016--2020 regardless of how
+    thin the Sentinel-2 archive is.
+    """
     lossyear = np.asarray(lossyear)
     datamask = np.asarray(datamask)
     x_coordinates_m = np.asarray(x_coordinates_m)
@@ -239,8 +262,9 @@ def neighborhood_hansen_features(lossyear: np.ndarray, datamask: np.ndarray,
         for window, lower in ((1, 20), (3, 18), (5, 16)):
             numerator = (local_loss >= lower) & (local_loss <= 20)
             result[f"b_density_{window}"][index] = float(numerator.sum() / denominator)
-        annual_counts = [int((local_loss == code).sum()) for code in range(16, 21)]
-        result["b_trend"][index] = _slope(annual_counts)
+        annual_counts = [int((local_loss == code).sum())
+                         for code in (year - 2000 for year in HANSEN_TREND_YEARS)]
+        result["b_trend"][index] = _slope(annual_counts, HANSEN_TREND_YEARS)
     return result
 
 

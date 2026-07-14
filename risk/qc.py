@@ -13,6 +13,7 @@ import numpy as np
 from .config import (
     BOA_ADD_OFFSET_BASELINE_04,
     BOA_QUANTIFICATION_VALUE,
+    FEATURE_YEARS,
     MAX_NODATA_FRACTION,
     MAX_OUT_OF_RANGE_FRACTION,
     MIN_CELL_MEDIAN_CLEAR_OBS,
@@ -122,8 +123,10 @@ def evaluate_site_year(year: int, reflectance: np.ndarray, clearobs: np.ndarray,
 def evaluate_site(records: Mapping[int, SiteYearQC], cell_year_median_clear: np.ndarray) -> SiteQC:
     """Drop the whole site if any year or the locked every-year cell check fails."""
     values = np.asarray(cell_year_median_clear, dtype=float)
-    if values.ndim != 2 or values.shape[1] != 5:
-        raise ValueError("Expected at-risk cell x five-year clear-observation medians.")
+    if values.ndim != 2 or values.shape[1] != len(FEATURE_YEARS):
+        raise ValueError(
+            f"Expected at-risk cell x {len(FEATURE_YEARS)} feature-year clear-observation medians."
+        )
     if values.shape[0] == 0:
         fraction = 0.0
     else:

@@ -1,4 +1,4 @@
-"""Master-grid creation and alignment checks for five-year trajectories."""
+"""Master-grid creation and alignment checks for the locked condition trajectory."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from rasterio.windows import Window, bounds as window_bounds
 from .config import (
     BOA_ADD_OFFSET_BASELINE_04,
     BOA_QUANTIFICATION_VALUE,
+    FEATURE_YEARS,
     PATCH_PIXELS,
     REFERENCE_YEAR,
     STRIDE_PIXELS,
@@ -130,8 +131,8 @@ def cell_grid(master: MasterGrid, analysis_bounds_wgs84: tuple[float, float, flo
 def load_trajectory(paths: dict[int, str | Path],
                     convention: str = "already_offset_integer_scaled") -> tuple[MasterGrid, dict[int, np.ndarray], tuple[str, ...]]:
     years = assert_feature_years(paths.keys())
-    if set(years) != set(range(2016, 2021)):
-        raise ValueError("The locked trajectory requires all five years 2016--2020.")
+    if set(years) != set(FEATURE_YEARS):
+        raise ValueError(f"The locked trajectory requires exactly the years {FEATURE_YEARS}.")
     master = master_grid(paths[REFERENCE_YEAR])
     arrays: dict[int, np.ndarray] = {}
     names: tuple[str, ...] | None = None
@@ -145,11 +146,13 @@ def load_trajectory(paths: dict[int, str | Path],
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Verify/warp five composites to the 2020 master grid.")
-    for year in range(2016, 2021):
+    parser = argparse.ArgumentParser(
+        description=f"Verify/warp the {len(FEATURE_YEARS)} composites to the {REFERENCE_YEAR} master grid."
+    )
+    for year in FEATURE_YEARS:
         parser.add_argument(f"--y{year}", type=Path, required=True)
     args = parser.parse_args()
-    paths = {year: getattr(args, f"y{year}") for year in range(2016, 2021)}
+    paths = {year: getattr(args, f"y{year}") for year in FEATURE_YEARS}
     grid, arrays, bands = load_trajectory(paths)
     print(f"Master: {grid.crs} {grid.shape} {grid.transform}")
     print(f"Bands: {bands}; years: {tuple(arrays)}")
