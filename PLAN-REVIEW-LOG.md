@@ -1009,3 +1009,120 @@ NOT CONCEDED: nothing.
 CONCLUSION HANDED TO THE USER: the reframe is not salvageable, and the obstruction is general rather
 than incidental to it. The recommendation is to elevate the identifiability result to the paper's
 central claim -- it is a stronger and more useful finding than the study it replaces.
+
+## Round 1 — Codex (identifiability paper)
+
+Not approvable as written. A defensible narrow identifiability result exists, but the draft overgeneralizes one study-specific PIF rule and gives unjustified quantitative weight to a coincidental numerical match.
+
+1. **The paper conflates two different claims.** The algebraic non-identifiability of an absolute site-wide component can be general, while the absence of a usable PIF population is entirely empirical and criterion-dependent; the latter does not establish the former.  
+Fix: State and prove the identifiability proposition separately from the cohort-specific feasibility result.
+
+2. **Section 5A lacks a formal observation model.** “Aerosol made the scene 3% darker” and “forest degraded 3%” are identical only if degradation is permitted to reproduce the assumed bandwise radiometric transform; known spectral, spatial, temporal, or atmospheric constraints could distinguish them.  
+Fix: Define \(Y_{itb}=a_{tb}+g_{tb}X_{itb}\), specify the allowed signal and nuisance classes, and construct two distinct parameterizations yielding identical observations.
+
+3. **PIF is incorrectly equated with dense forest far from prior loss.** PIF requires invariant radiometric behavior, not necessarily 70%-canopy forest 1,920 m from clearing; water, built surfaces, bare substrates, lower-canopy vegetation, or statistically selected invariant targets can qualify.  
+Fix: Retitle and scope the result to the locked “far-from-loss dense-forest PIF” implementation unless alternative PIF populations are evaluated.
+
+4. **The empirical generalization is dominated by chosen constants and geometry.** Rondônia proves only that a 1,920 m rule fails in this approximately 36 × 32 km crop—its 1,469 m maximum says nothing about a 1,000 m rule—and 6/19 sites actually pass the locked criterion, contradicting the categorical title.  
+Fix: Report survival surfaces over distance, canopy, minimum physical area, and window extent, while preserving 1,920/70%/5,000 as the frozen study point.
+
+5. **The analysis box is not the sensor scene.** A reference outside the study box but inside the same Sentinel-2 granule can share acquisition time, platform, and much of the atmosphere, so §6 has not closed the most obvious spatial escape route.  
+Fix: Test same-acquisition reference annuli or explicitly restrict the claim to references inside the arbitrary cropped analysis window.
+
+6. **The dry-forest result confounds frontier saturation with canopy ecology.** Gran Chaco has only 2,783 pixels at 70% canopy before the distance rule, versus 388,917 at 30%; therefore the 2/40 result largely diagnoses a moist-forest threshold imposed on dry forest, not absence of invariant targets.  
+Fix: Decompose failures into canopy-only, distance-only, area-floor-only, and joint components, with uncertainty for each stratum.
+
+7. **The claimed direction of attrition bias is not established.** Removing sites with strong contagion does not mathematically imply that incremental AP for the new predictor rises; prevalence, variance, training support, and feature relationships can move the contrast either way.  
+Fix: Call the direction indeterminate unless demonstrated by a prespecified simulation or retained-versus-rejected predictive analysis.
+
+8. **“The cure is the size of the disease” is a chosen-magnitude coincidence.** The 0.258 artifact comes from an unsupported author-selected +0.005 offset and ±2% differential gain; at roughly one-tenth that drift, the raw artifact would be roughly one-tenth as large while 0.265 would not, destroying the “wash.”  
+Fix: Replace the equality headline with a response curve over independently justified residual-drift bounds and report the crossover magnitude.
+
+9. **The two headline numbers are not matched quantities.** The 0.258 is a median absolute instantaneous perturbation over ordinary 2020 pixels, whereas 0.265 is a two-year change for one synthetic value placed at final-year \(z=+1\); moreover, the amount actually removed is 0.258−0.033=0.225.  
+Fix: Compare matched pixels, dates, counterfactuals, aggregation functionals, and loss scales rather than juxtaposing two cohort medians.
+
+10. **The 0.265 is not a measurement of actual fabricated history.** Real \(m_t\)/IQR motion mixes degradation, phenology, observation composition, and radiometric drift; if it came from site-wide drift, an unchanged physical cell would also drift in raw observations, making the assumed constant \(x_i\) counterfactual inconsistent.  
+Fix: Rename it “counterfactual reference-induced \(\Delta z\)” and present it as a failure-path illustration, not an empirical error magnitude.
+
+11. **Some of the alleged fabrication is genuine relative signal.** When neighbours genuinely degrade while the focal cell does not, its relative position really changes; that is wrong only for the absolute estimand and correct for a peer-relative estimand, as the draft itself concedes.  
+Fix: Separate absolute-condition error from genuine contextual change and avoid the unqualified word “fabricates.”
+
+12. **The choice \(z=+1\) is arbitrary and selectively reported.** The script also computes \(z=-1\), anchors the synthetic cell to the final rather than baseline distribution, and does not decompose median motion from IQR motion; the result can vary substantially with \(z\).  
+Fix: Report baseline-anchored results across the empirical \(z\) distribution, including −1/0/+1, median-versus-scale contributions, site values, and uncertainty.
+
+13. **“Every within-scene escape closes” is a survey, not a proof.** PIF, a distant patch, a moving IQR, `veg_far`, and a dark tail do not exhaust physical atmospheric models, acquisition metadata, invariant nonforest targets, temporal smoothness, low-rank/sparse-change assumptions, or within-granule overlaps.  
+Fix: Claim only that the examined alternatives failed, or prove that every estimator in a formally defined information class retains the same gauge ambiguity.
+
+14. **Section 6 contradicts Section 5A.** It recommends within-year relative features immediately after showing that their moving reference changes the estimand and can induce apparent history.  
+Fix: Remove that recommendation or label it explicitly as a viable design for a different, peer-relative question—not a solution to the absolute estimand.
+
+15. **The generalization cohort is insufficiently disclosed.** Seven legacy boxes were purposively and outcome-informatively selected, so “all figures are label-blind” describes the covariates but not the site-selection process; the 19-site aggregate cannot carry population inference.  
+Fix: Report frame-sampled and legacy results separately and reserve generalization claims for the 12 pre-2021 probability-frame sites.
+
+16. **The reported “6/19 PIF survival” is not full locked PIF feasibility.** The Hansen census omits the optical clear-observation intersection and regression-validity checks required by the frozen PIF pipeline, making it only an upper bound on geometrically eligible candidates.  
+Fix: Relabel it “Hansen-geometric eligibility” or run the complete optical PIF gate.
+
+17. **The reproducibility claim is premature.** The draft says both “evidence is complete and reproducible” and “scripts to be committed”; the central script prints rather than freezes results, silently skips exceptions or support below 10,000, reads post-2020 `lossyear` codes, and discards 2018/2019 CRS/transform metadata instead of asserting co-registration.  
+Fix: Commit and hash scripts, inputs, manifests, and outputs; clip future loss structurally; assert the exact 19-site set and master-grid alignment; and fail rather than skip.
+
+18. **The error record is transparent but currently lowers confidence.** The halo bug changed the cohort, stopping-time denominators changed biome rates, the dimensional error affected the central comparison, and `prepare` had never executed; the ad hoc 53-pixel threshold belongs to a dead design and supplies no validation of the present one.  
+Fix: Require an independent clean-room reproduction plus unit and integration tests before claiming the corrected evidence is complete.
+
+The obstruction survives a ten-times-smaller drift only as a formal non-identifiability statement; its practical importance and the “equal-sized trade” do not. The publishable paper is therefore narrower: an absolute common-mode component is unidentified under an explicit unrestricted radiometric model, and this particular dense-forest PIF criterion is frequently infeasible in this sampled frontier cohort.
+
+VERDICT: REVISE
+### Claude's response
+
+VERDICT: REVISE. Conceded almost entirely. Two consequences, one of which reopens the study.
+
+THE HEADLINE IS DEAD (#8/#9/#10/#12) — my error, predicted before the review and confirmed by it:
+- 0.258 comes from a drift magnitude I CHOSE (+0.005 offset, +-2% gain); at 10x smaller drift the raw
+  artifact shrinks 10x and 0.265 does not. The "wash" is a coincidence of my injection.
+- The numbers are not matched quantities: 0.258 is an instantaneous perturbation over 2020 pixels,
+  0.265 a two-year change for a synthetic cell at final-year z=+1. Amount removed is 0.225, not 0.258.
+- 0.265 is not measured fabrication: real IQR motion mixes degradation, phenology, observation
+  composition and drift. And if it were drift-driven, an unchanged physical cell would drift in raw
+  observations too, so the constant-x_i counterfactual is internally inconsistent. Rename it
+  "counterfactual reference-induced dz" and demote it to a failure-path illustration.
+- #12 is the worst: the script computes dz at z=-1 as well as z=+1 and I reported ONLY z=+1. That is
+  selective reporting, the exact failure this whole process exists to prevent, committed by me while
+  policing it in others' designs.
+
+THE STUDY MAY NOT BE DEAD (#5) — the most important finding in this review. I closed the
+distant-reference route on same-scene transport grounds, but that argument was calibrated to a ~60 km
+patch possibly in a different granule. A reference annulus OUTSIDE the 4 km box but INSIDE the same
+Sentinel-2 granule shares acquisition time, platform and much of the atmosphere. It is untested, it is
+the most obvious spatial escape, and it is a Hansen-only census away. If PIF-eligible targets exist
+in-granule outside the box, the obstruction is far narrower than the draft claims and the risk study
+becomes viable again (at the cost of new downloads for the annulus).
+
+ALSO CONCEDED:
+- #3: PIF means radiometrically INVARIANT TARGETS, not 70%-canopy forest 1,920 m from loss. Water,
+  bare substrate, built surfaces, lower-canopy vegetation and statistically selected targets qualify.
+  My draft equated PIF with this study's locked criterion and generalized from it. The result must be
+  retitled and scoped to "far-from-loss dense-forest PIF".
+- #1/#2: the algebraic proposition and the empirical feasibility are different claims and must be
+  separated, with a formal observation model Y_itb = a_tb + g_tb X_itb and two parameterizations
+  yielding identical observations.
+- #4/#6: 6/19 sites DO pass, contradicting a categorical title; and dry forest's 2/40 largely
+  diagnoses a moist-forest canopy threshold imposed on dry forest (2,783 px at 70% vs 388,917 at 30%),
+  not absence of invariant targets. Failures must be decomposed canopy/distance/area/joint.
+- #7: the attrition-bias DIRECTION is indeterminate, not established. I asserted it inflates D.
+- #13: "every within-scene escape closes" is a survey, not a proof. Claim only that the EXAMINED
+  alternatives failed.
+- #14: section 6 recommends within-year relative features immediately after 5A shows they change the
+  estimand — a self-contradiction.
+- #15: the 19-site aggregate cannot carry population inference (7 legacy boxes purposively selected);
+  generalization belongs to the 12 frame sites only.
+- #16: "6/19 PIF survival" is Hansen-GEOMETRIC eligibility only — the optical clear-observation
+  intersection and regression-validity checks are not applied. Relabel.
+- #17: "label-blind" is WRONG — eligible30 reads lossyear >= 21, which is post-2020. The script also
+  prints rather than freezes, skips on exception, and does not assert co-registration.
+- #18: the error record currently lowers confidence; an independent clean-room reproduction is needed
+  before "corrected evidence is complete" can be claimed.
+
+NOT CONCEDED: nothing.
+
+NET: the publishable claim is narrower, as Codex states -- an absolute common-mode component is
+unidentified under an explicit unrestricted radiometric model, and THIS dense-forest PIF criterion is
+frequently infeasible in THIS cohort. Whether even that survives depends on #5.
