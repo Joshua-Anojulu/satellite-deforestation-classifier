@@ -144,12 +144,12 @@ def clearobs_native_statistics(path: Path, eligible_hansen: np.ndarray,
             counts.shape, source.transform, str(source.crs),
         )
         analysis_bounds = transform_bounds("EPSG:4326", source.crs, *analysis_bounds_wgs84, densify_pts=21)
-        values, weights = _area_weighted_values(counts, support20, analysis_bounds)
+        values, weights = _area_weighted_values(counts, support20, source.transform, analysis_bounds)
         site_median = _weighted_median(values, weights)
         cell_medians = []
         for bounds in cell_bounds_master:
             projected = transform_bounds(master_crs, source.crs, *bounds, densify_pts=5)
-            values, weights = _area_weighted_values(counts, support20, projected)
+            values, weights = _area_weighted_values(counts, support20, source.transform, projected)
             cell_medians.append(_weighted_median(values, weights))
         # Area-weighted average onto each native Hansen pixel for the PIF clear criterion.
         on_hansen = np.full(eligible_hansen.shape, np.nan, dtype=np.float32)
