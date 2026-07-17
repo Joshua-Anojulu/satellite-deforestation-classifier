@@ -68,10 +68,38 @@ baseline and inflated D.
   potentially 19. No PIF gate, therefore no PIF attrition.
 - **L13.8 unchanged:** combined LOSO stays primary, frame-only LOSO stays the generalization
   analysis. No hierarchy change to defend (this was r2#8/#9's lesson).
-- **Residual-drift check (the honest gap):** affine cancellation is **exact for bands** but only
-  **approximate for indices** (NDVI/NDMI/NBR are nonlinear in the bands), so a second-order residual
-  survives. This needs a bounded equivalence check — far weaker than AMENDMENT-4's D2 apparatus, but
-  **not free, and not yet specified**. This is the first thing Act 2 should attack.
+- **Residual-drift check — MEASURED, and it partly falsifies the claim above.**
+  `risk/census/drift_invariance_test.py` applies synthetic per-band affine drift to a real composite
+  (rondonia/2020, 4.3 M support pixels) and measures the residual in the standardized index:
+
+  | Drift | Raw index change | **Standardized residual (median / p95, z units)** |
+  |---|---|---|
+  | uniform gain +3% | 0.0000 | **0.0000 / 0.0000** |
+  | differential gain ±2% (NIR vs RED) | 0.0065 | **0.0003 / 0.0405** |
+  | **uniform offset +0.005** | 0.0243 | **0.0328 / 0.1460** |
+  | combined | 0.0166 | **0.0313 / 0.1062** |
+
+  1. **Uniform gain is a non-issue.** Normalized-difference indices are *already* exactly
+     gain-invariant — `(gN − gR)/(gN + gR) = (N − R)/(N + R)` — before standardization enters. The
+     round-5 objection that killed D2 ("additive correction is blind to multiplicative gain") is
+     real for **bands** but does not reach the **indices** this study uses.
+  2. **Differential gain is absorbed** by the site median (residual 0.0003 z).
+  3. **Additive offset is NOT cancelled — the claim was wrong.** Standardization is **no better than
+     raw** for offset (0.0328 vs 0.0243 median): the nonlinearity converts an additive band offset
+     into a genuine index change, and dividing by IQR can amplify it. "Affine drift cancels to first
+     order" holds **exactly for bands** and **fails for the offset component on indices**. A
+     *year-varying* offset — atmospheric-correction error being the obvious source — injects a
+     systematic per-year shift, and `d_*` features are slopes across exactly those years. That is a
+     spurious-trend path in the confirming direction and it must be closed before this design is
+     primary.
+
+  **The problem is now bounded and specific**, which the D2 apparatus never was: gain is free,
+  differential gain is handled, and only the **offset** component needs treatment.
+  **Candidate (unproven, for Act 2 to attack):** a within-scene offset correction — subtract each
+  band's low percentile computed over the **fixed support** (identical pixels all three years),
+  a dark-object-subtraction variant needing no external controls, no PIF and no reference forest.
+  Its own risk is that the dark tail of forest (shadow fraction) may itself change with clearing,
+  which would re-import the signal being corrected; the fixed support limits but may not remove that.
 
 ## Risks / open questions
 

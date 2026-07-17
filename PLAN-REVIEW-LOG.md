@@ -890,3 +890,122 @@ WHAT THE FIVE ROUNDS BOUGHT (all before a single byte was downloaded):
 Every one of these would have surfaced after ~2 days of CDSE downloads, or not at all.
 
 HANDED TO THE USER per the skill's deadlock rule.
+
+---
+
+# Plan Review Log: REFRAME (within-site-relative design)
+Act 1 partially locked with the user 2026-07-17 (primary/sensitivity hierarchy). MAX_ROUNDS=5.
+PLAN_FILE=REFRAME-PLAN.md. Supersedes AMENDMENT-4-PLAN.md. PLAN.md remains frozen.
+Reviewer: codex-cli 0.144.3, model gpt-5.6-sol (config default, xhigh).
+
+Pre-review note: before Act 2, Claude EMPIRICALLY TESTED the plan's load-bearing claim
+(risk/census/drift_invariance_test.py) and it came back PARTLY FALSE. Uniform gain is a
+non-issue (ratio indices cancel it exactly); differential gain is absorbed (0.0003 z); but
+additive offset is NOT cancelled (0.0328 z median / 0.1460 p95 on NDVI) and standardization is
+no better than raw. The claim 'affine drift cancels to first order' is exact for bands and WRONG
+for the offset component on indices. Disclosed in the plan before review rather than found by it.
+
+## Round 1 — Codex (reframe)
+
+Not approvable. The reframe still has direct paths to false confirmation: the proposed offset correction is not identifiable, year-specific scaling can manufacture history from static condition, and the resulting estimand cannot reject the original hypothesis.
+
+1. **The “within-scene” correction has no scene-level offset to estimate.** Each annual composite is a masked four-month median of many acquisitions, with pixel- and band-specific contributors; one low-percentile scalar cannot represent that mixture and may leave artifacts spatially aligned with frontier geometry.  
+Fix: Correct individual acquisitions using independent calibration before compositing, or abandon point correction and require positivity to survive a preregistered adversarial offset sensitivity.
+
+2. **The forest dark tail is endogenous to the hypothesis.** Its low values reflect canopy and terrain shadow, gaps, moisture, burn, and SCL/solar-geometry effects; fixed pixel identities do not make their reflectance invariant, so changing shadow or degradation fractions enter the estimated “offset.”  
+Fix: Do not estimate atmospheric offset from analysis forest; use an independent invariant target or treat additive offset as unidentifiable and bar a positive headline unless it survives bounded worst-case offsets.
+
+3. **Independent per-band percentiles need not describe the same dark objects.** Subtracting B04, B08, and SWIR quantiles obtained from different pixels constructs an artificial spectral vector, can create negative reflectance, and can severely distort normalized-difference indices through their denominator.  
+Fix: If retained, define one independent joint dark-pixel mask, lock the percentile, subtraction order, negative-value rule, and clipping rule, and fail the method when corrected spectra violate physical bounds.
+
+4. **The moving IQR can fabricate “history” from an unchanged cell.** If raw condition is constant, \(x_{it}=x_i\), then changing annual scales gives \(\Delta z_i=x_i(1/IQR_{20}-1/IQR_{18})+\text{constant}\); block D therefore becomes a transformation of static condition whenever site IQR changes.  
+Fix: Use one fixed site scale across all years, or add a frozen-value pseudo-history control block and require D to add value beyond that control.
+
+5. **Including at-risk cells is not necessarily conservative.** Mixture medians and IQRs move nonlinearly when a degrading subgroup crosses quartiles; the denominator can shrink, amplify tails, reverse apparent trajectories, or create changes in unaffected cells rather than merely “dampen” contrast.  
+Fix: Lock a contamination sweep across reference mixtures and require the sign and CI to survive leave-at-risk-out and whole-support references; otherwise report `INCONCLUSIVE`.
+
+6. **Each cell’s history depends on changes elsewhere in the site.** A cell can acquire a relative trajectory because its neighbours changed while it did not, allowing landscape-wide condition dynamics correlated with clearing contagion to enter D even after controlling for the cell’s own snapshot and block B.  
+Fix: Name this explicitly as a peer-relative exposure and include site-reference-motion controls so it cannot be presented as the cell’s own condition history.
+
+7. **“Fixed support” does not ensure fixed observed support.** Annual cloud masks and nodata can change which pixels contribute to the reference median/IQR and to each cell’s p10, mean, and standard deviation, manufacturing trajectories through observation composition.  
+Fix: Use the identical finite-pixel intersection across all three years for both reference and cell summaries, with locked effective-support and missingness failure rules.
+
+8. **No IQR stability rule exists.** A small site-year IQR magnifies residual offsets and noise—the measured 0.146 z p95 already demonstrates this—and an arbitrary epsilon would introduce another selectable parameter.  
+Fix: Derive a minimum usable IQR from repeatability before inspecting results; violations must make the directional result inconclusive, not trigger a predictor-dependent site deletion.
+
+9. **The drift experiment does not justify the general claims made from it.** It covers one Rondônia composite and apparently NDVI only; it does not test all sites, years, NDMI, NBR, brightness, cell summaries, three-year D features, or ΔAP, while the 0.0405-z p95 contradicts “differential gain is absorbed.”  
+Fix: Run the complete feature and model pipeline under independently bounded bandwise and spatial perturbations at every site-year, and require the headline CI to survive the worst admissible case.
+
+10. **The raw-versus-standardized comparison is dimensionally invalid.** A raw index change of 0.0243 and a standardized residual of 0.0328 z are in different units, so their numerical ordering does not establish that standardization is “no better.”  
+Fix: Express both effects in baseline-IQR units and report their full distributions, especially upper tails, for every index and site.
+
+11. **Spatially varying drift remains an open fabrication path.** Aerosol, BRDF, topography, solar geometry, and contributor mix can alter low tails and heterogeneity locally while a site-wide median or dark percentile appears stable; these effects directly target `slope_std` and `slope_p10`.  
+Fix: Add preregistered blockwise drift perturbations or spatial negative controls and require every directional conclusion to survive them.
+
+12. **The claim that the “full C baseline returns” is undefined.** If `tailmass` remains `X < median−0.20` in raw index units, it is not standardized or offset-robust; if it becomes `z < −0.20`, it is a new feature with a different scale and meaning, potentially changing baseline strength and inflating D.  
+Fix: Lock the exact tailmass formula and units now, call it a new construct if changed, and make positivity dependent on the weaker static baseline `INCONCLUSIVE`.
+
+13. **The feature-construction graph is ambiguous.** “Per index/band” does not say whether bands are corrected and standardized before indices, indices are computed before standardization, or how brightness and post-correction clipping are handled; these orders are not equivalent.  
+Fix: Specify one executable sequence from reflectance through offset treatment, physical-range checks, index construction, reference statistics, cell summaries, and C/D features.
+
+14. **The reframe substitutes a different scientific question.** Relative position is context-dependent and blind to uniform absolute degradation; consequently, a null cannot reject the original absolute-condition hypothesis, while a positive can reflect neighbours’ change rather than the focal cell’s history.  
+Fix: Either re-register the hypothesis as “peer-relative condition history predicts clearing” and state that the original hypothesis remains untested, or obtain an external radiometric anchor and retain the absolute estimand.
+
+15. **“Disagreement is a finding” is not a headline rule.** Whole-support versus `veg_far`, raw versus offset-corrected, and potentially multiple perturbation analyses create several selectable outcomes without a replacement for L4’s formal concordance table.  
+Fix: Freeze a complete decision table in which every directional claim must survive all mandatory drift treatments and is scoped to the relevant reference estimand; all other combinations are `INCONCLUSIVE`.
+
+16. **`veg_far` presence at 19/19 sites does not establish a usable sensitivity.** The census does not establish a fixed three-year optical intersection, effective spatial support, adequate IQR, or an explicit loss-distance halo, so disagreement could merely reflect a sparse or misclassified reference.  
+Fix: Complete a label-blind optical-support census with fixed pixels, effective blocks, IQR adequacy, and haloed distance classification before treating `veg_far` as interpretable.
+
+VERDICT: REVISE
+### Claude's response
+
+VERDICT: REVISE. Finding #4 is decisive and conceded; it is not repairable within this design.
+
+#4 THE MOVING IQR FABRICATES HISTORY. With raw condition constant (x_it = x_i),
+z_it = (x_i - m_t)/IQR_t, so dz_i = x_i*(1/IQR_20 - 1/IQR_18) + const. A cell that never changed
+acquires a trend whenever the SITE's IQR moves, and the fabricated trend is PROPORTIONAL to the
+cell's static condition -- block D becomes a transformation of block C. Where C and D encode static
+condition differently, D can appear to add incremental value while adding nothing. Verified by
+algebra, not opinion.
+
+THE TENSION THAT KILLS THE REFRAME. Codex's fix (one fixed site scale for all years) DESTROYS the
+drift cancellation: with a fixed reference, x -> g*x + o gives z' = (g*x + o - m)/IQR != z. The
+cancellation worked only BECAUSE the reference moved with the drift. So:
+
+  moving reference  => cancels drift, fabricates history (#4)
+  fixed reference   => preserves history, cancels no drift
+
+This is an IDENTIFIABILITY OBSTRUCTION, not a specification gap: any within-scene reference that
+moves with the drift also moves with the signal. Separating them requires a population exposed to
+drift but NOT to signal -- i.e. PIF -- which is precisely what does not exist inside a saturated
+frontier (measured: 6/19 sites; 0 at Rondonia; median intact-forest-to-clearing distance 168 m).
+
+Every route tried is a face of the same wall:
+  PIF                -> absent in-frontier (measured)
+  distant patch      -> breaks same-scene transport; error lands on the block under test
+  whole support      -> fabricates history via moving IQR (#4)
+  veg_far interior   -> endogenous; interior forest is degrading too (#2/#16)
+  dark tail (DOS)    -> endogenous; shadow fraction changes with clearing (#1/#2/#3)
+And #14 closes it from the other side: relative position is a DIFFERENT question, so a null under it
+cannot reject the original absolute-condition hypothesis.
+
+ALSO CONCEDED, and worth recording:
+- #10: the raw-vs-standardized comparison in my drift experiment is DIMENSIONALLY INVALID -- 0.0243
+  index units vs 0.0328 z units are different scales, so "standardization is no better than raw" is
+  not established by that ordering. The offset residual (0.0328 z median / 0.1460 p95) stands; the
+  comparative claim does not. My error.
+- #9: the drift experiment is one composite, one site, NDVI-focused; it cannot support general claims
+  about all sites/years/indices/D features/dAP, and the 0.0405-z p95 does sit awkwardly with
+  "differential gain is absorbed" (the MEDIAN is 0.0003; the tail is not).
+- #12: "the full C baseline returns" was undefined -- tailmass in raw units is not offset-robust,
+  and in z units it is a NEW construct with different meaning. Either way my claim was loose.
+- #6: peer-relative exposure -- a cell can acquire a trajectory because its NEIGHBOURS changed, which
+  is landscape dynamics correlated with contagion, not the cell's own condition history.
+- #7: "fixed support" != fixed OBSERVED support; annual cloud masks change contributors.
+
+NOT CONCEDED: nothing.
+
+CONCLUSION HANDED TO THE USER: the reframe is not salvageable, and the obstruction is general rather
+than incidental to it. The recommendation is to elevate the identifiability result to the paper's
+central claim -- it is a stronger and more useful finding than the study it replaces.
