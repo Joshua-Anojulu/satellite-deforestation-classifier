@@ -103,6 +103,50 @@ many sites had only 2–7 products — unrecoverable by any mask or cloud thresh
 2016 → 12/19 sites viable, 2017 → 16/19, 2018–2020 → 19/19. Verification that data is *correct*
 never checks that enough of it *exists*.
 
+## 5A. The obstruction is general: every within-scene escape closes
+
+PIF's infeasibility invites an obvious response — *use a different reference*. It does not work, and
+the reason is structural rather than a failure of imagination.
+
+**The confound.** Within one scene, a site-wide radiometric drift and a site-wide degradation
+signal produce identical imagery: "the scene got 3% darker (aerosol)" and "the forest degraded 3%"
+are not separable. Breaking the tie requires a subpopulation **assumed signal-free**. PIF *is* that
+assumption, operationalized. §3–§4 show the assumption is unsatisfiable inside a frontier.
+
+**The self-reference corollary, measured.** The natural escape is to standardize each cell against
+its own site-year distribution, `z_it = (x_it − m_t)/IQR_t`, so per-band drift cancels. For a cell
+whose raw condition never changes, `Δz_i = x_i·(1/IQR₂₀ − 1/IQR₁₈) + const` — a spurious trend
+proportional to static condition, appearing whenever the site scale moves. Measured over the fixed
+three-year support at all 19 sites (`risk/census/identifiability_evidence.py`):
+
+| Index | median \|IQR change\| across sites (max) | **fabricated Δz, unchanged cell at z=+1** (median / p90) |
+|---|---|---|
+| **NDVI** | **17.6%** (171.9%) | **0.265 / 0.770** |
+| NBR | 9.2% (41.5%) | 0.106 / 0.496 |
+| NDMI | 5.7% (35.7%) | 0.114 / 0.423 |
+
+**The trade is a wash — this is the paper's central quantitative claim.** Standardization genuinely
+suppresses drift: under a +0.005 reflectance offset with ±2% differential NIR/RED gain, the NDVI
+artifact falls from **0.258 to 0.033** baseline-IQR units (median, 19 sites) — an 8× reduction. But
+the moving reference that achieves it fabricates **0.265 z** of trend for a cell that never changed.
+**The artifact removed and the artifact introduced are the same size.** A fixed reference avoids the
+fabrication but cancels no drift, because the cancellation only ever worked *because* the reference
+moved with the drift.
+
+| Reference | Cancels drift? | Fabricates history? |
+|---|---|---|
+| moving (site-year) | yes (0.258 → 0.033) | **yes (0.265 z)** |
+| fixed (one scale) | **no** | no |
+| signal-free subpopulation (PIF) | yes | no — **but does not exist in-frontier (§3–§4)** |
+
+**Scope, stated honestly.** This is an obstruction under explicit assumptions: single-sensor optical
+imagery, no external radiometric anchor, and references drawn from within the scene. It is not a
+proof that the question is unanswerable. An external anchor — cross-sensor calibration, vicarious
+sites — breaks it, and that is the direction we would point a successor. Note also that the
+fabrication is only fabrication under an **absolute** condition estimand; under a peer-relative
+estimand it is the intended signal, but that is a **different question**, and one whose answer is
+driven by what a cell's neighbours did rather than by the cell's own history.
+
 ## 6. What a viable design would require
 
 - **Do not assume PIF inside frontiers.** Establish the reference population *before* committing to

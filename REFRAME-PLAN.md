@@ -84,22 +84,31 @@ baseline and inflated D.
      round-5 objection that killed D2 ("additive correction is blind to multiplicative gain") is
      real for **bands** but does not reach the **indices** this study uses.
   2. **Differential gain is absorbed** by the site median (residual 0.0003 z).
-  3. **Additive offset is NOT cancelled — the claim was wrong.** Standardization is **no better than
-     raw** for offset (0.0328 vs 0.0243 median): the nonlinearity converts an additive band offset
-     into a genuine index change, and dividing by IQR can amplify it. "Affine drift cancels to first
-     order" holds **exactly for bands** and **fails for the offset component on indices**. A
-     *year-varying* offset — atmospheric-correction error being the obvious source — injects a
-     systematic per-year shift, and `d_*` features are slopes across exactly those years. That is a
-     spurious-trend path in the confirming direction and it must be closed before this design is
-     primary.
+  3. **Additive offset is only partly cancelled** — a residual of 0.0328 z (median) / 0.146 (p95)
+     survives on NDVI, because the nonlinearity converts an additive band offset into a genuine index
+     change. "Affine drift cancels to first order" holds **exactly for bands** and only
+     **approximately for indices**.
+     **CORRECTION (Codex r1#10 was right, I was wrong):** the earlier claim that standardization is
+     "no better than raw" compared 0.0243 *index units* against 0.0328 *z units* — dimensionally
+     invalid. Re-measured cohort-wide in common baseline-IQR units, standardization **helps by ~8x**
+     (NDVI 0.258 -> 0.033 median across 19 sites).
 
-  **The problem is now bounded and specific**, which the D2 apparatus never was: gain is free,
-  differential gain is handled, and only the **offset** component needs treatment.
-  **Candidate (unproven, for Act 2 to attack):** a within-scene offset correction — subtract each
-  band's low percentile computed over the **fixed support** (identical pixels all three years),
-  a dark-object-subtraction variant needing no external controls, no PIF and no reference forest.
-  Its own risk is that the dark tail of forest (shadow fraction) may itself change with clearing,
-  which would re-import the signal being corrected; the fixed support limits but may not remove that.
+## VERDICT: THIS DESIGN IS DEAD (measured, 2026-07-17)
+
+Codex Act 2 round 1 found the fabrication path and the measurement confirms its magnitude. With raw
+condition constant, `dz_i = x_i*(1/IQR_20 - 1/IQR_18) + const`. Measured over the fixed three-year
+support at all 19 sites, real site scales move a median of **17.6%** (NDVI, max 171.9%), so a cell
+that **never changed** acquires a spurious trend of **0.265 z** (median; p90 0.770).
+
+**The cure and the disease are the same size.** Standardization suppresses the drift artifact from
+0.258 to 0.033 baseline-IQR units — and fabricates 0.265 z of history. A fixed reference avoids the
+fabrication but cancels no drift, because cancellation only ever worked *because* the reference moved
+with the drift. There is no third option inside the scene: any reference that moves with the drift
+also moves with the signal.
+
+This plan is therefore **superseded by the identifiability result** it accidentally proved. Its value
+is now as evidence: the reframe is the fourth and last escape route, and it closes. See
+`paper/pif_infeasibility_finding.md` §5A. Do not implement.
 
 ## Risks / open questions
 
