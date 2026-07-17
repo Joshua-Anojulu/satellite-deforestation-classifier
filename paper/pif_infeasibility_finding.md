@@ -1,9 +1,19 @@
 # Pseudo-invariant feature normalization is infeasible inside active deforestation frontiers
 
-**Status:** draft outline, 2026-07-17. Evidence is complete and reproducible; prose is not final.
-**Framing:** a methodological negative result. It is not a failed study write-up — the finding is
-that a widely-used normalization method has a domain where it cannot be applied, and the boundary
-is measurable.
+> **⚠️ RETRACTED 2026-07-17 — DO NOT CITE AS WRITTEN. The central claim below is FALSE.**
+> This draft argues PIF-eligible forest is absent from deforestation frontiers and elevates that to
+> an identifiability obstruction (esp. §5A). It is not. PIF forest sits **0–9 km outside the 4 km
+> analysis box, in the same Sentinel-2 granule** — verified in `risk/census/ingranule_annulus_census.py`
+> and `annulus_granule_check.py` (commit `db60096`). The real, much narrower finding: PIF is
+> unavailable *inside a 4 km-buffered box* and available immediately outside it — a **buffer-geometry
+> design note**, not a property of frontiers. §5A ("identifiability obstruction", "cure is the size
+> of the disease") is withdrawn; the offset/IQR numbers stand but the interpretation does not.
+> This file is kept as the record of the retracted line of reasoning; rewrite around the design note
+> or scrap. See PLAN-REVIEW-LOG.md (paper-review round) and CONTEXT_HANDOFF.md §11.
+
+**Status:** RETRACTED draft, 2026-07-17. Retained for provenance, not for use.
+**Framing (original, now withdrawn):** a methodological negative result about a normalization method's
+domain of applicability.
 
 ---
 
