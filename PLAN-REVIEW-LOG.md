@@ -429,3 +429,464 @@ Verified independently, not taken on trust:
   run. No frame hash was invented.
 
 Consequence: **the L13 frame draw has NOT run**, so no sites are selected and no composites downloaded.
+
+---
+
+# Plan Review Log: AMENDMENT-4 — PIF criterion unsatisfiable in-frontier
+Act 1 (grill) complete — plan locked with the user 2026-07-17. MAX_ROUNDS=5.
+PLAN_FILE=AMENDMENT-4-PLAN.md (PLAN.md is frozen and is NOT the review target).
+Reviewer: codex-cli 0.144.3, model gpt-5.6-sol (config default, reasoning effort xhigh).
+
+## Round 1 — Codex
+
+Not approvable yet. The frozen L4 null is mechanically reachable, but the amendment still permits false confirmation through predictor-dependent attrition and an under-specified patch gate.
+
+1. **The temporal firewall is not structural during final QC.** The amendment promises “no label contact,” but [`prepare_site`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/prepare.py:211>) reads full `lossyear`, builds 2021–2024 labels, and evaluates `loss >= 21` before deciding QC at line 320; even though the support expression is mathematically label-invariant, replacement decisions occur in a process already exposed to outcomes.  
+Fix: Complete and hash all QC/replacement decisions in a separate process accepting only ≤2020 masks and imagery, then attach 2021–2024 labels after the cohort is frozen.
+
+2. **The PIF distance calculation does not establish distance from “any” loss pixel.** [`build_pif_mask`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/normalization.py:39>) runs the distance transform only over the downloaded master extent, so actual loss just outside an edge is unknown; this can inflate edge PIF counts and invalidate both the census and patch search.  
+Fix: Read a ≥1,920 m plus one-pixel Hansen halo around every counted extent, calculate distance in a metric CRS, and crop only after the global-distance test.
+
+3. **The “outcome-identical accelerator” is not guaranteed geometrically identical.** Full preparation obtains Hansen bounds from the backend-produced raster, while a no-download screen knows only the theoretical buffered box; boundary rounding can change counts near 5,000.  
+Fix: Specify one canonical buffered footprint and pixel-center rule for both paths, and conservatively download every candidate whose upper-bound count could cross 5,000 under raster alignment uncertainty.
+
+4. **Multiple cross-stratum replacements have no locked global processing order.** L13.4 locked round-robin order precisely because each retained replacement changes later 50 km decisions, but amendment step 2 only says to work within each stratum.  
+Fix: Lock a state machine that removes failed sites, refills vacancies in original round/biome order, immediately adds each accepted candidate to `retained`, and logs every rank and rejection reason.
+
+5. **Real L2 failure handling contradicts L13.5.** The amendment says a downloaded frame site is “dropped” and that 14 may become 13, but the frozen rule requires another queue replacement after every frame QC failure until three sites survive or the queue exhausts.  
+Fix: Continue deterministic replacement after every optical, coefficient, or PIF failure; stop only on queue exhaustion, not merely when the provisional cohort falls below 14.
+
+6. **The reported 100%/50%/20%/8% “pass rates” are statistically invalid.** Each denominator is the stopping time needed to observe exactly three successes, and the census omitted separation, so `3/k` is neither an unbiased survival estimate nor evidence that dry-forest survivors are exactly an “8% tail.”  
+Fix: Screen the complete frozen candidate frame—or a fixed-size prefix chosen independently of results—and report finite-population survival and covariate distributions separately from spatial-separation attrition.
+
+7. **PIF QC changes the scientific population in a direction that can favor the hypothesis.** Requiring remote high-canopy forest preferentially removes saturated frontiers where prior-loss block B is strongest, potentially making C/D appear more incrementally useful; calling this merely “optical QC” conceals the selection mechanism.  
+Fix: Amend L13.7 to target explicitly PIF-feasible frontiers, compare full-frame versus retained ≤2020 S/B covariates, and prohibit generalization to saturated active frontiers.
+
+8. **The seven claimed validation sites are not known PIF passes.** The census excludes clear-observation and coefficient QC and is explicitly only a Hansen upper bound, while the final replacement cohort should contain at least 12 actual in-box PIF passes if L13.6 succeeds.  
+Fix: Build validation only after full L2, use every final actual PIF-passing site with biome-stratified reporting, and predefine a minimum validation-site count.
+
+9. **The patch placement rule is not executable as written.** “Search outward,” “first 0.1° window,” and “~the median distance” do not define a lattice, metric, target tolerance, dateline behavior, or what happens when the Hansen-first patch later fails clear-observation PIF QC.  
+Fix: Lock a globally anchored lattice, geodesic ranking, exact target-distance rule, non-overlap constraints, and deterministic continuation after full patch QC failure, then hash the ordered patch ledger before labels are accessible.
+
+10. **Sharing a relative orbit does not provide the claimed same-scene control.** The current composite graph loads all qualifying acquisitions without an orbit filter ([`download_timeseries.py`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/download_timeseries.py:68>)); the same relative orbit recurs on different dates, atmospheres, and possibly mixed-orbit composites.  
+Fix: Require identical product IDs/acquisition dates and a common valid-observation set for target and patch, or drop all “same-scene atmosphere” validity claims and abandon the inferential gate.
+
+11. **Nearest-patch validation can be circular.** Nothing prevents the validation patch from overlapping the buffered site or being a subset of the “true in-box PIF,” which would make agreement nearly tautological.  
+Fix: Require every validation patch and all its PIF pixels to be disjoint from the target buffered extent and from the in-box reference population.
+
+12. **Distance matching cannot validate transport into the saturation regime.** The plan concedes that no validation site represents the land-cover and clearing context of Rondônia-like sites, yet still lets an unsaturated-site gate declare saturated results interpretable.  
+Fix: Treat remote-patch outputs as exploratory regardless of gate, or replace them with the simpler unnormalized sensitivity excluding `c_*_tailmass`, the only unnormalized feature that requires PIF.
+
+13. **The feature gate omits the block under test.** It checks only `c_*` features, although patch-derived year mappings directly change every `d_*` slope, delta, and temporal-variation feature that determines the headline history contrast.  
+Fix: Require equivalence for every C and D feature in both pipelines, explicitly over every site × patch × year × band/index, with a locked scale and zero-variance rule.
+
+14. **The gate margins are uncalibrated point thresholds.** The 0.05/0.01/0.02 and 0.10/0.25-SD limits were introduced after diagnosing the problem, lack a measurement-repeatability or predictive-tolerance basis, and ignore spatial uncertainty.  
+Fix: Calibrate margins outcome-blind from independent repeat/reference measurements and require spatial-block equivalence confidence intervals—not point estimates—to lie wholly inside them.
+
+15. **Gate failure is handled by suppressing evidence.** “Numbers are not reported” can hide the magnitude, direction, and site concentration of patch failure.  
+Fix: Always publish every validation diagnostic and attempted-site failure; when the gate fails, report saturated effects as unestimated rather than withholding the failed measurements.
+
+16. **QC-failed tables can currently enter modeling.** [`prepare_site`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/prepare.py:346>) writes cell tables even when `site_qc.passed` is false, and [`models.py`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/models.py:279>) accepts a CSV without checking a frozen QC manifest.  
+Fix: Emit model-consumable tables only after QC passes and make model entry verify site IDs against the hashed final-cohort manifest.
+
+17. **The new screening evidence and execution trail are insufficiently reproducible.** The amendment requires logging but does not lock the census code, input hashes, geometry, retained-set state, actual-vs-upper-bound PIF counts, or an end-to-end `prepare_site` test after discovering that the path had never run.  
+Fix: Produce a hashed per-rank ledger and amended manifest, plus synthetic end-to-end tests covering multiple replacements, temporal-firewall isolation, QC failure, and rejection of failed-site tables before any more downloads.
+
+18. **The documentation correction is incomplete.** Step 12 identifies only L3, while the frozen plan still says five years in L6, L10, Phase 4, and the acquisition-cost calculation, leaving implementers conflicting instructions.  
+Fix: Append a complete, line-referenced AMENDMENT-3/4 supersession map without silently editing the frozen sections.
+
+No files were modified.
+
+VERDICT: REVISE
+### Claude's response
+
+Verified every factual claim against the code before accepting. Codex was right on the material points.
+
+ACCEPTED — changed the plan:
+- #2 (halo): CONFIRMED and decisive. Distance ran over the downloaded extent only, so edge forest got
+  inflated distances. Re-ran with a 1,980 m halo: every count falls, santa_cruz_bolivia flips PASS->FAIL
+  (5,464 -> 3,367). Legacy survivors 2 -> 1. Combined cohort <= 12+1 = 13 < floor 14 => L13.6 stop-and-re-plan.
+  The previous draft's "cohort lands at exactly 14" was an artifact of this bug.
+- #12 (simpler alternative): premise verified — pif_median is consumed at exactly one line
+  (features.py:77, tailmass). The patch/donut arm is WITHDRAWN and replaced by an unnormalized,
+  tailmass-free arm needing no PIF, no new locked parameters and no downloads.
+- #7 (selection favouring the hypothesis): accepted as the deepest finding. PIF QC deletes saturated
+  frontiers where block B is strongest, weakening the baseline C/D is measured against. The restructure
+  is adopted specifically because the PIF-free arm removes this mechanism; L13.7 scope amended and
+  retained-vs-frame b_* covariate comparison added.
+- #6 (invalid rates): accepted. Stopping-time denominators. Re-screened on a fixed 40-box prefix with
+  halo: amazon 26/40, congo 25/40, sea_peat 10/40, dry_forest 2/40. "8% tail" withdrawn.
+- #5: accepted — verified L13.5; frame L2 failures are REPLACED until 3 survive or the queue exhausts.
+- #4: accepted — verified L13.4 locks a cross-stratum round-robin; also noted its 50 km rule can drop
+  tshopo_drc, the last legacy survivor.
+- #16: accepted — verified prepare_site writes tables regardless of site_qc.passed and models.py checks
+  no manifest. Real bug; fix precedes further downloads.
+- #1, #3, #15, #17, #18: accepted as written (structural firewall, canonical footprint + 20% download
+  margin, publish-don't-suppress, hashed ledger + end-to-end tests, full supersession map).
+
+MOOT (arm withdrawn): #9, #10, #11, #13, #14. #10's substance is conceded — "same relative orbit" never
+delivered same-scene control, since composites aggregate acquisitions across a seasonal window.
+
+PARTIAL — #8: the underlying point (the census is a Hansen-only upper bound, not a set of known PIF
+passes) is accepted and folded into D/G. The specific fix is moot with the validation arm withdrawn.
+
+NOT CONCEDED: nothing material. Round 2 should attack the two places this plan is weakest, both flagged
+in it rather than hidden: (a) whether losing normalization lets radiometric drift FABRICATE d_* trend
+signal, which is the mirror-image false-confirmation risk, and whether the acquisition covariates and
+L4 concordance are sufficient guards or a prespecified drift test is required; (b) whether retiring the
+combined analysis and elevating the frame cohort is principled (PLAN.md:922 already designates the frame
+as the cohort carrying generalization claims) or is choosing the analysis that survives.
+
+## Round 2 — Codex
+
+The revision resolves most prior findings in principle: the halo, temporal firewall, stopping-time bias, deterministic replacement, QC-manifest enforcement, audit ledger, documentation map, and all reference-patch objections are addressed. Two earlier issues remain only partially resolved: the geometry safeguard and replacement behavior across the now-distinct cohorts.
+
+The new primary is not yet safe from false confirmation.
+
+1. **A prespecified drift falsification test is mandatory.** Fixed seasons and L2A surface reflectance reduce drift but cannot show that band-specific atmospheric or sensor shifts did not manufacture `d_*`; the existing acquisition variables are proxies, not radiometric controls.  
+Fix: Before labels are attached, hash a drift protocol using ≤2020 stable negative-control pixels, actual platform/orbit/product metadata, and equivalence margins derived from within-season repeatability; a failed drift test must bar a positive headline.
+
+2. **The acquisition-covariate robustness arm is too weak as implemented.** [`prepare.py`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/prepare.py:368>) repeats each site-year metadata scalar across every cell, so it cannot represent spatially varying aerosol/path-radiance artifacts; moreover, roughly twelve metadata fields are learned from only eleven training sites in frame LOSO.  
+Fix: Estimate site-year common-mode band/index shifts directly from label-blind control pixels and test raw versus common-mode-adjusted `d_*`, rather than relying on metadata columns added to the prediction model.
+
+3. **Current L4 concordance does not isolate normalization.** The proposed comparison is unnormalized/tailmass-free versus normalized/tailmass-included, potentially trained on different sites; any disagreement can be caused by tailmass, cohort composition, or normalization.  
+Fix: Add a normalized/tailmass-free pipeline and compare it with the unnormalized/tailmass-free pipeline using exactly the same sites, training sets, folds, tuning, and features.
+
+4. **Even feature-matched overlap concordance cannot validate saturated sites.** PIF-feasible overlap is selected precisely against saturation, and the normalized arm may fail 12/12 altogether, so this guard can disappear where drift risk matters most.  
+Fix: Treat matched concordance as supporting evidence only; require the label-blind drift test independently at every primary site, with failure or insufficient control support forcing `INCONCLUSIVE`.
+
+5. **The revised headline decision rule is undefined.** Frozen L4 requires both normalized and unnormalized CIs to agree, while the amendment makes normalization secondary and possibly unavailable; “report disagreement” does not say what headline follows an unnormalized positive, normalized null, or absent normalized arm.  
+Fix: Append a complete decision table in which an unnormalized positive becomes “HISTORY ADDS VALUE” only if the drift gate passes and matched concordance does not contradict it; otherwise it is `INCONCLUSIVE`.
+
+6. **Dropping tailmass can weaken only the static baseline and thereby favor D.** `tailmass` is exclusively a `c_*` feature ([`features.py`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/features.py:77>)); no `d_*` feature is removed, so the amendment’s “C/D signal” wording is wrong and a less complete C baseline can inflate D’s incremental AP. Existing quantiles may make it redundant, but that cannot be assumed.  
+Fix: Scope the primary claim to “history beyond the prespecified tailmass-free snapshot,” and require a full-C versus tailmass-free comparison on the PIF overlap; positivity appearing only after tailmass removal must be inconclusive.
+
+7. **The primary cohort is internally contradictory.** Section B says the PIF-free cohort is potentially all 19 sites, while section K retires pooling and elevates the 12-site frame; it is therefore unclear which sites define the primary CI.  
+Fix: State unambiguously that the primary generalization estimand is the 12-site frame-only PIF-free analysis, with legacy sites excluded from its training and evaluation.
+
+8. **Frame elevation is principled, but not already dictated by the frozen plan.** PLAN line 922 says the frame sensitivity carries generalization claims, but the next line still calls the 20-site analysis primary, and L13.8 explicitly labels combined LOSO primary; this is a defensible protocol amendment, not merely execution of an unambiguous prior hierarchy.  
+Fix: Disclose frame elevation as a post-freeze estimand/hierarchy change justified by outcome-informed legacy selection, and explicitly supersede every conflicting “combined primary” statement.
+
+9. **Retiring the PIF-free combined analysis is not justified.** The combined floor is unreachable only for the normalized/PIF arm; removing PIF makes the non-PIF combined cohort potentially 19 and therefore viable. Omitting the frozen combined analysis once a replacement primary survives looks selective.  
+Fix: Keep frame-only as the primary generalization analysis, but require the PIF-free combined LOSO as a labeled secondary case-study whenever non-PIF L2 survival is at least 14.
+
+10. **The two arms require separate cohort and replacement manifests.** A PIF-failing original frame site should remain in the PIF-free primary but be replaced only in the normalized cohort; likewise, a normalized replacement’s proximity to a legacy site must not delete that legacy site from a different PIF-free descriptive cohort.  
+Fix: Freeze distinct hashed manifests and replacement state for PIF-free and normalized arms, plus a third exact common-site manifest for matched concordance.
+
+11. **The ±20% geometry guard is an unsupported new threshold.** Nothing proves raster-alignment discrepancies cannot exceed 20%, so the claim that they “can never change a verdict” is stronger than the procedure supports.  
+Fix: Derive a worst-case pixel-count bound from the canonical geometry and transformations; if no bound is proven, classify every potentially crossing candidate as requiring the real gate.
+
+The frame-only elevation can be defended because it is the only cohort with a prospective sampling basis and was already designated as the basis for generalization. What cannot be defended is presenting that elevation as fully pre-existing while suppressing the now-viable PIF-free combined secondary analysis.
+
+Most importantly, acquisition covariates plus the proposed L4 overlap comparison are not sufficient guards. Without an outcome-blind, prespecified drift test and an explicit failure-to-`INCONCLUSIVE` rule, sensor or atmospheric drift retains a direct path to a false positive primary conclusion.
+
+VERDICT: REVISE
+### Claude's response
+
+Verified the factual claims again before accepting. All three checked out.
+
+ACCEPTED — changed the plan:
+- #6 (DECISIVE, and a bias this plan introduced): verified d_* = slope_mean/slope_std/slope_p10/
+  tstd_mean/delta — none use tailmass; tailmass is exclusively c_{name}_tailmass, i.e. the static 2020
+  snapshot baseline. So dropping it weakens the BASELINE and can inflate D's incremental AP. The draft's
+  "only tailmass is lost, every d_* survives" was wrong in the direction that favours the hypothesis.
+  Added B2: claim scoped to "beyond the tailmass-free snapshot"; full-C vs tailmass-free comparison
+  required on the PIF overlap; positivity appearing only after tailmass removal => INCONCLUSIVE.
+- #8/#9 (accepted, and they resolve each other): verified L13.8 says "Combined LOSO ... Primary" — my
+  PLAN.md:922 citation was selective. But elevation is also unnecessary: the floor is unreachable only
+  for the PIF arm, and the PIF-free combined cohort can reach 19 >= 14. So L13.8 is kept UNCHANGED and
+  only the pipeline changes. No hierarchy change to defend; the selectivity objection disappears.
+- #1/#2/#4 (drift): accepted in full. Verified prepare.py:368-370 broadcasts site-year scalars to every
+  cell — proxies, not radiometric controls, and ~12 site-constant columns fit on 11 LOSO training sites.
+  Added D2: mandatory, hashed-before-labels, label-blind control-pixel drift gate at EVERY primary site,
+  common-mode shifts estimated from controls (not metadata), margins from within-season repeatability,
+  failure or insufficient controls => INCONCLUSIVE. m_* covariates demoted to diagnostics.
+- #3: accepted — added a normalized/tailmass-free pipeline so concordance varies ONE thing
+  (normalization) on identical sites/folds/features; matched concordance is supporting evidence only.
+- #5: accepted — added the F2 decision table covering unnormalized-positive/normalized-null/absent-arm.
+  Note it is built so drift failure yields INCONCLUSIVE rather than a null, so the gate cannot
+  manufacture the deflationary result either.
+- #7: accepted — primary cohort stated unambiguously (B).
+- #10: accepted — F3 separate hashed manifests per arm + common-site manifest; a normalized-arm
+  replacement's 50 km rule must not delete a legacy box from the PIF-free cohort.
+- #11: accepted — the invented +-20% guard is withdrawn and replaced by a DERIVED bound
+  B = 2*(H+W) (one-pixel Hansen ring from master-vs-canonical extent), with [5000-B, 5000+B] going to
+  the real gate, and unconditional real-gate referral where B cannot be proven.
+
+NOT CONCEDED: nothing material in round 2.
+
+Remaining self-flagged weakness for round 3: D2 is now the study's load-bearing assumption, and
+label-blind control pixels are scarcest exactly at saturated sites — if controls are insufficient there,
+those sites go INCONCLUSIVE and the primary narrows back toward the PIF-feasible population the
+restructure exists to escape. This is testable from <=2020 data before any download.
+
+## Round 3 — Codex
+
+The hierarchy, tailmass, matched-concordance, manifest, and patch findings are now addressed. Round-2 findings #1/#2/#4 remain only asserted: D2 has the right failure direction, but it is not yet an executable statistical test.
+
+1. **“Stable negative-control pixels” is undefined.** D2 does not identify the land-cover classes, spatial support, clear-observation requirement, fixed-pixel rule, or exclusion criteria; selecting pixels because their 2018–2020 reflectance appears stable would make the gate circular and almost guarantee a pass.  
+Fix: Define the control mask entirely from independent ≤2020 categorical/history data, prohibit reflectance-stability-based selection, and lock one non-selectable fallback hierarchy before inspecting annual shifts.
+
+2. **Control feasibility at saturated sites remains unknown.** Raw pixel count is insufficient because adjacent 10 m pixels are not independent; Rondônia might contain thousands of nominal controls but only a few effective spatial blocks—or none representing the relevant forest atmosphere.  
+Fix: Before approval, run a label-blind census over every prospective primary site and report control pixels, connected components, spatial blocks, land-cover classes, and clear observations against a prespecified effective-support floor.
+
+3. **The insufficient-control rule contradicts the risks section.** [D2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/AMENDMENT-4-PLAN.md:144>) and F2 make any site failure bar the global positive headline, while line 261 says those sites become inconclusive and the primary “narrows,” implying site exclusion. Excluding them would recreate saturation-driven attrition and change the estimand.  
+Fix: State explicitly that D2 never excludes or replaces a site: all frozen sites remain in the primary estimate, but any site lacking adequate controls makes the overall headline `INCONCLUSIVE`.
+
+4. **The gate cannot yet be computed from the stored artifacts as described.** Current downloads retain annual medians, temporal dispersion, clear counts, and median solar zenith—not per-acquisition reflectance or per-pixel platform/orbit membership ([`download_timeseries.py`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/download_timeseries.py:99>)); genuine within-season repeatability and platform-specific shifts may therefore require split composites or new downloads.  
+Fix: Specify exactly how repeatability and platform/orbit effects are estimable from existing files, or add label-blind S2A/S2B and split-half composite downloads to sequencing and cost.
+
+5. **A common-mode scalar does not test the most dangerous D features.** Spatially varying aerosol or BRDF effects can fabricate `d_*_slope_std`, distort `p10`, and affect indices nonlinearly even when the site-wide median shift is zero.  
+Fix: Estimate control shifts by prespecified spatial blocks, test both common-mode and spatial-heterogeneity drift, correct bands first, and recompute indices and every D feature from the corrected bands.
+
+6. **The estimator and equivalence test remain placeholders.** “Derived from within-season repeatability” does not specify the split, estimator, reference year, confidence level, uncertainty propagation, multiple-feature rule, or whether noisy sites receive wider—and therefore easier—margins.  
+Fix: Lock formulas for repeatability, shift estimation, spatial-block confidence intervals, familywise pass/fail across sites/bands/D features, and make excessive noise cause insufficient support rather than wider permissive bounds.
+
+7. **“Raw `d_*` vs adjusted `d_*`” has no test statistic or pass rule.** A small median feature change may still be spatially aligned with risk and materially change AP, while a large harmless constant shift may not change ranking.  
+Fix: Require both a label-blind feature-equivalence gate and, after labels are attached, identical-cohort raw-versus-drift-adjusted LOSO concordance; raw positivity that does not survive adjustment must be `INCONCLUSIVE`.
+
+8. **The control surface may not transport radiometrically to forest.** Deep water, bare soil, built surfaces, and forest have different BRDF and atmospheric-correction errors; conversely, “no-loss forest” may contain the genuine degradation signal and subtracting its trend can erase real history.  
+Fix: Require at least two independently defined control classes—including a vegetation-like control—and fail D2 when their estimated corrections materially disagree instead of choosing the favorable class.
+
+9. **The tailmass guard can disappear without a decision.** B2 requires full-C comparison on the PIF overlap, but the plan acknowledges that overlap may be small or absent; F2 does not say whether an unavailable or underpowered full-C comparison blocks positivity.  
+Fix: Lock a minimum evaluable overlap and state that failure to evaluate the mandatory full-C comparison makes any positive headline `INCONCLUSIVE`.
+
+10. **F2 is still incomplete.** It omits `HISTORY HARMS`, unreliable/undefined CIs, and the case where the PIF-free CI excludes zero negatively; “unavailable-and-not-contradicting” also treats absence of evidence as non-contradiction.  
+Fix: Add explicit rows for negative, unreliable, undefined, unavailable normalized comparison, and unavailable tailmass comparison, with unavailable evidence described neutrally.
+
+11. **The geometry bound depends on an unproved premise.** `B = 2(H+W)` is valid for a one-Hansen-pixel perimeter difference, but the claim that backend projection/grid snapping changes each edge by at most one 10 m pixel is not derived or asserted in code.  
+Fix: Verify and record the canonical-versus-master edge displacement for every raster; where the one-pixel premise fails or cannot be proven, bypass screening exactly as the plan proposes.
+
+The key estimand issue now has a clean resolution available: insufficient D2 controls must not remove saturated sites. They should remain in the combined and frame estimates, with the entire positive claim becoming inconclusive. That preserves the PIF-free population and prevents the drift gate from becoming a new attrition filter.
+
+Until the control definition, effective-support census, stored-data feasibility, spatial-drift test, equivalence statistics, and no-exclusion rule are locked, D2 is a promise of a guard rather than a guard.
+
+VERDICT: REVISE
+### Claude's response
+
+Round 3's core judgement is accepted: D2 was intent, not a test. It is now an executable spec (D2.1-D2.8).
+
+ACCEPTED — changed the plan:
+- #1: control definition is now categorical-only and reflectance-stability selection is PROHIBITED as
+  circular. Two mandatory independent classes: (a) vegetation = Hansen datamask==1 & tree>=70 & no
+  2001-2020 loss (crucially NO distance rule, so it is abundant where PIF is not — 506,341 px at
+  Rondonia); (b) non-vegetation = datamask==2 permanent water. Locked non-selectable fallback: a class
+  short on support yields "insufficient controls", never a fallback to the surviving class.
+- #8: accepted, and it cuts both ways — class (b) may not transport to forest, while class (a) may
+  contain the genuine degradation signal, so subtracting its trend could ERASE real history rather than
+  fabricate it. Handled by requiring both classes and FAILING D2 when their corrections disagree beyond
+  the locked margin, so the favourable class can never be chosen.
+- #2: effective support is now counted in 640 m spatial blocks, not raw pixels, with a pre-approval
+  label-blind census (pixels, connected components, blocks, classes, clear obs) required before any site
+  enters the primary.
+- #3: accepted — this was a genuine self-contradiction. D2.7 now states D2 NEVER excludes or replaces a
+  site; all frozen sites stay in the combined and frame estimates and a control shortfall makes the
+  OVERALL headline INCONCLUSIVE. The risks section is rewritten to match: the failure mode is a
+  study-wide stall, not a narrowing estimand.
+- #4: verified — composites are temporal reductions only (median/sd/sum over t), so per-acquisition
+  reflectance and platform membership are NOT in the rasters. Resolved without new downloads where
+  possible: the stored `dispersion` band IS a within-season per-pixel per-band SD (a real repeatability
+  estimate), and provenance retains all product_ids per site-year (90 for rondonia/2020), so the S2A/S2B
+  mix is recoverable by catalogue metadata lookup. Split composites are required ONLY at sites whose
+  platform mix shifts beyond a locked tolerance — cost incurred only where triggered.
+- #5: accepted — shifts estimated per spatial block per band; both common-mode AND spatial-heterogeneity
+  drift tested; bands corrected first, then indices and every D feature recomputed from corrected bands.
+- #6: accepted — margins are a locked function of a POOLED cohort-wide repeatability reference, so a
+  noisy site gets "insufficient support" rather than wider, easier bounds.
+- #7: accepted — two gates: label-blind spatial-block bootstrap CIs (not point estimates) inside the
+  margins with a locked familywise rule, plus post-label identical-cohort raw-vs-adjusted LOSO.
+- #9: accepted — F2b locks a minimum evaluable overlap; a non-evaluable full-C comparison makes any
+  positive INCONCLUSIVE (table row 5).
+- #10: accepted — F2 rebuilt with 9 rows including HISTORY HARMS, unreliable/undefined CI, and
+  unavailable comparisons. "Unavailable-and-not-contradicting" is removed: absence of evidence is no
+  longer scored as agreement (row 8).
+- #11: accepted — the one-pixel premise is no longer assumed. Canonical-vs-master edge displacement is
+  MEASURED per raster from the composites already on disk; B = 2*(H+W)*e; unmeasurable geometry bypasses
+  screening entirely.
+
+NOT CONCEDED: nothing material in round 3.
+
+## Round 4 — Codex
+
+Most round-3 structural findings are addressed: categorical controls, two-class disagreement, spatial blocks, no site exclusion, band-first correction, adjusted LOSO, expanded F2, and measured geometry are now present. D2 still has several unexecuted degrees of freedom that could be resolved favorably after seeing the drift diagnostics.
+
+1. **The plan’s own pre-approval condition has not been met.** D2.2 requires a census, but neither its results nor the minimum effective-block floor appears in the plan; choosing that floor after seeing water scarcity would be threshold shopping.  
+Fix: Lock the floor from a power/equivalence calculation, then append the complete site-by-class-by-year census before approval.
+
+2. **Control support is not explicitly fixed across years.** Requiring support “per site-year” allows different pixels or blocks to contribute in 2018, 2019, and 2020, so changing cloud availability or water extent could masquerade as radiometric drift.  
+Fix: Use the identical control pixels and identical block weights in all three years—the intersection with adequate finite observations across every year—and fail support if that fixed intersection is inadequate.
+
+3. **The correction field is undefined.** D2.3 estimates shifts in control-containing blocks but never says how corrections are assigned to target forest pixels in blocks without controls: nearest block, interpolation, site mean, or smoothing would produce different adjusted D features.  
+Fix: Lock an explicit spatial estimator, interpolation/extrapolation rule, maximum unsupported distance, edge handling, and failure condition before computing any shifts.
+
+4. **There is no rule for combining the two control classes.** “Fail on disagreement” prevents selecting the favorable class only when they disagree; when they agree within the margin, the plan still does not say whether to use vegetation, water, their mean, or both adjusted pipelines.  
+Fix: Construct separate vegetation-adjusted and water-adjusted pipelines and require the raw conclusion to survive both, avoiding any selectable combination rule.
+
+5. **Stored dispersion is not clean repeatability.** [`dispersion`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/risk/download_timeseries.py:100>) is the temporal SD of observations across a four-month season; it mixes phenology, atmosphere, platform differences, and real surface change and is not the sampling distribution of the annual median. A pooled margin derived directly from it may be overly wide and let drift pass.  
+Fix: Validate a prespecified conversion from dispersion and clear-count to median-composite uncertainty against split-half composites, or obtain split-half products for all sites rather than only platform-mix triggers.
+
+6. **`product_ids` do not identify actual pixel contributors.** Provenance lists every qualifying product intersecting the bounding box, while SCL masking determines contributions separately at each pixel; equal catalogue-level S2A/S2B counts can hide a strongly changing platform mix over the control or analysis support.  
+Fix: Produce per-platform valid-observation count rasters over the fixed control and analysis supports, or treat catalogue mix as diagnostic and require split-platform composites universally.
+
+7. **Several “locked” D2 quantities remain unspecified.** There is no formula or value for the pooled-margin function, excessive-dispersion multiple, platform-mix tolerance, bootstrap confidence level, block resampling scheme, per-cell feature summary, familywise procedure, or minimum bootstrap success rate.  
+Fix: Put every formula, constant, and conjunction rule into D2 before the census or drift outputs are inspected.
+
+8. **The feature-equivalence statistic is incomplete.** D features are cell-level, but “CI for `|raw d_* − adjusted d_*|`” does not say whether the estimand is the mean, median, maximum, or upper quantile across cells; a small mean can hide a risk-aligned spatial tail.  
+Fix: Require both a signed block-weighted mean and a prespecified upper quantile of absolute cell-level differences to pass equivalence for every D feature and control class.
+
+9. **Post-label “survives adjustment” is not a decision rule.** It could mean positive point estimate, overlapping CIs, unchanged sign, or adjusted lower bound above zero.  
+Fix: Define survival as the drift-adjusted hierarchical ΔAP CI independently satisfying the same positive classification as the raw CI under identical folds, with either control-class adjustment failing to do so forcing `INCONCLUSIVE`.
+
+10. **The full-C minimum overlap is still an unlocked threshold.** F2b invokes a “locked minimum” without specifying it, leaving room to declare an inconvenient comparison underpowered.  
+Fix: Lock the site, biome-coverage, positive-count, and at-risk-cell requirements before computing full-C results.
+
+11. **F2 preserves directional disagreement only for a positive raw result.** Row 3 declares `NULL` and row 4 declares `HISTORY HARMS` regardless of a contradictory normalized/tailmass-free result on the identical overlap, whereas frozen L4 treated any pipeline disagreement as inconclusive.  
+Fix: Add normalization-contradiction rows for null and harm, or explicitly justify and scope the asymmetric veto.
+
+12. **The measured geometry rule disables screening for undownloaded replacements.** Those candidates have no backend master raster from which to measure `e`, so the literal fallback sends every one to the real gate; in dry forest that could mean dozens of full downloads and invalidates the stated ~84-file cost.  
+Fix: Derive and validate a conservative geometry-specific bound before download from the backend grid specification, or revise sequencing and cost to assume no accelerator for new candidates.
+
+The central feasibility question is still unanswered: whether every frozen site has both vegetation and permanent-water controls in enough fixed 640 m blocks. Raw vegetation abundance at Rondônia does not answer water availability or effective support. Because the plan explicitly makes that census a pre-approval prerequisite, approval before its floor and results are frozen would leave the most consequential threshold selectable.
+
+VERDICT: REVISE
+### Claude's response
+
+Round 4's central charge is upheld: the plan made the D2.2 census a pre-approval prerequisite and had
+not run it. It is now RUN, and it broke the design as written — which is exactly why it mattered.
+
+CENSUS RESULT (label-blind, <=2020 Hansen, read-only). Blocks >=53 control px:
+  vegetation 19/19 sites; WATER only 10/19 (zero px at F3_M020.720 and F4_M002.900_P0105.500;
+  4 px at santa_cruz, 6 at gran_chaco, 8 at F2_M002.900). With D2.1 requiring BOTH classes and D2.7
+  never excluding a site, the headline would have been INCONCLUSIVE BY CONSTRUCTION — the study could
+  return no finding at all, not even the publishable null. Approving before this census, exactly as
+  round 4 warned, would have hidden that until after the downloads were spent.
+
+ACCEPTED — changed the plan:
+- #1: census run and appended (D2.2). The floor is deliberately NOT set from it; it must come from a
+  power/equivalence calculation before any drift diagnostic is inspected. The binding consequence is
+  stated: veg_far at F4_M002.900_P0105.500 has 11 blocks, so a floor above ~11 stalls the whole headline.
+- Water class WITHDRAWN, but NOT by dropping the guard round 3 demanded. Replaced by two DISJOINT
+  vegetation controls split at 640 m from loss (veg_near / veg_far), which probe the real concern behind
+  r3#8 — degradation contamination — rather than surface-type transport. Feasibility re-censused: 19/19
+  sites on both classes. Forest threshold is the study's OWN universe (tree>=30, eligible30,
+  prepare.py:222) because a control must match the population it corrects; PIF's 70% exists for
+  pseudo-invariance, which does not apply to a drift control. Justified on principle and fixed before any
+  drift is inspected. Note for the record: no other categorical class works — bare/built are near-absent
+  in moist tropical frontiers, and grassland/shrubland/cropland ARE the post-clearing state.
+- #2: accepted — control masks are time-invariant by construction; the year-varying conjunct is now an
+  explicit fixed clear-observation intersection with identical pixels and block weights in all 3 years.
+- #3: accepted — correction field locked: own-block shift; else inverse-distance-weighted mean of k=4
+  nearest control blocks; unsupported beyond 1,920 m => insufficient support. No smoothing, no site-mean.
+- #4: accepted — no combination rule. Separate veg_near-adjusted and veg_far-adjusted pipelines; the raw
+  conclusion must survive BOTH.
+- #5: accepted — dispersion is NOT clean repeatability (verified: temporal SD across a ~4-month season,
+  not the sampling distribution of the annual median). Split-half composites now required for ALL sites
+  to validate the conversion; accepted as a cost item rather than argued away.
+- #6: accepted — product_ids list bbox-intersecting products while SCL masking decides contribution per
+  pixel, so catalogue mix is demoted to a diagnostic. No gate depends on platform attribution, which is
+  sound because the correction is estimated from controls sharing the target's acquisitions and masking,
+  so it absorbs common-mode shift whatever its cause.
+- #7/#10: accepted — added register U listing every unlocked quantity with its derivation, explicitly
+  stating approval should be conditional on the register being filled by derivation, not by numbers
+  chosen to fit the census.
+- #8: accepted — equivalence now requires BOTH a signed block-weighted mean AND the 95th percentile of
+  absolute cell-level differences, per feature/band/class.
+- #9: accepted — "survives adjustment" defined as the drift-adjusted hierarchical dAP CI independently
+  satisfying the same positive classification as raw under identical folds; either class failing => INCONCLUSIVE.
+- #11: accepted — F2 rows 3b and 4b added; the normalization veto is no longer asymmetric to positives.
+- #12: accepted — the ~84-file/~16h cost estimate is WITHDRAWN as unreliable. New candidates have no
+  master raster from which to measure e, so absent a validated pre-download bound there is no
+  accelerator, and dry_forest at 5% survival could mean dozens of full downloads. The plan now refuses
+  to quote a total until the complete-frame screen reports the count.
+
+NOT CONCEDED: nothing material in round 4.
+
+## Round 5 — Codex (FINAL, MAX_ROUNDS)
+
+The round-4 findings are mostly addressed, but the central feasibility claim is still not established. D2.2 demonstrates that both control classes exist; it does not demonstrate that D2.3 can construct a valid correction over every evaluated block. Two additional false-confirmation paths remain.
+
+1. **The census does not test the correction-field support rule.** Reporting 11 `veg_far` source blocks does not show that every at-risk target block has adequate nearby sources for IDW; with such sparse support, large parts of `F4_M002.900_P0105.500` may be unsupported.  
+Fix: Append a site-by-class census of the percentage and count of evaluated target blocks satisfying the complete D2.3 neighborhood rule after the fixed cross-year clear intersection; approval requires 100% if one unsupported block fails the site.
+
+2. **The 1,920 m IDW rule tests the wrong neighbour.** D2 uses `k=4` but declares failure only when the *nearest* control block exceeds 1,920 m, allowing the other three contributors to come from arbitrarily far away.  
+Fix: Require the fourth-nearest control block to be within 1,920 m, or lock a maximum distance and minimum contributor count explicitly.
+
+3. **The completed census is Hansen-only, not the required effective optical census.** The table counts blocks with categorical controls, while D2 requires identical pixels with finite observations in all three years; the binding 11 far blocks can only decrease after that intersection.  
+Fix: Re-run and append the census using the actual fixed 2018–2020 finite/clear pixel intersection and the final block-occupancy definition.
+
+4. **The unexplained “≥53 control pixels” is itself an unlocked threshold.** It materially determines the reported 19/19 feasibility but is absent from register U and has no derivation.  
+Fix: Add the per-block occupancy threshold to U, derive it independently of the observed census, and regenerate the census after locking it.
+
+5. **D2 corrects offsets but does not specify or test gain drift.** “Per-band shifts” implies additive correction; a year-specific multiplicative gain can fabricate `slope_std`, p10, and nonlinear index trends while additive correction leaves `std` unchanged—so raw and adjusted pipelines can agree falsely.  
+Fix: Define an affine per-band correction or separately estimate and equivalence-test both gain and offset using fixed control pixels, then recompute all indices and D features.
+
+6. **The correction estimator remains underspecified.** The plan does not state the per-block reference statistic, reference year, robust fitting method, minimum reflectance spread for gain estimation, IDW exponent, or how uncertainty in the correction field enters feature CIs.  
+Fix: Add these formulas and failure rules to U; they are structural estimator choices, not implementation details.
+
+7. **The split-half validation is still selectable.** The partition rule—chronological halves, odd/even acquisitions, random split, or platform-stratified split—is not locked, and each estimates a different mixture of phenology and measurement noise.  
+Fix: Add a deterministic, platform/DOY-balanced split algorithm, seed, minimum observations per half, and failed-half rule to U.
+
+8. **The near/far distance split needs its own halo rule.** Section D applies the 1,980 m halo to PIF calculations, but D2’s 640 m loss-distance classification is not explicitly covered; truncated edge loss would move edge forest from `veg_near` into `veg_far` and inflate the already fragile far census.  
+Fix: Compute the D2 near/far mask with an explicit ≥640 m Hansen loss halo—preferably the existing 1,980 m halo—and crop after classification.
+
+9. **Post-label survival is defined only for positive findings.** D2.6 requires adjusted CIs to preserve raw positivity, but a raw `HISTORY HARMS` result can still be reported when either adjusted pipeline becomes null or positive.  
+Fix: Require the same raw-versus-both-adjusted concordance for every directional conclusion; disagreement makes harms inconclusive too.
+
+10. **Register U is not yet exhaustive.** It omits the 53-pixel occupancy threshold, split-half construction, gain model, correction-field estimator, control-distance halo, and IDW contributor-distance rule; filling the current register would not close these choices.  
+Fix: Add every item above to U before granting conditional approval.
+
+11. **The risks section is stale.** It still says the census has not run and discusses water availability, contradicting D2.1–D2.2; earlier claims of “no new downloads” also conflict with mandatory split-half products.  
+Fix: Update the supersession map and risks/cost language so only the final protocol can guide implementation.
+
+Replacing water with disjoint near/far vegetation is defensible and conservative, but class existence is not correction coverage. More importantly, an additive-shift gate has a concrete blind spot for multiplicative sensor drift—the exact kind of drift that can manufacture `d_*_slope_std` while passing raw-versus-adjusted concordance. Conditional approval cannot cure that unless the estimator and register are expanded first.
+
+VERDICT: REVISE
+### Claude's response — DEADLOCK DECLARED, NOT CONVERGENCE
+
+MAX_ROUNDS=5 reached WITHOUT VERDICT: APPROVED. Recording this as a deadlock rather than manufacturing
+agreement. Note the deadlock is NOT a disagreement: I concede all 11 round-5 findings. The pattern across
+five rounds was not two models arguing to a standstill — each round I fixed real defects and Codex found
+deeper specification gaps beneath them. The plan is far stronger than round 1 and still not
+implementation-ready. A flagged disagreement beats a false approval; so does a flagged incompleteness.
+
+UNRESOLVED AT DEADLOCK (Claude's position on each):
+- #5 AFFINE GAIN DRIFT — the most important. CONCEDED, and it is a genuine false-confirmation path I did
+  not guard: an additive-only correction leaves a multiplicative year-gain uncorrected, which can
+  fabricate d_*_slope_std and p10 trends while raw-vs-adjusted concordance passes. The estimator must
+  become affine (gain + offset), separately equivalence-tested, with indices and all D features
+  recomputed. No counter-position; this must be fixed before implementation.
+- #1/#3 CORRECTION COVERAGE vs CLASS EXISTENCE — CONCEDED. My census proved the classes exist, not that
+  every evaluated target block has IDW support under the full D2.3 rule after the fixed cross-year clear
+  intersection. The binding 11 far-blocks at F4_M002.900_P0105.500 can only fall under that
+  intersection. The required census is label-blind and free; it simply has not been run.
+- #4 THE >=53-PX OCCUPANCY THRESHOLD — CONCEDED, and it is my own error of exactly the kind this process
+  exists to catch: I invented 53 px, it materially drives the reported 19/19 feasibility, and it is
+  absent from register U. It must be derived independently and the census regenerated after locking it.
+- #2 IDW CONTRIBUTOR DISTANCE — CONCEDED. k=4 with a failure rule on only the NEAREST block lets three
+  contributors come from arbitrarily far. Needs the 4th-nearest inside the cap, or an explicit
+  max-distance/min-contributor pair.
+- #6/#7/#10 ESTIMATOR + SPLIT-HALF + REGISTER — CONCEDED. Reference statistic, reference year, robust
+  fit, IDW exponent, correction-field uncertainty propagation into feature CIs, and a deterministic
+  platform/DOY-balanced split with seed are structural choices, not implementation details.
+- #9 SURVIVAL DEFINED ONLY FOR POSITIVES — CONCEDED. A raw HISTORY HARMS must face the same
+  raw-vs-both-adjusted concordance; otherwise the veto is asymmetric again, which is the same defect as
+  r4#11 in the opposite direction.
+- #8 NEAR/FAR HALO — CONCEDED in the plan text. The census code did compute the near/far split on the
+  haloed array and crop after classification, so the reported numbers are not affected; the PLAN failed
+  to state the rule. Text fix, not a numbers fix.
+- #11 STALE RISKS/COST TEXT — CONCEDED and FIXED in this revision (risks items 1-2 rewritten; the
+  "no new downloads" claim is superseded by mandatory split-half products and the withdrawn cost estimate).
+
+WHAT THE FIVE ROUNDS BOUGHT (all before a single byte was downloaded):
+- r1#2: the halo bug — the cohort arithmetic was wrong; santa_cruz flipped PASS->FAIL and the combined
+  floor turned out unreachable (13 < 14). This alone invalidated the round-1 plan.
+- r1#12 + r2#6: the reference-patch arm was withdrawn as unnecessary AND the replacement I proposed was
+  caught inflating D by weakening the C baseline (tailmass is a c_* feature).
+- r1#7: PIF attrition preferentially deletes saturated frontiers where block B is strongest — a path to
+  false confirmation.
+- r4#1 + this session's census: the two-class water rule would have made the study INCONCLUSIVE by
+  construction (water at 10/19 sites), discoverable only by running the prerequisite census.
+- r5#5: additive-only correction is blind to multiplicative gain drift.
+Every one of these would have surfaced after ~2 days of CDSE downloads, or not at all.
+
+HANDED TO THE USER per the skill's deadlock rule.
