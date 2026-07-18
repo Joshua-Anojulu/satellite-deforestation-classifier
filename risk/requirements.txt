@@ -1,0 +1,16 @@
+# Runtime dependencies for the companion risk study (Python 3.14).
+numpy
+pandas
+scipy
+scikit-learn
+rasterio
+openeo
+pyproj
+geopandas
+shapely
+xarray
+requests
+
+# Test runner used by the required proof command.
+pytest
+
