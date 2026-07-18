@@ -130,3 +130,18 @@ STATUS: substantively converged. All findings across 3 rounds accepted and incor
 round's items were mechanical. Not re-submitted for a 4th round (round cap + this session's context is
 near-exhausted). This is a REVIEWED, converged plan awaiting the user's implement-or-not decision, NOT
 an approved-and-verified one — the difference is that Codex has not seen v3-final.
+
+## Act 3 — Build (codex-build)
+
+### Round 1 — Codex build
+Builder: codex-cli 0.144.5, gpt-5.6-sol xhigh. Launched by the user (harness blocked --yolo from Claude). thread_id 019f7550-ceba-7690-af63-a20ff9d7371e. ~11m50s.
+Report: implemented v3 spec exactly, no deviations; self-reported 35 passed.
+Files: risk/download_timeseries.py (+293/-10), risk/tests/test_download_guard.py (+305, 13 tests).
+
+### Claude's verdict — VERIFIED, ready to commit
+- Read full diff: faithful to v3. Fail-safe precedence (env checked before decode via _exception_chain; unmatched RE-RAISES); atomic unique-temp -> os.replace -> versioned marker; marker cache-miss on any mismatch; orphan sweep gated on dead-PID (_pid_is_alive: Windows OpenProcess/WaitForSingleObject + POSIX os.kill) AND >24h age; band-count threaded from _EXPECTED_BAND_COUNTS.
+- Ran pytest MYSELF: 35 passed in 1.81s.
+- Load-bearing tests are real, not trivial: late-tile truncation asserts an early tile reads then the last tile raises then _decodes False; live-foreign-temp keeps the current (alive) PID and backdates past the age gate, asserting survival; unclassified RasterioIOError propagates and leaves the existing final untouched.
+- REAL-DATA smoke test (not just synthetic fixtures): _decodes True for all 4 cube types on actual rondonia composites at the right band counts, wrong count rejected, marker round-trips.
+- No stray .ok/.part left in the data dir.
+Verdict: spec-faithful, proven on real + synthetic data. Recommend commit.

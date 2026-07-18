@@ -14,14 +14,18 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import errno
 import json
 import math
+import os
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
 import numpy as np
+import rasterio
 import requests
 
 from .config import (
@@ -42,6 +46,57 @@ from .provenance import backend_provenance, base_provenance, sha256_file, write_
 
 BACKEND_URL = "https://openeo.dataspace.copernicus.eu"
 CATALOGUE_URL = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
+
+_VALIDATOR_VERSION = 1
+_ORPHAN_TEMP_MIN_AGE_SECONDS = 24 * 60 * 60
+_EXPECTED_BAND_COUNTS = {
+    "reflectance": len(REFLECTANCE_BANDS),
+    "dispersion": len(REFLECTANCE_BANDS),
+    "clearobs": 1,
+    "solar_zenith": 1,
+}
+_ENVIRONMENT_ERRNOS = {
+    value for name in (
+        "EACCES", "EPERM", "ENOSPC", "EDQUOT", "EMFILE", "ENFILE", "ENOMEM",
+        "EROFS", "EIO", "ENOENT", "ENOTDIR", "EISDIR", "EBADF", "ESPIPE",
+    ) if (value := getattr(errno, name, None)) is not None
+}
+_ENVIRONMENT_ERROR_SIGNATURES = (
+    "permission denied",
+    "access is denied",
+    "operation not permitted",
+    "no space left on device",
+    "disk full",
+    "disk quota exceeded",
+    "too many open files",
+    "cannot allocate memory",
+    "out of memory",
+    "memory allocation failed",
+    "failed to open",
+    "cannot open",
+    "could not open",
+    "failed to seek",
+    "seek failed",
+    "illegal seek",
+    "input/output error",
+    "i/o error",
+    "read-only file system",
+)
+_DECODE_ERROR_SIGNATURES = (
+    "tiffreadencodedtile",
+    "tiffreadencodedstrip",
+    "ireadblock",
+    "not recognized as a supported file format",
+    "not recognized as being in a supported file format",
+    "decompression failed",
+    "error decoding block",
+    "corrupt jpeg data",
+    "premature end of jpeg file",
+)
+
+
+class _CorruptDownload(Exception):
+    """A downloaded file failed the base-pixel decode/schema gate."""
 
 
 def buffered_bbox(bbox: Mapping[str, float], metres: float = BUFFER_M) -> dict[str, float]:
@@ -176,21 +231,246 @@ def query_acquisition_metadata(bbox: Mapping[str, float], period: tuple[str, str
     }
 
 
-def _download(cube: Any, destination: Path, retries: int = 4) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists() and destination.stat().st_size > 0:
-        print(f"skip (exists): {destination}")
-        return
-    for attempt in range(1, retries + 1):
+def _exception_chain(error: BaseException):
+    pending = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        yield current
+        if current.__cause__ is not None:
+            pending.append(current.__cause__)
+        if current.__context__ is not None:
+            pending.append(current.__context__)
+
+
+def _is_environmental_error(error: BaseException) -> bool:
+    """Return True when any cause identifies a local resource or file-I/O failure."""
+    for current in _exception_chain(error):
+        if isinstance(current, (MemoryError, PermissionError)):
+            return True
+        # GDAL CPLE exceptions also expose an ``errno`` field, but it is a GDAL
+        # error number (for example CPLE_AppDefined == 1), not an OS errno.
+        if (isinstance(current, OSError)
+                and getattr(current, "errno", None) in _ENVIRONMENT_ERRNOS):
+            return True
+        message = str(current).lower()
+        if any(signature in message for signature in _ENVIRONMENT_ERROR_SIGNATURES):
+            return True
+    return False
+
+
+def _is_decode_error(error: BaseException) -> bool:
+    return any(
+        signature in str(current).lower()
+        for current in _exception_chain(error)
+        for signature in _DECODE_ERROR_SIGNATURES
+    )
+
+
+def _decodes(path: Path, expected_band_count: int) -> bool:
+    """Check base-pixel decodability and band count, excluding overviews and masks."""
+    try:
+        with rasterio.open(path) as source:
+            if source.width <= 0 or source.height <= 0:
+                return False
+            if source.count != expected_band_count:
+                return False
+            for band in range(1, source.count + 1):
+                for _, window in source.block_windows(band):
+                    source.read(band, window=window)
+        return True
+    except Exception as error:
+        # Environmental evidence has deterministic precedence over decode signatures.
+        if _is_environmental_error(error):
+            raise
+        if _is_decode_error(error):
+            return False
+        raise
+
+
+def _marker_path(destination: Path) -> Path:
+    return destination.with_name(f"{destination.name}.ok")
+
+
+def _unique_temp(path: Path) -> Path:
+    return path.with_name(f"{path.name}.{os.getpid()}.{uuid.uuid4().hex}.part")
+
+
+def _remove_owned_temp(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _pid_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if pid == os.getpid():
+        return True
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            # Access denied identifies an extant protected process. Any other unknown
+            # result is also treated as live so cleanup remains fail-safe.
+            return ctypes.get_last_error() != 87  # ERROR_INVALID_PARAMETER
         try:
-            cube.download(destination, format="GTiff")
+            result = kernel32.WaitForSingleObject(handle, 0)
+            return result == 0x00000102  # WAIT_TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError as error:
+        return error.errno != errno.ESRCH
+    return True
+
+
+def _temp_owner_pid(candidate: Path, destination: Path) -> int | None:
+    prefix = f"{destination.name}."
+    suffix = ".part"
+    if not candidate.name.startswith(prefix) or not candidate.name.endswith(suffix):
+        return None
+    middle = candidate.name[len(prefix):-len(suffix)].split(".")
+    if len(middle) == 3 and middle[0] == "ok":
+        middle = middle[1:]
+    if len(middle) != 2:
+        return None
+    pid_text, uuid_text = middle
+    try:
+        if uuid.UUID(hex=uuid_text).hex != uuid_text.lower():
+            return None
+        return int(pid_text)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _sweep_orphan_temps(destination: Path) -> None:
+    """Best-effort sweep of old temps whose embedded owner PID is no longer alive."""
+    now = time.time()
+    for candidate in destination.parent.glob(f"{destination.name}.*.part"):
+        pid = _temp_owner_pid(candidate, destination)
+        if pid is None or _pid_is_alive(pid):
+            continue
+        try:
+            age = now - candidate.stat().st_mtime
+            if age > _ORPHAN_TEMP_MIN_AGE_SECONDS:
+                candidate.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _marker_matches(destination: Path, expected_band_count: int) -> bool:
+    marker = _marker_path(destination)
+    try:
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+        stat = destination.stat()
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    expected_types = {
+        "validator_version": int,
+        "expected_band_count": int,
+        "size": int,
+        "mtime_ns": int,
+    }
+    if any(type(payload.get(key)) is not value_type
+           for key, value_type in expected_types.items()):
+        return False
+    return (
+        payload["validator_version"] == _VALIDATOR_VERSION
+        and payload["expected_band_count"] == expected_band_count
+        and payload["size"] == stat.st_size
+        and payload["mtime_ns"] == stat.st_mtime_ns
+    )
+
+
+def _write_marker(destination: Path, expected_band_count: int) -> None:
+    marker = _marker_path(destination)
+    temp = _unique_temp(marker)
+    stat = destination.stat()
+    payload = {
+        "validator_version": _VALIDATOR_VERSION,
+        "expected_band_count": expected_band_count,
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+    }
+    try:
+        temp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+        os.replace(temp, marker)
+    finally:
+        _remove_owned_temp(temp)
+
+
+def _download(cube: Any, destination: Path, expected_band_count: int,
+              retries: int = 4) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _sweep_orphan_temps(destination)
+    marker = _marker_path(destination)
+    if destination.exists():
+        if _marker_matches(destination, expected_band_count):
+            print(f"skip (validated): {destination}")
             return
-        except Exception:
-            if destination.exists() and destination.stat().st_size == 0:
-                destination.unlink()
+        if _decodes(destination, expected_band_count):
+            _write_marker(destination, expected_band_count)
+            print(f"skip (validated): {destination}")
+            return
+        marker.unlink(missing_ok=True)
+        destination.unlink()
+    else:
+        marker.unlink(missing_ok=True)
+
+    for attempt in range(1, retries + 1):
+        temp = _unique_temp(destination)
+        try:
+            cube.download(temp, format="GTiff")
+        except BaseException as error:
+            _remove_owned_temp(temp)
+            if (not isinstance(error, Exception)
+                    or _is_environmental_error(error)
+                    or attempt == retries):
+                raise
+            time.sleep(15 * attempt)
+            continue
+
+        try:
+            if not _decodes(temp, expected_band_count):
+                raise _CorruptDownload(f"Downloaded GeoTIFF failed validation: {destination}")
+        except _CorruptDownload:
+            _remove_owned_temp(temp)
             if attempt == retries:
                 raise
             time.sleep(15 * attempt)
+            continue
+        except BaseException:
+            _remove_owned_temp(temp)
+            raise
+
+        try:
+            os.replace(temp, destination)
+        except BaseException:
+            _remove_owned_temp(temp)
+            raise
+        _write_marker(destination, expected_band_count)
+        return
 
 
 def download_manifest(manifest_path: str | Path, only_site: str | None = None,
@@ -229,7 +509,10 @@ def download_manifest(manifest_path: str | Path, only_site: str | None = None,
                 print(f"validated graph: {site['candidate_id']} {year}")
                 continue
             for name, cube in cubes.items():
-                _download(cube, directory / f"{year}_{name}.tif")
+                _download(
+                    cube, directory / f"{year}_{name}.tif",
+                    expected_band_count=_EXPECTED_BAND_COUNTS[name],
+                )
 
 
 def main() -> None:
