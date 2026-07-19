@@ -14,6 +14,25 @@ change_detection.py    Compare year A vs B -> forest-loss map + event list
 validate_gfw.py        Compare detected loss vs Global Forest Watch raster
 ```
 
+## Known weakness: the downloaders don't validate integrity
+
+`download_sites.py` skips on `os.path.exists(out) and getsize(out) > 0` and only
+deletes **zero-byte** files on a failed attempt; `download_sentinel.py` does no
+validation at all. A **truncated** GeoTIFF (nonzero bytes, valid header, a corrupt
+later tile) therefore passes silently and is retained forever on resume. This is
+the same failure that put two 15-34%-short composites in the sibling risk pipeline
+(see `risk/download_timeseries.py` on the `risk-forecasting` branch, which was
+hardened with an atomic-write + full-decode guard). The detector pipeline here was
+**not** ported that guard: its published results are safe only because every scene
+that produced a number was full-decoded downstream (`patchify` -> `classify`, and
+`diagnose_composites.py`'s `s.read()`), which crashes on a truncated tile rather
+than using it.
+
+**If you ever re-run a download** (e.g. adding a site), run
+`python -m deforestation.diagnose_composites` afterwards and confirm every
+site/date prints stats (not `MISSING/ERR`) before trusting any count — an
+existence/size count alone will miss a truncated file.
+
 ## Prerequisites (need YOUR input)
 
 1. **Study area** — a region with documented deforestation and clear-ish
