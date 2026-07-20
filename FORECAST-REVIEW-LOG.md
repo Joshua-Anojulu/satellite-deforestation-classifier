@@ -454,3 +454,276 @@ STATUS: substantively converged. All findings across 5 rounds accepted and incor
 rounds were mechanical. Not re-submitted for a 6th round (round cap). This is a REVIEWED, converged plan
 awaiting the user's implement-or-not decision — NOT an approved-and-verified one, because Codex has not
 seen v6-final (it differs from v5 only by the round-5 parameter-freezes it itself requested).
+
+
+---
+
+## Round 6 (VERIFICATION round on v6) — Codex
+
+_New Codex session (`gpt-5.6-sol`, xhigh; the rounds 1-5 thread was gone), scoped to verifying the four
+round-5 parameter-freezes were correct and reproducible as written, with settled design explicitly fenced
+off. Codex respected the fence — it raised no out-of-scope objection._
+
+The v6 changes are not fully reproducible. r5#2 and the GFC wording fix pass; r5#1, r5#3, and r5#4 remain materially under-specified.
+
+1. **The variogram-range estimator is still incomplete.** The plan specifies an empirical semivariogram and 95%-of-sill crossing, but not the residual-generating model, semivariance estimator, lag bins, maximum lag, sill estimator, pooling weights across sites/origins, first-crossing rule, interpolation, or conversion of the range to integer pixels. These were expressly part of the [round-5 reproducibility objection](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-REVIEW-LOG.md:416>) and can materially change \(L\) and every resulting gate. See [FORECAST-PLAN.md:157](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:157>).
+
+   **Fix —** Freeze the residual source and exact Matheron/other estimator, lag-bin edges and maximum, sill and pooling formulas, crossing/interpolation rule, and `ceil(range / pixel_size)` separately at 30 m and 90 m.
+
+2. **The block construction is internally contradictory and incomplete.** “Non-overlapping … moving blocks” combines two distinct bootstrap designs; a moving-block bootstrap normally has overlapping candidate blocks. The tiling anchor, number of site draws, block-selection probabilities, and treatment of the final overshooting block are also unstated. Partial edge blocks make uniform-block and pixel-proportional sampling numerically different. See [FORECAST-PLAN.md:160](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:160>).
+
+   **Fix —** Choose one design—for example, grid-aligned non-overlapping tiles anchored at each site’s raster origin—then state that exactly \(S\) sites are drawn, candidate blocks are sampled uniformly, and the full final block and all duplicate pixels are retained.
+
+3. **Exact random reproducibility is absent.** “Seed everything” does not provide a seed, RNG algorithm, or deterministic site/block ordering; with only 1,000 replicates, different seeds can change a borderline gate. See [FORECAST-PLAN.md:99](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:99>).
+
+   **Fix —** Freeze a numeric seed, RNG family/version, and canonical ordering for sites, blocks, pixels, and survey records.
+
+4. **The detector-audit sampling design is not actually frozen.** “~180,” “further stratified by site,” and “frozen per-site inclusion probabilities” provide neither exact sample sizes nor a rule that produces those probabilities, including rounding and undersized-stratum handling. Consequently, two analysts cannot select the same audit or weights. See [FORECAST-PLAN.md:83](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:83>).
+
+   **Fix —** Set an exact biome sample size and a deterministic site-allocation rule, specify SRS without replacement within sites, census handling for small strata, and give \(\pi_{bs}=n_{bs}/N_{bs}\).
+
+5. **The survey estimand and decision calculations remain ambiguous.** The plan does not say whether detector share is pixel- or geodesic-area-weighted, give the linearized-variance formula/FPC, define the UCB construction, or define “weighted-corrected targeting-efficiency”—including its budget, resolution, aggregation, denominator, and treatment of detector cases. An asymmetric bootstrap interval also has no unique “half-width.” See [FORECAST-PLAN.md:91](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:91>).
+
+   **Fix —** Write the Hájek ratio and stratified variance formulas explicitly, freeze the one-sided UCB critical value/transformation, and define the corrected headline statistic and comparison as a precise formula at a named budget, scale, and aggregation level.
+
+6. **The gap confidence level is named, but its bound is not uniquely defined.** A one-sided 95% bootstrap lower bound ordinarily uses the 5th percentile, whereas the lower endpoint of a two-sided 95% interval uses the 2.5th percentile; percentile, basic, and BCa intervals also differ. Section 10’s generic “95% interval” does not resolve this. See [FORECAST-PLAN.md:77](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:77>) and [FORECAST-PLAN.md:165](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:165>).
+
+   **Fix —** Freeze the interval algorithm—for example, percentile \(q_{.025},q_{.975}\) for two-sided gates and percentile \(q_{.05}\) for the one-sided gap non-inferiority LCB.
+
+7. **The §F frozen list does not explicitly include the newly frozen uncertainty procedures.** Section 10 calls the bootstrap “fully frozen,” but §F’s apparently exhaustive “Frozen NOW” list names metrics and budgets without naming the bootstrap, survey estimator, or CI constructions. See [FORECAST-PLAN.md:17](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:17>).
+
+   **Fix —** Add the complete bootstrap, audit-estimator, and confidence-bound procedures to §F’s frozen-now list.
+
+The nested LOSO rule is otherwise correct and consistent with the origin chronology and leakage firewall: each fold trains on the other 11 sites’ 2021 outcomes, selects and calibrates on their 2022 outcomes, and first uses held-out-site predictors for 2023 inference. The GFC wording is also correctly repaired in both provenance and risks, without allowing coverage to alter §1.
+
+VERDICT: REVISE
+
+### Claude's response — all 7 conceded, incorporated as v7
+
+The verification round was worth running: **v6 was reviewed but not reproducible.** Codex confirmed r5#2
+(nested LOSO) and the GFC provenance wording as correct, and found that the other three freezes plus one
+newly-introduced contradiction still could not be implemented from the text alone. All 7 accepted — every
+one is a mechanical specification gap, none reopens design.
+
+1. **Variogram estimator** — froze residual source (outcome − contagion baseline), Matheron estimator,
+   1-px lag bins 1-200, max lag 200 px, pair-count-weighted pooling, sill = mean over bins 151-200, first
+   crossing at bin upper edge with no interpolation, and `ceil(range/pixel_size)` separately at 30/90 m.
+2. **Block construction contradiction** — conceded outright; "non-overlapping L×L **moving** blocks" was my
+   own wording error fusing two different bootstrap designs. Withdrew "moving": it is now a grid-aligned,
+   strictly non-overlapping tile bootstrap anchored at the raster origin, partial edge tiles kept as-is,
+   candidates sampled **uniformly over tiles** (not pixel-proportional), exactly S sites drawn, final
+   overshooting tile retained in full, duplicates retained.
+3. **Seed/RNG** — froze seed 42, NumPy `Generator(PCG64)` with `SeedSequence.spawn` per (analysis,
+   replicate), and canonical ordering for sites/tiles/pixels/survey records.
+4. **Audit sampling** — froze n_b = 180 over **2023 positives only**, largest-remainder apportionment
+   proportional to N_bs, census for sites with N_bs ≤ 5 (and for whole groups with ΣN_bs ≤ 180), SRS
+   without replacement, π_bs = n_bs/N_bs frozen before any label is read.
+5. **Survey estimand** — wrote the Hájek ratio explicitly, fixed it to a pixel-count basis at 30 m, gave
+   the stratified Taylor-linearized variance with FPC in closed form, froze the one-sided 95% UCB as
+   z=1.645 on the logit scale back-transformed, and defined `TE_corr` as a precise formula (5% budget,
+   30 m, pooled over 12 frame sites, weights `w_i·(1−d_i)`).
+6. **Interval algorithm** — this was the sharpest catch: "95% lower bound" was genuinely ambiguous between
+   q0.05 and q0.025. Froze percentile bootstrap throughout, two-sided (q0.025, q0.975), one-sided lower
+   q0.05 for gap non-inferiority, upper q0.95, and defined "CI half-width" as (q0.975 − q0.025)/2 — the
+   half-width was previously undefined for an asymmetric interval yet used as a pass/fail threshold.
+7. **§F completeness** — added the whole uncertainty machinery (bootstrap, audit estimator, CI
+   constructions) to the "Frozen NOW" list, which had claimed to be exhaustive while omitting it.
+
+Re-submitted to the same session as round 7.
+
+
+## Round 7 (v7 re-review) — Codex — MAX_ROUNDS cap reached
+
+V7 is substantially tighter, but it is still not reproducible from the text alone. One survey formula is internally contradictory, and several remaining choices can change pass/fail decisions.
+
+1. **The variogram input and units remain ambiguous.** “Contagion-baseline predicted probability” does not specify raw versus calibrated probabilities, in-sample versus out-of-sample predictions, or the fold-specific fitted model. Also, the range is expressed through one-pixel bins but then divided by `pixel_size`, leaving its physical unit unclear. Empty lag bins and whether \(L\) is recomputed per outer fold are unspecified. See [FORECAST-PLAN.md:177](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:177>).
+
+   **Fix —** For each outer fold and scale, name the exact prediction artifact and eligibility mask, define bin \(k\) in metres, specify empty-bin handling, record range/RF radius in metres, and use the resulting fold-specific \(L\) for that held-out site.
+
+2. **The bootstrap stopping population is undefined.** “Drawn pixels” and “site pixel count” could mean all raster cells, eligible evaluation-population pixels, or non-nodata cells. Tiles containing few or no eligible pixels make these alternatives produce different replicate sizes and undefined-AP rates. See [FORECAST-PLAN.md:191](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:191>).
+
+   **Fix —** State exactly which cells count toward the stopping total and metrics, including whether zero-eligible tiles remain candidates.
+
+3. **The RNG stream mapping is still call-order-dependent.** `SeedSequence.spawn` produces children sequentially, but the plan does not enumerate analyses or map an `(analysis, replicate)` tuple to a child index. Analysts running analyses in different orders will obtain different replicates and survey samples. See [FORECAST-PLAN.md:116](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:116>).
+
+   **Fix —** Assign fixed numeric analysis codes and instantiate each stream directly with `SeedSequence(42, spawn_key=(analysis_code, replicate))`, including a designated survey-sampling code.
+
+4. **The audit allocation can assign zero or one observation to a nonempty site.** Largest-remainder proportional allocation does not guarantee \(n_s>0\), or \(n_s\ge2\) for variance estimation, when \(N_s>5\) but is small relative to its biome. Equal-remainder tie-breaking is also unspecified. A zero inclusion probability invalidates the Hájek estimator. See [FORECAST-PLAN.md:91](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:91>).
+
+   **Fix —** Guarantee at least two observations in every noncensus nonempty site before proportional apportionment, break remainder ties by ascending site ID, and define every census stratum’s variance contribution as zero.
+
+5. **The stated detector-share UCB is mathematically contradictory.** The text gives \(D̂+1.645\sqrt{V̂(D̂)}\), which is a probability-scale Wald bound, while simultaneously saying it is computed on the logit scale. A logit bound requires a delta-method transformed standard error. It is also undefined when \(D̂=0\) or \(1\)—a plausible audit outcome—and the ordinary Taylor/Wald estimate can then produce a falsely degenerate bound. See [FORECAST-PLAN.md:99](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:99>).
+
+   **Fix —** Give the exact transformed formula, e.g. `expit(logit(D̂)+1.645·sqrt(V̂)/(D̂(1−D̂)))`, and freeze a valid boundary-safe survey interval for \(D̂∈\{0,1\}\).
+
+6. **`TE_corr` still lacks an executable formula.** Only sampled positives have \(d_i\) and \(w_i\), while “each 2023 positive” suggests the full population. It is also unclear whether the original top-5%-area target set remains fixed or is recomputed, and whether 5% is selected globally or separately within sites before pooling. These choices change the corrected recall. See [FORECAST-PLAN.md:107](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:107>).
+
+   **Fix —** Define `TE_corr = Σ_sample a_i w_i(1−d_i)z_i / Σ_sample a_i w_i(1−d_i)`, where \(z_i\) is membership in an explicitly frozen global or per-site target set from the uncorrected map.
+
+7. **Bootstrap quantiles are not exactly reproducible.** `q0.025`, `q0.05`, and related quantiles have multiple finite-sample interpolation conventions, and the text does not explicitly say that undefined replicates are removed before computing them. See [FORECAST-PLAN.md:197](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:197>).
+
+   **Fix —** Specify, for example, `numpy.quantile(defined_replicates, q, method="linear")`, with the undefined fraction calculated against all 1,000 attempted replicates.
+
+The non-overlapping tile geometry, §F inclusion, one-sided gap bound, origin chronology, nested LOSO firewall, and GFC-coverage wording are now internally consistent.
+
+VERDICT: REVISE
+
+### Status at cap — NOT approved, and NOT a disagreement
+
+Loop terminated at the round cap (MAX_ROUNDS=2 for this verification pass). No finding in rounds 6 or 7
+was contested by Claude; there is no open disagreement to arbitrate. What the two rounds show instead is
+a **specification regress**: each round of added prose exposes a finer numerical convention beneath it.
+
+Codex's confirmed-stable list GREW again this round — non-overlapping tile geometry, §F inclusion,
+one-sided gap bound, origin chronology, nested LOSO firewall, and GFC-coverage wording are all now
+declared internally consistent. The design is settled. What remains splits in two:
+
+**Substantive (real defects, must fix regardless of what happens to the loop):**
+- r7#5 — the detector-share UCB is **mathematically contradictory as written**: the formula given is a
+  probability-scale Wald bound while the text says it is computed on the logit scale, and it is
+  undefined at D̂ ∈ {0,1}, which is a plausible audit outcome. Claude's error, introduced in v7.
+- r7#4 — largest-remainder apportionment can hand a nonempty site n_s ∈ {0,1}: n_s = 0 gives a zero
+  inclusion probability and invalidates the Hájek estimator outright; n_s = 1 leaves within-site variance
+  undefined.
+- r7#6 — TE_corr is written over "each 2023 positive" (population) but its terms d_i, w_i exist only for
+  sampled positives; the target-set convention (frozen vs recomputed, global vs per-site) is also open.
+
+**Convention-level (numerics a test suite pins better than a paragraph):** r7#1 empty-bin handling and
+metres-vs-pixels bookkeeping, r7#2 which cells count toward the bootstrap stopping total, r7#3 explicit
+`spawn_key` mapping, r7#7 quantile interpolation method.
+
+Handed to Josh at human gate #2.
+
+### Claude's response to round 7 — all 7 conceded, incorporated as v8; cap extended by one confirm round
+
+Josh chose option 2 at the gate: fix all 7, then spend one more round to try for a clean APPROVED.
+
+**Substantive (would have produced wrong numbers):**
+- r7#5 — conceded as a genuine error of mine. The v7 text printed `D̂ + 1.645·√V̂` (a probability-scale
+  Wald bound) while asserting it was computed on the logit scale; the two are different estimators. v8
+  gives the delta-method form `expit(logit(D̂) + 1.645·√V̂/(D̂(1−D̂)))` explicitly, and — since D̂ = 0 is a
+  plausible audit outcome where the logit bound is undefined — freezes a Clopper–Pearson one-sided upper
+  bound at Kish effective n for D̂ ∈ {0,1}, which at D̂ = 0 is 1 − 0.05^(1/n_eff).
+- r7#4 — conceded. Largest-remainder apportionment really can hand a nonempty site n_s ∈ {0,1}. v8 fixes
+  the allocation ORDER: census small strata first, then a floor of n_s = 2 on every remaining site, then
+  largest-remainder on what is left, ties by ascending site id; census strata contribute exactly zero
+  variance (FPC = 0); N_bs = 0 sites are not strata at all.
+- r7#6 — conceded. v8 restricts TE_corr to the sample space (the only place d_i and w_i exist), writes the
+  ratio out, and freezes the target set as the global top-5%-by-geodesic-area from the UNCORRECTED map,
+  never recomputed after detector removal.
+
+**Convention-level:**
+- r7#1 — named the exact prediction artifact (contagion baseline, out-of-fold, pre-calibration raw p̂),
+  restricted residuals to eligible pixels, redefined lag bins in METRES (bin k = ((k−1)g, kg]), froze
+  empty-bin dropping, and made L fold-specific so a held-out site cannot set its own block size.
+- r7#2 — froze the counting population as eligible-population pixels throughout, and kept zero-eligible
+  tiles as candidates so tile-selection probabilities stay independent of the outcome.
+- r7#3 — replaced sequential `spawn()` with direct `SeedSequence(42, spawn_key=(analysis_code, replicate))`
+  and enumerated the analysis codes 0-6, so execution order cannot change any draw.
+- r7#7 — froze `numpy.quantile(..., method="linear")` on the DEFINED replicates, with the undefined
+  fraction measured against all 1000 attempted.
+
+Re-submitted to the same session as round 8 (confirm round).
+
+## Round 8 (CONFIRM round on v8) — Codex
+
+_Judged against the standard actually in play: reproducible by an independent analyst GIVEN a reference
+implementation and unit tests pinning residual numerical conventions._
+
+Two material problems remain.
+
+1. **The variogram’s “out-of-fold” predictions are not leakage-safe by construction.** For outer held-out site \(h\), reusing ordinary 12-site LOSO predictions for the other 11 sites can involve models trained with data from \(h\), allowing \(h\) to influence its own \(L\), contrary to the stated firewall. Inner cross-fitting among only the 11 sites would produce different residuals and ranges. See [FORECAST-PLAN.md:207](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:207>).
+
+   **Fix —** Specify that, within each outer fold, each residual-site prediction is generated by an inner leave-one-site-out fit using only the other 10 non-held-out sites, with the exact temporal training/validation roles preserved.
+
+2. **The audit allocation can request more samples than a stratum contains.** After assigning the two-sample floors, the remaining budget is apportioned proportional to the original \(N_s\), rather than remaining capacity \(N_s-2\). For example, \(N=(6,175)\) with budget 180 assigns the six-pixel site more than six samples. See [FORECAST-PLAN.md:91](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:91>).
+
+   **Fix —** Apportion the post-floor budget proportional to remaining capacities \(N_s-2\), with capped iterative redistribution if necessary.
+
+The bootstrap counting population, RNG mapping, quantile convention, `TE_corr`, gap bound, §F list, chronology, and GFC wording are otherwise sufficiently specified under the reference-implementation-and-tests standard.
+
+VERDICT: REVISE
+
+### Claude's response — both conceded, incorporated as v9
+
+Findings 7 → 7 → **2**, with everything else declared sufficiently specified. Both survivors were real and
+neither was a convention quibble:
+
+- **r8#1 — a leakage bug I introduced in v8.** Making L fold-specific was meant to stop a held-out site
+  setting its own block size, but I sourced the residuals from the ordinary 12-site LOSO predictions — in
+  which the outer held-out site *h* participated in training the models that predict the other 11 sites.
+  So *h* leaked into its own L through the variogram. v9 requires **inner cross-fitting**: within outer
+  fold *h*, each of the 11 sites' residuals comes from a fit on the other 10 non-held-out sites only,
+  temporal roles preserved. This is the same class of error the round-5 nested-LOSO freeze existed to
+  prevent, reintroduced one level down in the uncertainty machinery.
+- **r8#2 — arithmetic overflow with a worked counterexample.** Apportioning the post-floor budget
+  proportional to N_bs rather than remaining capacity (N_bs − 2) can allocate a stratum more samples than
+  it contains: N = (6, 175) at budget 180 gives the 6-pixel site ~8. v9 apportions by remaining capacity
+  and adds capped iterative redistribution, so allocation can never exceed a stratum's size.
+
+Re-submitted as round 9.
+
+## Round 9 (CONFIRM round on v9) — Codex — **APPROVED**
+
+Both round-8 findings are correctly resolved:
+
+- Variogram residuals now use inner cross-fitting confined to the 11 non-held-out sites, so outer site \(h\) cannot influence its own \(L\). The temporal roles remain consistent with nested LOSO. [FORECAST-PLAN.md:210](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:210>)
+- Audit allocation now uses remaining capacity \(N_{bs}-2\), caps census allocations, and redistributes excess deterministically; it cannot request more observations than exist. [FORECAST-PLAN.md:91](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:91>)
+
+The freezes are internally consistent with §F, the chronology, evaluation gates, and leakage firewall. Under the stated reference-implementation-and-unit-tests standard, the plan is reproducible enough to implement without unresolved choices that would materially alter reported numbers or pass/fail decisions.
+
+VERDICT: APPROVED
+
+---
+
+# LOOP CLOSED — v9 APPROVED after 9 rounds
+
+Rounds 1-5 (design, earlier session): 17 → 11 → 8 → 4 → 4 findings, terminated at cap without APPROVED.
+Rounds 6-9 (verification, this session): 7 → 7 → 2 → **0, APPROVED**.
+
+**Every finding across all 9 rounds was conceded by Claude; not one was rejected.** That is worth stating
+plainly rather than as a compliment to the process: it means the plan's author was consistently wrong at
+the margin, and the review was doing real work up to the very last round.
+
+The verification pass was not a formality. v6 was a *reviewed* plan that was **not implementable**, and
+rounds 6-9 caught, among others, two errors of the exact class the plan exists to prevent:
+1. A **contradictory bootstrap design** ("non-overlapping *moving* blocks" fuses two different estimators).
+2. A **mathematically wrong UCB** — a probability-scale Wald bound mislabelled as logit-scale, undefined at
+   D̂ ∈ {0,1} which is a plausible audit outcome.
+3. An **audit allocation that could invalidate its own estimator** (n_s = 0 ⇒ zero inclusion probability).
+4. A **leakage path reintroduced in v8** — the held-out site influencing its own bootstrap block size
+   through the variogram, one level below where the round-5 nested-LOSO freeze had closed it.
+
+Any of these would have silently produced wrong numbers or a wrong gate decision, and #4 would have
+quietly breached the leakage firewall the entire study rests on.
+
+**Status: APPROVED plan, awaiting Josh's sign-off at human gate #2. No code written during the loop.**
+
+## Post-approval — Claude's own review of v9 → v10
+
+Josh asked for an independent read before sign-off rather than taking the APPROVED verdict at face value.
+Two items, one cosmetic and one not.
+
+**Cosmetic (fixed):** §9's deep-model gate still said "site-clustered bootstrap CI" while §10(d) mandates
+the hierarchical spatial block bootstrap for that exact gate — stale wording from an earlier draft, the
+same drift class that produced the v6 defects. Aligned.
+
+**Substantive (fixed as v10): the detector-audit retention gate ignored its own sampling error.**
+The v9 rule was `|TE_headline − TE_corr| ≤ half-width`. TE_headline comes from the full raster and has no
+sampling error, but TE_corr is a Hájek estimate over ~180 audited positives per biome and carries real
+survey variance that appeared nowhere in the rule. Rough sizing: ~720 sampled positives, SE on the order
+of 0.03–0.05 after weight-induced design effect, against a tolerance plausibly 0.05–0.10 — the same order
+of magnitude. The gate could therefore pass or fail on audit noise alone, in either direction, and it is
+precisely the gate that decides whether the study is forecasting or detecting.
+
+v10 requires `|TE_headline − TE_corr| + 1.96·SE_survey(TE_corr) ≤ half-width`, with SE_survey taken from
+the stratified Taylor-linearized ratio variance already frozen for D̂ (FPC included, census strata zero),
+so imprecision makes the gate harder to pass, never easier. No new machinery is introduced.
+
+**Why nine rounds of adversarial review did not catch this.** Rounds 6-9 were scoped — by Claude — to
+whether the freezes were *reproducible*: could an independent analyst implement them and get the same
+numbers? Codex verified TE_corr was computable (r7#6) and that the comparison was well-defined. It never
+asked whether the comparison was statistically *valid*, because that question was outside the fence Claude
+drew. The scoping that kept Codex from re-litigating settled design also kept it from auditing the
+statistics of a rule it had just helped specify. Worth remembering: a tightly-scoped review is efficient
+exactly to the degree it is blind, and the reviewer cannot tell you what your fence excluded.
