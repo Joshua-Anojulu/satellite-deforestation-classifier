@@ -808,3 +808,53 @@ code 6).
 self-serving tolerance. The rounds were scoped — by Claude — to reproducibility, and a scoped review
 returns findings only from inside its fence. The fence was the right call for efficiency and it is also
 why #1 survived: nobody was asked whether the frozen rules were the right rules.
+
+## Feasibility precheck (GFC-only) — and a LOGGED PROTOCOL DEVIATION
+
+### DEVIATION (§12): the test origin was read once, accidentally, by Claude
+
+While debugging `forecast/precheck_evaluability.py` — a script written specifically to avoid touching the
+2023 outcome — Claude ran an ad-hoc diagnostic that printed origin-2022 component counts and raw 2023/2024
+loss pixel counts for site `F1_P000.180_M0063.250`. **That is the test outcome.** It was read ~90 seconds
+after the module docstring forbidding it was written. Known as a result: that site has 4 mapped loss
+components in 2023, below the >=5 evaluability floor.
+
+The reading cannot be undone. The MATERIAL harm would be changing the frame in response to it, which would
+be selection on test labels; that must not now happen. Recorded here, to be disclosed in the paper's
+limitations. No other site's 2023 outcome has been read.
+
+### Result: the regional gate has zero margin in every stratum, and already fails on validation
+
+Ran over all 12 frame sites using training (2021) and validation (2022) outcomes only:
+
+| stratum | outcome 2021 | outcome 2022 |
+|---|---|---|
+| amazon_moist | 3/3 evaluable, 473 components | **2/3 evaluable — DARK** |
+| congo_moist | 3/3, 2,959 | 3/3, 3,160 |
+| dry_forest | 3/3, 773 | 3/3, 465 |
+| sea_peat | 3/3, 939 | 3/3, 809 |
+
+Every stratum carries exactly 3 sites against a floor of 3, so ANY single quiet site takes a region dark.
+`amazon_moist` already does, on validation.
+
+### Root cause: the screening criterion is misaligned with the estimand
+
+`F1_P000.180_M0063.250` is not a small or exhausted site — it has 741,528 eligible pixels, second-largest
+in the frame — and it had the HIGHEST `recent_loss_share` (0.0285) of the three amazon sites at selection
+time. Its actual loss history, forest base 766,795 px: 2018: 461 px, 2019: 6, 2020: 12, 2021: 59, 2022: 8.
+A single 2018 burst, then nothing.
+
+The frame was screened on 2016-2020 activity; the study predicts 2023 activity. **Frontier activity moves.**
+Historical activity does not imply future activity, so a frame selected on the former cannot be assumed
+evaluable under the latter. This is a design-level misalignment, not a bad draw.
+
+Claude's prior hypothesis — that the small `sea_peat` remnant site (10% forest share) was the danger — was
+WRONG. That site returns 309 and 171 components, comfortably above the floor. The risk was in the large,
+healthy, quiet site nobody would flag by eye.
+
+### Open decision (NOT taken by Claude — needs the grill/codex chain)
+
+Options: widen the frame beyond 3 sites/stratum for margin (new downloads; the candidate frame has
+thousands of rows); re-screen on a permitted recent criterion; drop the per-region generalization estimand
+and report pooled-only; or lower the floor (threshold shopping — explicitly rejected once already for the
+retired study, and rejected again here). The frame must NOT be altered using the 2023 knowledge above.
