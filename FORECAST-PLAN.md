@@ -1,4 +1,4 @@
-# Plan: Multi-Sensor Forecasting of Near-Term Tropical Tree-Cover Loss (v10, post-Codex verification rounds 6-9 + Claude review)
+# Plan: Multi-Sensor Forecasting of Near-Term Tropical Tree-Cover Loss (v11, post-Codex rounds 6-10 + two Claude reviews)
 _Locked via grill — by Claude + Josh (2026-07-19/20). 5 design rounds (17→11→8→4→4 findings) then 4 verification rounds on the frozen parameters (7→7→2→0, **APPROVED** at round 9); all 30 findings conceded, none rejected. v10 adds one gap found by Claude's own read AFTER Codex approved: the detector-audit retention gate compared a survey point estimate against a tolerance without its sampling error, so it could pass or fail on audit noise — now conservative by 1.96·SE_survey. See `FORECAST-REVIEW-LOG.md`._
 
 ## Goal
@@ -136,10 +136,17 @@ sensitivity; regrowth-after-2000 and repeat-disturbance pixels excluded (stated)
   tolerance would let the gate pass or fail on audit noise alone, in either direction. Retain the
   forecasting claim **iff**
 
-      |TE_headline − TE_corr| + 1.96 · SE_survey(TE_corr)  ≤  half-width
+      |TE_headline − TE_corr| + 1.96 · SE_survey(TE_corr)  ≤  TOL,
+      TOL ≡ min( half-width , 0.05 )
 
   where the half-width is the headline's bootstrap CI half-width, defined in §10(d) as `(q0.975 −
-  q0.025)/2`, and `SE_survey(TE_corr)` is the square root of the **same stratified Taylor-linearized ratio
+  q0.025)/2`. **The absolute cap 0.05 is frozen and is the operative half of the rule whenever the study is
+  imprecise (v11 #1).** Using the bootstrap half-width ALONE — as v10 did — makes the tolerance scale with
+  the study's own noise, so a thin, wide-CI study would earn a MORE permissive detector-integrity gate than
+  a precise one. That is backwards, and it is self-serving in exactly the direction that flatters the
+  headline claim, so the tolerance is now the stricter of the two. 0.05 is the largest absolute shift in
+  area-weighted recall@5% we are willing to call immaterial to the forecasting claim; it is a prespecified
+  judgement, disclosed as such, not estimated from these data. and `SE_survey(TE_corr)` is the square root of the **same stratified Taylor-linearized ratio
   variance already frozen above for D̂** — FPC included, census strata contributing exactly zero — applied to
   the `TE_corr` ratio with `e_i = a_i·(1 − d_i)·(z_i − TE_corr)`. **The ratio's OWN denominator is used, not
   D̂'s:** `V̂(TE_corr) = X̂⁻² · Σ_s (1 − n_s/N_s) · (N_s²/n_s) · s²_{e,s}` with
@@ -152,8 +159,15 @@ Pin GFC version+md5 (at download, verify coverage confirms the **frozen 2023 pri
 **only which optional embargoed years** are available — it never changes §1), package versions, openEO
 backend version, process graphs, Git commit; **seed everything explicitly (v7 #3, v8 #3): global seed = 42;
 RNG = NumPy `Generator(PCG64)`. Streams are instantiated DIRECTLY, never by sequential `spawn()` — order of
-execution must not change any draw — via `Generator(PCG64(SeedSequence(42, spawn_key=(analysis_code,
-replicate))))`, with frozen numeric analysis codes: `0` = detector-audit survey sampling, `1` = headline
+execution must not change any draw — via `Generator(PCG64(SeedSequence(42, spawn_key=(analysis_code, unit_index,
+replicate))))`. **The `unit_index` coordinate is required (v11 #3):** with only `(analysis_code,
+replicate)`, any analysis that runs once per FOLD — notably code 6, model weight init and training shuffles,
+which runs per outer fold and per competing architecture — would draw from a single shared stream, so
+execution order across folds would change the draws. That is exactly the order-dependence the direct-
+`spawn_key` rule was adopted to eliminate, left open for training. `unit_index` is frozen as: the **outer
+LOSO fold index** (0-11, ascending by held-out site id) for codes 1-6, times two plus the architecture index
+(0 = temporal-attention U-Net, 1 = channel-stacked U-Net) for code 6 specifically; **0** for code 0, which
+is drawn once globally. Frozen numeric analysis codes: `0` = detector-audit survey sampling, `1` = headline
 block bootstrap at 30 m, `2` = headline block bootstrap at 90 m, `3` = gap-diagnostic bootstrap, `4` =
 deep-model gate bootstrap, `5` = variogram-range estimation, `6` = model weight init / training shuffles;
 `replicate` is the 0-based replicate index (0 for non-replicated analyses). Canonical ordering before any
@@ -237,7 +251,15 @@ site-origin**, then pooled across site-origins as a **pair-count-weighted mean p
 (zero pairs) are dropped from the pooled curve and from the crossing scan** — they are not interpolated and
 not treated as crossings.
 
-**Sill ≡ mean pooled semivariance over the non-empty bins among k = 151..200.** **Range ≡ the upper edge, in
+**Sill ≡ mean pooled semivariance over the non-empty bins among k = 151..200**, subject to a frozen
+**plateau check (v11 #2)**: fit an OLS line to the pooled semivariance over those same bins and require
+`|slope| · (50·g) ≤ 0.05 × sill` — i.e. the curve rises by ≤5% of the sill across the tail window. **If the
+check FAILS the variogram has not plateaued, the sill is UNDERESTIMATED, and the 0.95-of-sill crossing
+would fire spuriously early — yielding a too-small L, too-small blocks, and CIs that are too NARROW.** That
+is the anti-conservative direction and it silently inflates confidence in the regional gate and the
+deep-model gain gate at once. On failure, therefore, the estimated range is DISCARDED and
+`L = ceil(max(RF_radius_m, 200·g) / g)` — fall back toward LARGER blocks, never smaller — and the failure
+is reported per fold and scale. **Range ≡ the upper edge, in
 metres, of the first non-empty bin whose pooled semivariance ≥ 0.95 × sill**; no interpolation. If no bin
 crosses, the range is **undefined** and L falls back to the receptive-field radius. **Both the range and the
 RF radius are recorded in metres**, and `L = ceil( max(range_m, RF_radius_m) / g )` **integer pixels**,

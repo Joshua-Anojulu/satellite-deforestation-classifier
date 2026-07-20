@@ -778,3 +778,33 @@ tolerance; a conventional TOST at the 5% level would use 1.645. Keeping 1.96 —
 the gate should be hard to pass.
 
 **Final state: v10 APPROVED. 10 rounds, 33 findings, all conceded, none rejected.**
+
+## Second Claude review (v10 → v11) — three fixes, all conservative
+
+A cold re-read of §4/§5/§10 after the round-10 APPROVED. None of the three came up in ten adversarial
+rounds; two were introduced by Claude within the previous few hours.
+
+**v11 #1 — the retention tolerance rewarded imprecision (worst of the three, and Claude's own design).**
+v10 set the tolerance to the headline's bootstrap CI half-width, so it SCALED WITH THE STUDY'S OWN NOISE:
+a thin, wide-CI study would earn a MORE permissive detector-integrity gate than a precise one. Backwards,
+and self-serving in the direction that flatters the headline claim. Codex approved it in round 10 because
+it was asked whether the arithmetic was sound — it was — rather than whether the tolerance was the right
+object. Now `TOL = min(half-width, 0.05)`, with 0.05 frozen and disclosed as a prespecified judgement.
+
+**v11 #2 — the sill plateau was assumed, and its failure mode is anti-conservative.** If the variogram has
+not flattened by bins 151-200 the sill is underestimated, the 0.95 crossing fires early, L is too small,
+blocks are too small, and CIs are too NARROW — inflating confidence in the regional gate and the deep-model
+gain gate simultaneously. Added a frozen OLS plateau check over the tail window; on failure the estimated
+range is discarded and L falls back to `max(RF_radius, 200·g)`. Fail toward LARGER blocks, never smaller.
+
+**v11 #3 — r7#3 was only half-closed.** The frozen key `spawn_key=(analysis_code, replicate)` has no fold
+coordinate, but code 6 (weight init / training shuffles) runs per outer fold AND per competing
+architecture. Those would share one stream, so execution order across folds would change the draws — the
+precise order-dependence the direct-spawn_key rule was adopted to eliminate, left open for training. Key is
+now `(analysis_code, unit_index, replicate)` with unit_index frozen per fold (and per architecture for
+code 6).
+
+**What this says about the process.** Ten rounds converged to APPROVED and a plain re-read still found a
+self-serving tolerance. The rounds were scoped — by Claude — to reproducibility, and a scoped review
+returns findings only from inside its fence. The fence was the right call for efficiency and it is also
+why #1 survived: nobody was asked whether the frozen rules were the right rules.
