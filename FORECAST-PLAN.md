@@ -141,7 +141,9 @@ sensitivity; regrowth-after-2000 and repeat-disturbance pixels excluded (stated)
   where the half-width is the headline's bootstrap CI half-width, defined in §10(d) as `(q0.975 −
   q0.025)/2`, and `SE_survey(TE_corr)` is the square root of the **same stratified Taylor-linearized ratio
   variance already frozen above for D̂** — FPC included, census strata contributing exactly zero — applied to
-  the `TE_corr` ratio with `e_i = a_i·(1 − d_i)·(z_i − TE_corr)`. `TE_headline` is computed from the full
+  the `TE_corr` ratio with `e_i = a_i·(1 − d_i)·(z_i − TE_corr)`. **The ratio's OWN denominator is used, not
+  D̂'s:** `V̂(TE_corr) = X̂⁻² · Σ_s (1 − n_s/N_s) · (N_s²/n_s) · s²_{e,s}` with
+  **`X̂ = Σ_sample w_i·a_i·(1 − d_i)`** — substituting D̂'s `(Σ w_i)⁻²` here would be wrong. `TE_headline` is computed from the full
   raster and contributes no sampling term. This is deliberately conservative, matching the one-sided-UCB
   idiom used for the `D̂ ≤ 0.10` rule: audit imprecision makes the gate **harder** to pass, never easier.
 

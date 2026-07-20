@@ -727,3 +727,54 @@ asked whether the comparison was statistically *valid*, because that question wa
 drew. The scoping that kept Codex from re-litigating settled design also kept it from auditing the
 statistics of a rule it had just helped specify. Worth remembering: a tightly-scoped review is efficient
 exactly to the degree it is blind, and the reviewer cannot tell you what your fence excluded.
+
+## Round 10 — Codex review of the v10 retention gate — **APPROVED**
+
+1. **Yes, the v9 diagnosis is correct.** The old gate treated a noisy Hájek estimate as known, so it did not control the probability of accepting a population correction larger than the tolerance. Your magnitude is plausible but not guaranteed: with \(n=720\), the worst-case SRS proportion SE is about 0.019; an SE of 0.03–0.05 corresponds to a design effect of roughly 2.6–7.2, which unequal biome/site weights could produce. The actual value must come from the frozen survey formula.
+
+2. **The v10 correction is statistically sound.** For
+
+\[
+\widehat R=\frac{\sum w_i a_i(1-d_i)z_i}
+                 {\sum w_i a_i(1-d_i)},
+\]
+
+the linearized residual is correctly
+
+\[
+e_i=a_i(1-d_i)(z_i-\widehat R).
+\]
+
+The variance must use the ratio denominator  
+\(\widehat X^2=[\sum w_i a_i(1-d_i)]^2\), with the stated stratified \(N_s^2(1-f_s)s^2_{e,s}/n_s\) terms. That is the natural interpretation of “applied to the `TE_corr` ratio” in [section 4](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:134>).
+
+The constant requires one nuance:
+
+- \(1.96\) makes the entire two-sided 95% Wald interval for the true difference fall inside \([-H,H]\). The written rule is therefore valid and deliberately conservative.
+- A conventional 5%-level equivalence/TOST procedure would use \(1.645\), equivalent to containment of a 90% two-sided interval.
+
+Thus, \(1.96\) is not uniquely required by the absolute value, but it is correct for the stricter confidence standard v10 explicitly adopts.
+
+3. **No material inconsistency is introduced.** The survey uncertainty is conditional on the fixed full-raster target set, while the headline bootstrap half-width remains the prespecified tolerance; there is no double-counting. `TE_headline` has no audit-sampling variance, though its spatial uncertainty still determines that half-width. The rule remains frozen under §F, does not affect the temporal firewall or LOSO nesting, and the revised [deep-model gate](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FORECAST-PLAN.md:193>) now correctly points to the paired §10(d) hierarchical block bootstrap.
+
+VERDICT: APPROVED
+
+### Claude's response — approved, with one clarification taken
+
+Two things worth recording against my own claim:
+
+- **My magnitude estimate was overstated.** I asserted SE 0.03-0.05 as though it followed; Codex points out
+  the worst-case SRS SE at n=720 is 0.019, so my range presumes a design effect of 2.6-7.2. That is
+  plausible under unequal biome/site weights but is NOT established a priori. The diagnosis (a noisy
+  estimate treated as known) stands independently of the magnitude — the gate was invalid in form. The
+  actual SE must come from the frozen formula at analysis time and should be reported, not assumed.
+- **A real ambiguity I left:** I wrote "the same variance ... applied to the TE_corr ratio", which leaves
+  the denominator implicit. D̂'s formula carries `(Σ w_i)⁻²`; TE_corr's requires its own
+  `X̂ = Σ w_i·a_i·(1 − d_i)`. Codex called this the natural interpretation — which is exactly why it needed
+  to be written down rather than inferred. Now explicit in §4, with the wrong substitution named.
+
+On the constant: 1.96 makes the full two-sided 95% Wald interval for the difference fall inside the
+tolerance; a conventional TOST at the 5% level would use 1.645. Keeping 1.96 — the stricter standard, and
+the gate should be hard to pass.
+
+**Final state: v10 APPROVED. 10 rounds, 33 findings, all conceded, none rejected.**
