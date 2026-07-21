@@ -1,0 +1,13 @@
+{
+  "minimum_separation_km": 50.0,
+  "rejected_draws": [
+    {
+      "binding_distance_km": 24.32701453971571,
+      "candidate_id": "F4_M003.120_P0105.500",
+      "collided_with": "F4_M002.900_P0105.500",
+      "draw_rank": 8,
+      "group": "sea_peat"
+    }
+  ],
+  "specification": "Specification W"
+}

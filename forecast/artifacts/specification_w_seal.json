@@ -1,0 +1,9 @@
+{
+  "artifacts": {
+    "specification_w_fold_table.json": "dc1e9d4b5cc6ea7e3133acc656b14225a851909f5945271d762e0ad42e72f18d",
+    "specification_w_manifest.json": "bddf76da847a0d7fcdd411d1ea45999964a03bf12aabf292c9fb2fc76786b911",
+    "specification_w_rng_map.json": "71beaaa86f197c40d00a9f0fd79da3c3b43148e20dcdc52fdb800c1e583cdccb",
+    "specification_w_selection_skips.json": "0c452fe500898f976a4359279895b0bd4728f4b6611086e56a6b6a213549d94d"
+  },
+  "specification": "Specification W"
+}

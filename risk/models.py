@@ -168,7 +168,8 @@ def fit_predict_outer(train: pd.DataFrame, test: pd.DataFrame, arm: str, model_k
 def run_loso(table: pd.DataFrame, analysis: str, pipeline: str,
              arms: Sequence[str] = tuple(ARMS), model_kinds: Sequence[str] = ("lr", "gbm"),
              site_column: str = "site", label_column: str = "label",
-             acquisition_adjusted: bool = False
+             acquisition_adjusted: bool = False,
+             expected_frame_sites: int = 12,
              ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     if analysis not in {"combined", "frame_only"}:
         raise ValueError(analysis)
@@ -182,8 +183,10 @@ def run_loso(table: pd.DataFrame, analysis: str, pipeline: str,
         data = table.copy()
     sites = list(dict.fromkeys(data[site_column].tolist()))
     metadata_features = sorted(column for column in data if column.startswith("m_")) if acquisition_adjusted else []
-    if analysis == "frame_only" and len(sites) != 12:
-        raise RuntimeError(f"Frame-only LOSO requires all 12 frame sites, got {len(sites)}.")
+    if analysis == "frame_only" and len(sites) != expected_frame_sites:
+        raise RuntimeError(
+            f"Frame-only LOSO requires all {expected_frame_sites} frame sites, got {len(sites)}."
+        )
     if analysis == "combined" and len(sites) < COMBINED_MINIMUM:
         raise RuntimeError(f"Combined LOSO requires at least {COMBINED_MINIMUM} sites, got {len(sites)}.")
     predictions = []
@@ -191,8 +194,14 @@ def run_loso(table: pd.DataFrame, analysis: str, pipeline: str,
     for held_site in sites:
         train = data[data[site_column] != held_site]
         test = data[data[site_column] == held_site]
-        if analysis == "frame_only" and train[site_column].nunique() != 11:
-            raise AssertionError("Each frame-only outer fold must train on exactly 11 frame sites.")
+        if (
+            analysis == "frame_only"
+            and train[site_column].nunique() != expected_frame_sites - 1
+        ):
+            raise AssertionError(
+                "Each frame-only outer fold must train on exactly "
+                f"{expected_frame_sites - 1} frame sites."
+            )
         for model_kind in model_kinds:
             for arm in arms:
                 scores, tuning, one_class_sites = fit_predict_outer(
@@ -275,6 +284,9 @@ def run_leave_one_biome_out(table: pd.DataFrame, pipeline: str,
 
 
 def main() -> None:
+    from forecast.prelift_sandbox import require_pre_lift_role
+
+    require_pre_lift_role("tuning")
     parser = argparse.ArgumentParser(description="Run combined and clean frame-only full LOSO analyses.")
     parser.add_argument("table", type=Path, help="Prepared cell-level CSV")
     parser.add_argument("--pipeline", choices=("normalized", "unnormalized"), required=True)

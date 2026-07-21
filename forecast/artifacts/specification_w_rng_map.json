@@ -1,0 +1,21 @@
+{
+  "analysis_codes": {
+    "0": "detector-audit survey sampling",
+    "1": "headline block bootstrap at 30 m",
+    "2": "headline block bootstrap at 90 m",
+    "3": "gap-diagnostic bootstrap",
+    "4": "deep-model gate bootstrap",
+    "5": "variogram-range estimation",
+    "6": "model weight init / training shuffles"
+  },
+  "bit_generator": "PCG64",
+  "entropy": 42,
+  "fold_table_sha256": "dc1e9d4b5cc6ea7e3133acc656b14225a851909f5945271d762e0ad42e72f18d",
+  "seed_sequence_spawn_key": [
+    1,
+    "analysis_code",
+    "unit_index",
+    "replicate"
+  ],
+  "specification": "Specification W"
+}

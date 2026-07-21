@@ -1,0 +1,1675 @@
+{
+  "K": 9,
+  "K_max": 9,
+  "archive_years": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022
+  ],
+  "audit_budget_per_biome": 180,
+  "derived_artifacts": {
+    "fold_table": {
+      "file": "specification_w_fold_table.json",
+      "sha256": "dc1e9d4b5cc6ea7e3133acc656b14225a851909f5945271d762e0ad42e72f18d"
+    },
+    "rng_map": {
+      "file": "specification_w_rng_map.json",
+      "sha256": "71beaaa86f197c40d00a9f0fd79da3c3b43148e20dcdc52fdb800c1e583cdccb"
+    },
+    "selection_skips": {
+      "file": "specification_w_selection_skips.json",
+      "sha256": "0c452fe500898f976a4359279895b0bd4728f4b6611086e56a6b6a213549d94d"
+    }
+  },
+  "primary_specification": "12-site v11",
+  "result_namespace": "specification_w_exploratory",
+  "rolling_model_history_years": 3,
+  "schema_version": 1,
+  "site_count": 36,
+  "sites": [
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1881,
+      "candidate_id": "F1_P000.180_M0063.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.029060973407455205,
+      "draw_rank": 1,
+      "east": -63.125,
+      "eligible_forest_share": 0.8530169235741835,
+      "group": "amazon_moist",
+      "lat": 0.18,
+      "lon": -63.25,
+      "minimum_separation_km": 50.0,
+      "north": 0.29,
+      "periods": {
+        "2018": [
+          "2017-11-01",
+          "2018-02-28"
+        ],
+        "2019": [
+          "2018-11-01",
+          "2019-02-28"
+        ],
+        "2020": [
+          "2019-11-01",
+          "2020-02-29"
+        ],
+        "2021": [
+          "2020-11-01",
+          "2021-02-28"
+        ],
+        "2022": [
+          "2021-11-01",
+          "2022-02-28"
+        ]
+      },
+      "recent_loss_share": 0.028531860097839954,
+      "retained_position": 1,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 0.06999999999999999,
+      "specification": "Specification W",
+      "valid_land_share": 0.9879306818181818,
+      "west": -63.375,
+      "window_start_month": 11
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1901,
+      "candidate_id": "F2_P003.040_P0021.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.18832514767146138,
+      "draw_rank": 1,
+      "east": 21.375,
+      "eligible_forest_share": 0.8048429875658243,
+      "group": "congo_moist",
+      "lat": 3.04,
+      "lon": 21.25,
+      "minimum_separation_km": 50.0,
+      "north": 3.15,
+      "periods": {
+        "2018": [
+          "2017-11-01",
+          "2018-02-28"
+        ],
+        "2019": [
+          "2018-11-01",
+          "2019-02-28"
+        ],
+        "2020": [
+          "2019-11-01",
+          "2020-02-29"
+        ],
+        "2021": [
+          "2020-11-01",
+          "2021-02-28"
+        ],
+        "2022": [
+          "2021-11-01",
+          "2022-02-28"
+        ]
+      },
+      "recent_loss_share": 0.09904612985997632,
+      "retained_position": 1,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 2.93,
+      "specification": "Specification W",
+      "valid_land_share": 0.9999931818181819,
+      "west": 21.125,
+      "window_start_month": 11
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1191,
+      "candidate_id": "F3_M015.220_M0057.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.1252514804669296,
+      "draw_rank": 1,
+      "east": -57.375,
+      "eligible_forest_share": 0.5406949385648848,
+      "group": "dry_forest",
+      "lat": -15.22,
+      "lon": -57.5,
+      "minimum_separation_km": 50.0,
+      "north": -15.110000000000001,
+      "periods": {
+        "2018": [
+          "2018-05-01",
+          "2018-08-31"
+        ],
+        "2019": [
+          "2019-05-01",
+          "2019-08-31"
+        ],
+        "2020": [
+          "2020-05-01",
+          "2020-08-31"
+        ],
+        "2021": [
+          "2021-05-01",
+          "2021-08-31"
+        ],
+        "2022": [
+          "2022-05-01",
+          "2022-08-31"
+        ]
+      },
+      "recent_loss_share": 0.028662521738142058,
+      "retained_position": 1,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -15.33,
+      "specification": "Specification W",
+      "valid_land_share": 0.9997613636363636,
+      "west": -57.625,
+      "window_start_month": 5
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 301,
+      "candidate_id": "F4_M002.900_P0105.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.8690659090909091,
+      "draw_rank": 1,
+      "east": 105.625,
+      "eligible_forest_share": 0.10359431818181818,
+      "group": "sea_peat",
+      "lat": -2.9,
+      "lon": 105.5,
+      "minimum_separation_km": 50.0,
+      "north": -2.79,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.15634886363636363,
+      "retained_position": 1,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -3.01,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": 105.375,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1780,
+      "candidate_id": "F1_M009.940_M0075.750",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.03416209065949052,
+      "draw_rank": 2,
+      "east": -75.625,
+      "eligible_forest_share": 0.7854257959525065,
+      "group": "amazon_moist",
+      "lat": -9.94,
+      "lon": -75.75,
+      "minimum_separation_km": 50.0,
+      "north": -9.83,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.012463179809807807,
+      "retained_position": 2,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -10.049999999999999,
+      "specification": "Specification W",
+      "valid_land_share": 0.9999454545454546,
+      "west": -75.875,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1906,
+      "candidate_id": "F2_M002.900_P0024.000",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.06272329748452259,
+      "draw_rank": 2,
+      "east": 24.125,
+      "eligible_forest_share": 0.9348232711206466,
+      "group": "congo_moist",
+      "lat": -2.9,
+      "lon": 24.0,
+      "minimum_separation_km": 50.0,
+      "north": -2.79,
+      "periods": {
+        "2018": [
+          "2018-05-01",
+          "2018-08-31"
+        ],
+        "2019": [
+          "2019-05-01",
+          "2019-08-31"
+        ],
+        "2020": [
+          "2020-05-01",
+          "2020-08-31"
+        ],
+        "2021": [
+          "2021-05-01",
+          "2021-08-31"
+        ],
+        "2022": [
+          "2022-05-01",
+          "2022-08-31"
+        ]
+      },
+      "recent_loss_share": 0.032533250302275475,
+      "retained_position": 2,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -3.01,
+      "specification": "Specification W",
+      "valid_land_share": 0.999990909090909,
+      "west": 23.875,
+      "window_start_month": 5
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1037,
+      "candidate_id": "F3_M020.720_M0058.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.31703522727272726,
+      "draw_rank": 2,
+      "east": -58.375,
+      "eligible_forest_share": 0.4133,
+      "group": "dry_forest",
+      "lat": -20.72,
+      "lon": -58.5,
+      "minimum_separation_km": 50.0,
+      "north": -20.61,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.09372386363636363,
+      "retained_position": 2,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -20.83,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": -58.625,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1163,
+      "candidate_id": "F4_M002.460_P0111.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.47408691377084283,
+      "draw_rank": 2,
+      "east": 111.625,
+      "eligible_forest_share": 0.49423936666345036,
+      "group": "sea_peat",
+      "lat": -2.46,
+      "lon": 111.5,
+      "minimum_separation_km": 50.0,
+      "north": -2.35,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.06503140492829936,
+      "retained_position": 2,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -2.57,
+      "specification": "Specification W",
+      "valid_land_share": 0.9892772727272727,
+      "west": 111.375,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1890,
+      "candidate_id": "F1_M009.060_M0069.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.06143793243979614,
+      "draw_rank": 3,
+      "east": -69.375,
+      "eligible_forest_share": 0.9195072418640645,
+      "group": "amazon_moist",
+      "lat": -9.06,
+      "lon": -69.5,
+      "minimum_separation_km": 50.0,
+      "north": -8.950000000000001,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.026415746646945962,
+      "retained_position": 3,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -9.17,
+      "specification": "Specification W",
+      "valid_land_share": 0.99265,
+      "west": -69.625,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1922,
+      "candidate_id": "F2_P002.600_P0028.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.12099052476311908,
+      "draw_rank": 3,
+      "east": 28.375,
+      "eligible_forest_share": 0.8738411642109235,
+      "group": "congo_moist",
+      "lat": 2.6,
+      "lon": 28.25,
+      "minimum_separation_km": 50.0,
+      "north": 2.71,
+      "periods": {
+        "2018": [
+          "2017-11-01",
+          "2018-02-28"
+        ],
+        "2019": [
+          "2018-11-01",
+          "2019-02-28"
+        ],
+        "2020": [
+          "2019-11-01",
+          "2020-02-29"
+        ],
+        "2021": [
+          "2020-11-01",
+          "2021-02-28"
+        ],
+        "2022": [
+          "2021-11-01",
+          "2022-02-28"
+        ]
+      },
+      "recent_loss_share": 0.06017991358874881,
+      "retained_position": 3,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 2.49,
+      "specification": "Specification W",
+      "valid_land_share": 0.999975,
+      "west": 28.125,
+      "window_start_month": 11
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1077,
+      "candidate_id": "F3_P018.220_M0071.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.06543425909920747,
+      "draw_rank": 3,
+      "east": -71.125,
+      "eligible_forest_share": 0.46260392075147344,
+      "group": "dry_forest",
+      "lat": 18.22,
+      "lon": -71.25,
+      "minimum_separation_km": 50.0,
+      "north": 18.33,
+      "periods": {
+        "2018": [
+          "2017-12-01",
+          "2018-03-31"
+        ],
+        "2019": [
+          "2018-12-01",
+          "2019-03-31"
+        ],
+        "2020": [
+          "2019-12-01",
+          "2020-03-31"
+        ],
+        "2021": [
+          "2020-12-01",
+          "2021-03-31"
+        ],
+        "2022": [
+          "2021-12-01",
+          "2022-03-31"
+        ]
+      },
+      "recent_loss_share": 0.023568788374609594,
+      "retained_position": 3,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 18.11,
+      "specification": "Specification W",
+      "valid_land_share": 0.9598113636363637,
+      "west": -71.375,
+      "window_start_month": 12
+    },
+    {
+      "amendment_role": "incumbent",
+      "at_risk_cells": 1026,
+      "candidate_id": "F4_P004.140_P0114.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.5638594074333924,
+      "draw_rank": 3,
+      "east": 114.375,
+      "eligible_forest_share": 0.40422627973780895,
+      "group": "sea_peat",
+      "lat": 4.14,
+      "lon": 114.25,
+      "minimum_separation_km": 50.0,
+      "north": 4.25,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.06564300806482526,
+      "retained_position": 3,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 4.029999999999999,
+      "specification": "Specification W",
+      "valid_land_share": 0.9782943181818182,
+      "west": 114.125,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1521,
+      "candidate_id": "F1_M010.820_M0063.000",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.10383863636363637,
+      "draw_rank": 4,
+      "east": -62.875,
+      "eligible_forest_share": 0.7299681818181818,
+      "group": "amazon_moist",
+      "lat": -10.82,
+      "lon": -63.0,
+      "minimum_separation_km": 50.0,
+      "north": -10.71,
+      "periods": {
+        "2018": [
+          "2018-05-01",
+          "2018-08-31"
+        ],
+        "2019": [
+          "2019-05-01",
+          "2019-08-31"
+        ],
+        "2020": [
+          "2020-05-01",
+          "2020-08-31"
+        ],
+        "2021": [
+          "2021-05-01",
+          "2021-08-31"
+        ],
+        "2022": [
+          "2022-05-01",
+          "2022-08-31"
+        ]
+      },
+      "recent_loss_share": 0.013176136363636364,
+      "retained_position": 4,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -10.93,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": -63.125,
+      "window_start_month": 5
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1707,
+      "candidate_id": "F2_P002.380_P0022.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.5313772727272728,
+      "draw_rank": 4,
+      "east": 22.375,
+      "eligible_forest_share": 0.4632045454545455,
+      "group": "congo_moist",
+      "lat": 2.38,
+      "lon": 22.25,
+      "minimum_separation_km": 50.0,
+      "north": 2.4899999999999998,
+      "periods": {
+        "2018": [
+          "2017-11-01",
+          "2018-02-28"
+        ],
+        "2019": [
+          "2018-11-01",
+          "2019-02-28"
+        ],
+        "2020": [
+          "2019-11-01",
+          "2020-02-29"
+        ],
+        "2021": [
+          "2020-11-01",
+          "2021-02-28"
+        ],
+        "2022": [
+          "2021-11-01",
+          "2022-02-28"
+        ]
+      },
+      "recent_loss_share": 0.19780113636363636,
+      "retained_position": 4,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 2.27,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": 22.125,
+      "window_start_month": 11
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1456,
+      "candidate_id": "F3_M013.240_M0042.750",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.05965454545454545,
+      "draw_rank": 4,
+      "east": -42.625,
+      "eligible_forest_share": 0.5664284090909091,
+      "group": "dry_forest",
+      "lat": -13.24,
+      "lon": -42.75,
+      "minimum_separation_km": 50.0,
+      "north": -13.13,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.013886363636363636,
+      "retained_position": 4,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -13.35,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": -42.875,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1870,
+      "candidate_id": "F4_M001.580_P0114.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.13652806619487098,
+      "draw_rank": 4,
+      "east": 114.625,
+      "eligible_forest_share": 0.8248876413498148,
+      "group": "sea_peat",
+      "lat": -1.58,
+      "lon": 114.5,
+      "minimum_separation_km": 50.0,
+      "north": -1.47,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.04872347294119802,
+      "retained_position": 4,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -1.6900000000000002,
+      "specification": "Specification W",
+      "valid_land_share": 0.9926613636363636,
+      "west": 114.375,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1927,
+      "candidate_id": "F1_P001.060_M0070.000",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.0452422979764189,
+      "draw_rank": 5,
+      "east": -69.875,
+      "eligible_forest_share": 0.9505944145857017,
+      "group": "amazon_moist",
+      "lat": 1.06,
+      "lon": -70.0,
+      "minimum_separation_km": 50.0,
+      "north": 1.1700000000000002,
+      "periods": {
+        "2018": [
+          "2017-11-01",
+          "2018-02-28"
+        ],
+        "2019": [
+          "2018-11-01",
+          "2019-02-28"
+        ],
+        "2020": [
+          "2019-11-01",
+          "2020-02-29"
+        ],
+        "2021": [
+          "2020-11-01",
+          "2021-02-28"
+        ],
+        "2022": [
+          "2021-11-01",
+          "2022-02-28"
+        ]
+      },
+      "recent_loss_share": 0.018114605598911822,
+      "retained_position": 5,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 0.9500000000000001,
+      "specification": "Specification W",
+      "valid_land_share": 0.9766102272727273,
+      "west": -70.125,
+      "window_start_month": 11
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1917,
+      "candidate_id": "F2_P001.500_P0028.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.024666574815567166,
+      "draw_rank": 5,
+      "east": 28.625,
+      "eligible_forest_share": 0.9746650376380755,
+      "group": "congo_moist",
+      "lat": 1.5,
+      "lon": 28.5,
+      "minimum_separation_km": 50.0,
+      "north": 1.61,
+      "periods": {
+        "2018": [
+          "2017-11-01",
+          "2018-02-28"
+        ],
+        "2019": [
+          "2018-11-01",
+          "2019-02-28"
+        ],
+        "2020": [
+          "2019-11-01",
+          "2020-02-29"
+        ],
+        "2021": [
+          "2020-11-01",
+          "2021-02-28"
+        ],
+        "2022": [
+          "2021-11-01",
+          "2022-02-28"
+        ]
+      },
+      "recent_loss_share": 0.006550653414298939,
+      "retained_position": 5,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 1.39,
+      "specification": "Specification W",
+      "valid_land_share": 0.9979920454545455,
+      "west": 28.375,
+      "window_start_month": 11
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1397,
+      "candidate_id": "F3_M005.540_M0044.000",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.48781128053145817,
+      "draw_rank": 5,
+      "east": -43.875,
+      "eligible_forest_share": 0.45537469573656186,
+      "group": "dry_forest",
+      "lat": -5.54,
+      "lon": -44.0,
+      "minimum_separation_km": 50.0,
+      "north": -5.43,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.25425968813423727,
+      "retained_position": 5,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -5.65,
+      "specification": "Specification W",
+      "valid_land_share": 0.9999931818181819,
+      "west": -44.125,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1156,
+      "candidate_id": "F4_M001.800_P0104.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.44270970645187685,
+      "draw_rank": 5,
+      "east": 104.375,
+      "eligible_forest_share": 0.5460458731443013,
+      "group": "sea_peat",
+      "lat": -1.8,
+      "lon": 104.25,
+      "minimum_separation_km": 50.0,
+      "north": -1.69,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.16485490777188883,
+      "retained_position": 5,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -1.9100000000000001,
+      "specification": "Specification W",
+      "valid_land_share": 0.999990909090909,
+      "west": 104.125,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1920,
+      "candidate_id": "F1_M004.660_M0077.750",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.07283700143447425,
+      "draw_rank": 6,
+      "east": -77.625,
+      "eligible_forest_share": 0.918040656772033,
+      "group": "amazon_moist",
+      "lat": -4.66,
+      "lon": -77.75,
+      "minimum_separation_km": 50.0,
+      "north": -4.55,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.0384164775941981,
+      "retained_position": 6,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -4.7700000000000005,
+      "specification": "Specification W",
+      "valid_land_share": 0.9941875,
+      "west": -77.875,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1696,
+      "candidate_id": "F2_M003.340_P0024.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.34659545454545454,
+      "draw_rank": 6,
+      "east": 24.375,
+      "eligible_forest_share": 0.6426420454545455,
+      "group": "congo_moist",
+      "lat": -3.34,
+      "lon": 24.25,
+      "minimum_separation_km": 50.0,
+      "north": -3.23,
+      "periods": {
+        "2018": [
+          "2018-05-01",
+          "2018-08-31"
+        ],
+        "2019": [
+          "2019-05-01",
+          "2019-08-31"
+        ],
+        "2020": [
+          "2020-05-01",
+          "2020-08-31"
+        ],
+        "2021": [
+          "2021-05-01",
+          "2021-08-31"
+        ],
+        "2022": [
+          "2022-05-01",
+          "2022-08-31"
+        ]
+      },
+      "recent_loss_share": 0.16073522727272727,
+      "retained_position": 6,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -3.4499999999999997,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": 24.125,
+      "window_start_month": 5
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1146,
+      "candidate_id": "F3_M023.140_M0057.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.04841690770100444,
+      "draw_rank": 6,
+      "east": -57.125,
+      "eligible_forest_share": 0.3951685458435368,
+      "group": "dry_forest",
+      "lat": -23.14,
+      "lon": -57.25,
+      "minimum_separation_km": 50.0,
+      "north": -23.03,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.012255501326778868,
+      "retained_position": 6,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -23.25,
+      "specification": "Specification W",
+      "valid_land_share": 0.9990875,
+      "west": -57.375,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 884,
+      "candidate_id": "F4_M001.360_P0103.750",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.6676670326729841,
+      "draw_rank": 6,
+      "east": 103.875,
+      "eligible_forest_share": 0.30154806831707837,
+      "group": "sea_peat",
+      "lat": -1.36,
+      "lon": 103.75,
+      "minimum_separation_km": 50.0,
+      "north": -1.25,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.12835403268221118,
+      "retained_position": 6,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -1.4700000000000002,
+      "specification": "Specification W",
+      "valid_land_share": 0.9852454545454545,
+      "west": 103.625,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1799,
+      "candidate_id": "F1_M008.620_M0061.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.054502272727272726,
+      "draw_rank": 7,
+      "east": -61.375,
+      "eligible_forest_share": 0.8405375,
+      "group": "amazon_moist",
+      "lat": -8.62,
+      "lon": -61.5,
+      "minimum_separation_km": 50.0,
+      "north": -8.51,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.020254545454545456,
+      "retained_position": 7,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -8.729999999999999,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": -61.625,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1926,
+      "candidate_id": "F2_M000.480_P0020.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.06608104382562181,
+      "draw_rank": 7,
+      "east": 20.375,
+      "eligible_forest_share": 0.9336432657758397,
+      "group": "congo_moist",
+      "lat": -0.48,
+      "lon": 20.25,
+      "minimum_separation_km": 50.0,
+      "north": -0.37,
+      "periods": {
+        "2018": [
+          "2018-05-01",
+          "2018-08-31"
+        ],
+        "2019": [
+          "2019-05-01",
+          "2019-08-31"
+        ],
+        "2020": [
+          "2020-05-01",
+          "2020-08-31"
+        ],
+        "2021": [
+          "2021-05-01",
+          "2021-08-31"
+        ],
+        "2022": [
+          "2022-05-01",
+          "2022-08-31"
+        ]
+      },
+      "recent_loss_share": 0.033853865785677596,
+      "retained_position": 7,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -0.59,
+      "specification": "Specification W",
+      "valid_land_share": 0.9933738636363636,
+      "west": 20.125,
+      "window_start_month": 5
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1689,
+      "candidate_id": "F3_M022.040_M0063.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.15798295454545455,
+      "draw_rank": 7,
+      "east": -63.375,
+      "eligible_forest_share": 0.7636068181818182,
+      "group": "dry_forest",
+      "lat": -22.04,
+      "lon": -63.5,
+      "minimum_separation_km": 50.0,
+      "north": -21.93,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.01955340909090909,
+      "retained_position": 7,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -22.15,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": -63.625,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 757,
+      "candidate_id": "F4_M000.480_P0102.750",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.6820502201085186,
+      "draw_rank": 7,
+      "east": 102.875,
+      "eligible_forest_share": 0.24348167003266727,
+      "group": "sea_peat",
+      "lat": -0.48,
+      "lon": 102.75,
+      "minimum_separation_km": 50.0,
+      "north": -0.37,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.06590225878805364,
+      "retained_position": 7,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -0.59,
+      "specification": "Specification W",
+      "valid_land_share": 0.976790909090909,
+      "west": 102.625,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1925,
+      "candidate_id": "F1_M003.780_M0074.750",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.03405118734053364,
+      "draw_rank": 8,
+      "east": -74.625,
+      "eligible_forest_share": 0.9633836025906445,
+      "group": "amazon_moist",
+      "lat": -3.78,
+      "lon": -74.75,
+      "minimum_separation_km": 50.0,
+      "north": -3.67,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.01725759681405263,
+      "retained_position": 8,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -3.8899999999999997,
+      "specification": "Specification W",
+      "valid_land_share": 0.9918556818181818,
+      "west": -74.875,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1807,
+      "candidate_id": "F2_M002.900_P0018.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.20029145492342323,
+      "draw_rank": 8,
+      "east": 18.625,
+      "eligible_forest_share": 0.6949302673144477,
+      "group": "congo_moist",
+      "lat": -2.9,
+      "lon": 18.5,
+      "minimum_separation_km": 50.0,
+      "north": -2.79,
+      "periods": {
+        "2018": [
+          "2018-05-01",
+          "2018-08-31"
+        ],
+        "2019": [
+          "2019-05-01",
+          "2019-08-31"
+        ],
+        "2020": [
+          "2020-05-01",
+          "2020-08-31"
+        ],
+        "2021": [
+          "2021-05-01",
+          "2021-08-31"
+        ],
+        "2022": [
+          "2022-05-01",
+          "2022-08-31"
+        ]
+      },
+      "recent_loss_share": 0.08855736796649664,
+      "retained_position": 8,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -3.01,
+      "specification": "Specification W",
+      "valid_land_share": 0.9762931818181818,
+      "west": 18.375,
+      "window_start_month": 5
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 922,
+      "candidate_id": "F3_M011.040_M0041.250",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.02821590909090909,
+      "draw_rank": 8,
+      "east": -41.125,
+      "eligible_forest_share": 0.2925056818181818,
+      "group": "dry_forest",
+      "lat": -11.04,
+      "lon": -41.25,
+      "minimum_separation_km": 50.0,
+      "north": -10.93,
+      "periods": {
+        "2018": [
+          "2018-07-01",
+          "2018-10-31"
+        ],
+        "2019": [
+          "2019-07-01",
+          "2019-10-31"
+        ],
+        "2020": [
+          "2020-07-01",
+          "2020-10-31"
+        ],
+        "2021": [
+          "2021-07-01",
+          "2021-10-31"
+        ],
+        "2022": [
+          "2022-07-01",
+          "2022-10-31"
+        ]
+      },
+      "recent_loss_share": 0.01078409090909091,
+      "retained_position": 8,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -11.149999999999999,
+      "specification": "Specification W",
+      "valid_land_share": 1.0,
+      "west": -41.375,
+      "window_start_month": 7
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1061,
+      "candidate_id": "F4_P003.920_P0101.000",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.4456942716950317,
+      "draw_rank": 9,
+      "east": 101.125,
+      "eligible_forest_share": 0.3350412907154304,
+      "group": "sea_peat",
+      "lat": 3.92,
+      "lon": 101.0,
+      "minimum_separation_km": 50.0,
+      "north": 4.03,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.17241204334168037,
+      "retained_position": 8,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": 3.81,
+      "specification": "Specification W",
+      "valid_land_share": 0.9629613636363636,
+      "west": 100.875,
+      "window_start_month": 6
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1887,
+      "candidate_id": "F1_M002.900_M0053.750",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.04203625144620131,
+      "draw_rank": 9,
+      "east": -53.625,
+      "eligible_forest_share": 0.956222050062171,
+      "group": "amazon_moist",
+      "lat": -2.9,
+      "lon": -53.75,
+      "minimum_separation_km": 50.0,
+      "north": -2.79,
+      "periods": {
+        "2018": [
+          "2018-08-01",
+          "2018-11-30"
+        ],
+        "2019": [
+          "2019-08-01",
+          "2019-11-30"
+        ],
+        "2020": [
+          "2020-08-01",
+          "2020-11-30"
+        ],
+        "2021": [
+          "2021-08-01",
+          "2021-11-30"
+        ],
+        "2022": [
+          "2022-08-01",
+          "2022-11-30"
+        ]
+      },
+      "recent_loss_share": 0.03517866914213102,
+      "retained_position": 9,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -3.01,
+      "specification": "Specification W",
+      "valid_land_share": 0.9988943181818182,
+      "west": -53.875,
+      "window_start_month": 8
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1924,
+      "candidate_id": "F2_M001.360_P0026.000",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.04056469950386648,
+      "draw_rank": 9,
+      "east": 26.125,
+      "eligible_forest_share": 0.9587470700546145,
+      "group": "congo_moist",
+      "lat": -1.36,
+      "lon": 26.0,
+      "minimum_separation_km": 50.0,
+      "north": -1.25,
+      "periods": {
+        "2018": [
+          "2018-05-01",
+          "2018-08-31"
+        ],
+        "2019": [
+          "2019-05-01",
+          "2019-08-31"
+        ],
+        "2020": [
+          "2020-05-01",
+          "2020-08-31"
+        ],
+        "2021": [
+          "2021-05-01",
+          "2021-08-31"
+        ],
+        "2022": [
+          "2022-05-01",
+          "2022-08-31"
+        ]
+      },
+      "recent_loss_share": 0.016199706012259615,
+      "retained_position": 9,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -1.4700000000000002,
+      "specification": "Specification W",
+      "valid_land_share": 0.9725204545454545,
+      "west": 25.875,
+      "window_start_month": 5
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 807,
+      "candidate_id": "F3_M006.640_M0038.000",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.023788463005274308,
+      "draw_rank": 9,
+      "east": -37.875,
+      "eligible_forest_share": 0.30329379594243683,
+      "group": "dry_forest",
+      "lat": -6.64,
+      "lon": -38.0,
+      "minimum_separation_km": 50.0,
+      "north": -6.529999999999999,
+      "periods": {
+        "2018": [
+          "2018-08-01",
+          "2018-11-30"
+        ],
+        "2019": [
+          "2019-08-01",
+          "2019-11-30"
+        ],
+        "2020": [
+          "2020-08-01",
+          "2020-11-30"
+        ],
+        "2021": [
+          "2021-08-01",
+          "2021-11-30"
+        ],
+        "2022": [
+          "2022-08-01",
+          "2022-11-30"
+        ]
+      },
+      "recent_loss_share": 0.006971695417510522,
+      "retained_position": 9,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -6.75,
+      "specification": "Specification W",
+      "valid_land_share": 0.9981920454545454,
+      "west": -38.125,
+      "window_start_month": 8
+    },
+    {
+      "amendment_role": "addition",
+      "at_risk_cells": 1154,
+      "candidate_id": "F4_M000.260_P0109.500",
+      "cohort": "frame",
+      "cumulative_loss_share": 0.5061028653318612,
+      "draw_rank": 10,
+      "east": 109.625,
+      "eligible_forest_share": 0.39329498528872847,
+      "group": "sea_peat",
+      "lat": -0.26,
+      "lon": 109.5,
+      "minimum_separation_km": 50.0,
+      "north": -0.15000000000000002,
+      "periods": {
+        "2018": [
+          "2018-06-01",
+          "2018-09-30"
+        ],
+        "2019": [
+          "2019-06-01",
+          "2019-09-30"
+        ],
+        "2020": [
+          "2020-06-01",
+          "2020-09-30"
+        ],
+        "2021": [
+          "2021-06-01",
+          "2021-09-30"
+        ],
+        "2022": [
+          "2022-06-01",
+          "2022-09-30"
+        ]
+      },
+      "recent_loss_share": 0.1033840022385954,
+      "retained_position": 9,
+      "selection_algorithm": "cross-stratum sequential inhibition",
+      "south": -0.37,
+      "specification": "Specification W",
+      "valid_land_share": 0.9705761363636364,
+      "west": 109.375,
+      "window_start_month": 6
+    }
+  ],
+  "source_artifacts": {
+    "candidate_frame": {
+      "path": "C:\\Users\\josha\\ml-data\\deforestation-risk\\frame\\candidate_frame.csv",
+      "sha256": "da8c8ff6fe1b27a7d7790df8b5876c453ad8b223641243d1ff132b5451dba194"
+    },
+    "ordered_draw": {
+      "path": "C:\\Users\\josha\\ml-data\\deforestation-risk\\frame\\ordered_draw.csv",
+      "sha256": "f20c1ec6564a219b321174cc1340b0187fc10304921625e11eb6528bbfd5128a"
+    },
+    "primary_manifest": {
+      "path": "C:\\Users\\josha\\ml-data\\deforestation-risk\\frame\\analysis_sites.json",
+      "sha256": "758ab7e1ba7496900284e41ab0e7338fc64e5de5cd3a4aa208999e483586b031"
+    }
+  },
+  "specification": "Specification W",
+  "status": "AMENDED / EXPLORATORY",
+  "unchanged_gates": {
+    "evaluable_site_min_components": 5,
+    "regional_min_components": 30,
+    "regional_min_evaluable_sites": 3,
+    "sar_pilot_sites": 3
+  }
+}

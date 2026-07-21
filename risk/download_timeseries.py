@@ -515,13 +515,89 @@ def download_manifest(manifest_path: str | Path, only_site: str | None = None,
                 )
 
 
+def download_forecast_schedule(
+    manifest_path: str | Path,
+    schedule_path: str | Path,
+    only_site: str | None = None,
+    dry_run: bool = False,
+) -> None:
+    """Download only W's immutable, manifest-derived 144 missing site-years."""
+
+    import openeo
+    from forecast.download_schedule import validate_download_schedule
+
+    manifest_path = Path(manifest_path)
+    schedule_path = Path(schedule_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    schedule = json.loads(schedule_path.read_text(encoding="utf-8"))
+    if sha256_file(manifest_path) != schedule["manifest"]["sha256"]:
+        raise RuntimeError("Specification W manifest hash changed after schedule freeze.")
+    validate_download_schedule(manifest, schedule)
+    sites = {site["candidate_id"]: site for site in manifest["sites"]}
+    connection = openeo.connect(BACKEND_URL)
+    if not dry_run:
+        connection.authenticate_oidc()
+    for entry in schedule["entries"]:
+        if only_site and entry["site_id"] != only_site:
+            continue
+        site = sites[entry["site_id"]]
+        year = int(entry["year"])
+        period = tuple(entry["period"])
+        bbox = buffered_bbox({key: site[key] for key in ("west", "south", "east", "north")})
+        cubes = build_cubes(connection, bbox, period)
+        graphs = process_graphs(cubes)
+        directory = RAW_DIR / site["candidate_id"]
+        provenance = {
+            **base_provenance(),
+            "backend": backend_provenance(connection),
+            "site": site["candidate_id"],
+            "cohort": "frame",
+            "specification": "Specification W",
+            "specification_status": "AMENDED / EXPLORATORY",
+            "year": year,
+            "archive_year_assertion": "<=2022",
+            "rolling_model_history_years": 3,
+            "period": period,
+            "buffered_bbox": bbox,
+            "max_cloud_cover": MAX_CLOUD_COVER,
+            "scl_masked_classes": list(SCL_MASKED_CLASSES),
+            "scl_dilation": {
+                "shape": "square",
+                "native_resolution_m": 20,
+                "kernel": [SCL_DILATION_KERNEL, SCL_DILATION_KERNEL],
+            },
+            "process_graphs": graphs,
+            "schedule": {"path": str(schedule_path), "sha256": sha256_file(schedule_path)},
+        }
+        if not dry_run:
+            provenance["acquisition_metadata"] = query_acquisition_metadata(bbox, period)
+        write_json(directory / f"{year}_provenance.json", provenance)
+        if dry_run:
+            continue
+        for name, cube in cubes.items():
+            _download(
+                cube,
+                directory / f"{year}_{name}.tif",
+                expected_band_count=_EXPECTED_BAND_COUNTS[name],
+            )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Download the 100 locked risk-study composites.")
     parser.add_argument("manifest", type=Path, help="analysis_sites.json produced before download")
+    parser.add_argument(
+        "--forecast-schedule", type=Path,
+        help="Specification W immutable missing-pair schedule (additive forecast path)",
+    )
     parser.add_argument("--site", default=None)
     parser.add_argument("--dry-run", action="store_true", help="Validate/write graphs without downloads")
     args = parser.parse_args()
-    download_manifest(args.manifest, args.site, args.dry_run)
+    if args.forecast_schedule:
+        download_forecast_schedule(
+            args.manifest, args.forecast_schedule, args.site, args.dry_run
+        )
+    else:
+        download_manifest(args.manifest, args.site, args.dry_run)
 
 
 if __name__ == "__main__":

@@ -382,12 +382,22 @@ def ordered_permutations(candidates: Sequence[Candidate]) -> dict[str, list[Cand
     return result
 
 
-def select_round_robin(ordered: Mapping[str, Sequence[Candidate]]) -> tuple[list[Candidate], dict[str, set[int]]]:
-    """Three locked rounds, with cross-stratum 50-km sequential inhibition."""
+def select_round_robin(
+    ordered: Mapping[str, Sequence[Candidate]],
+    sites_per_group: int = FRAME_SITES_PER_GROUP,
+    rejection_recorder: Callable[[str, int, Candidate, float, Candidate], None] | None = None,
+) -> tuple[list[Candidate], dict[str, set[int]]]:
+    """Locked cross-stratum sequential inhibition, defaulting to v11's 3 rounds.
+
+    The optional round count and rejection callback are additive entry points for
+    Specification W.  Existing callers retain the original three-round behavior.
+    """
+    if sites_per_group <= 0:
+        raise ValueError("sites_per_group must be positive")
     retained: list[Candidate] = []
     cursors = {group: 0 for group in FRAME_GROUP_ORDER}
     consumed = {group: set() for group in FRAME_GROUP_ORDER}
-    for _round in range(FRAME_SITES_PER_GROUP):
+    for _round in range(sites_per_group):
         for group in FRAME_GROUP_ORDER:
             choices = ordered[group]
             while cursors[group] < len(choices):
@@ -395,10 +405,13 @@ def select_round_robin(ordered: Mapping[str, Sequence[Candidate]]) -> tuple[list
                 cursors[group] += 1
                 consumed[group].add(index)
                 candidate = choices[index]
-                if all(distance_km(candidate, previous) >= FRAME_MIN_SEPARATION_KM
-                       for previous in retained):
+                distances = [(distance_km(candidate, previous), previous) for previous in retained]
+                binding = min(distances, key=lambda item: (item[0], item[1].candidate_id), default=None)
+                if binding is None or binding[0] >= FRAME_MIN_SEPARATION_KM:
                     retained.append(candidate)
                     break
+                if rejection_recorder is not None:
+                    rejection_recorder(group, index + 1, candidate, binding[0], binding[1])
             else:
                 raise RuntimeError(f"No separated site remains in {group} during round {_round + 1}.")
     return retained, consumed
@@ -533,6 +546,9 @@ def finalize_analysis_sites(frame_payload: Mapping[str, object], chirps_netcdf: 
 
 
 def main() -> None:
+    from forecast.prelift_sandbox import require_pre_lift_role
+
+    require_pre_lift_role("frame_selection")
     parser = argparse.ArgumentParser(description="Build, screen, draw, and hash the L13 site frame.")
     parser.add_argument("--ecoregions", type=Path, required=True)
     parser.add_argument("--hydrobasins", type=Path, required=True)

@@ -1,0 +1,582 @@
+{
+  "folds": [
+    {
+      "fold_index": 0,
+      "site_id": "F1_M002.900_M0053.750",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 0,
+        "code_2": 0,
+        "code_3": 0,
+        "code_4": 0,
+        "code_5": 0,
+        "code_6": {
+          "channel_stacked_unet": 1,
+          "temporal_attention_unet": 0
+        }
+      }
+    },
+    {
+      "fold_index": 1,
+      "site_id": "F1_M003.780_M0074.750",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 1,
+        "code_2": 1,
+        "code_3": 1,
+        "code_4": 1,
+        "code_5": 1,
+        "code_6": {
+          "channel_stacked_unet": 3,
+          "temporal_attention_unet": 2
+        }
+      }
+    },
+    {
+      "fold_index": 2,
+      "site_id": "F1_M004.660_M0077.750",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 2,
+        "code_2": 2,
+        "code_3": 2,
+        "code_4": 2,
+        "code_5": 2,
+        "code_6": {
+          "channel_stacked_unet": 5,
+          "temporal_attention_unet": 4
+        }
+      }
+    },
+    {
+      "fold_index": 3,
+      "site_id": "F1_M008.620_M0061.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 3,
+        "code_2": 3,
+        "code_3": 3,
+        "code_4": 3,
+        "code_5": 3,
+        "code_6": {
+          "channel_stacked_unet": 7,
+          "temporal_attention_unet": 6
+        }
+      }
+    },
+    {
+      "fold_index": 4,
+      "site_id": "F1_M009.060_M0069.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 4,
+        "code_2": 4,
+        "code_3": 4,
+        "code_4": 4,
+        "code_5": 4,
+        "code_6": {
+          "channel_stacked_unet": 9,
+          "temporal_attention_unet": 8
+        }
+      }
+    },
+    {
+      "fold_index": 5,
+      "site_id": "F1_M009.940_M0075.750",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 5,
+        "code_2": 5,
+        "code_3": 5,
+        "code_4": 5,
+        "code_5": 5,
+        "code_6": {
+          "channel_stacked_unet": 11,
+          "temporal_attention_unet": 10
+        }
+      }
+    },
+    {
+      "fold_index": 6,
+      "site_id": "F1_M010.820_M0063.000",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 6,
+        "code_2": 6,
+        "code_3": 6,
+        "code_4": 6,
+        "code_5": 6,
+        "code_6": {
+          "channel_stacked_unet": 13,
+          "temporal_attention_unet": 12
+        }
+      }
+    },
+    {
+      "fold_index": 7,
+      "site_id": "F1_P000.180_M0063.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 7,
+        "code_2": 7,
+        "code_3": 7,
+        "code_4": 7,
+        "code_5": 7,
+        "code_6": {
+          "channel_stacked_unet": 15,
+          "temporal_attention_unet": 14
+        }
+      }
+    },
+    {
+      "fold_index": 8,
+      "site_id": "F1_P001.060_M0070.000",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 8,
+        "code_2": 8,
+        "code_3": 8,
+        "code_4": 8,
+        "code_5": 8,
+        "code_6": {
+          "channel_stacked_unet": 17,
+          "temporal_attention_unet": 16
+        }
+      }
+    },
+    {
+      "fold_index": 9,
+      "site_id": "F2_M000.480_P0020.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 9,
+        "code_2": 9,
+        "code_3": 9,
+        "code_4": 9,
+        "code_5": 9,
+        "code_6": {
+          "channel_stacked_unet": 19,
+          "temporal_attention_unet": 18
+        }
+      }
+    },
+    {
+      "fold_index": 10,
+      "site_id": "F2_M001.360_P0026.000",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 10,
+        "code_2": 10,
+        "code_3": 10,
+        "code_4": 10,
+        "code_5": 10,
+        "code_6": {
+          "channel_stacked_unet": 21,
+          "temporal_attention_unet": 20
+        }
+      }
+    },
+    {
+      "fold_index": 11,
+      "site_id": "F2_M002.900_P0018.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 11,
+        "code_2": 11,
+        "code_3": 11,
+        "code_4": 11,
+        "code_5": 11,
+        "code_6": {
+          "channel_stacked_unet": 23,
+          "temporal_attention_unet": 22
+        }
+      }
+    },
+    {
+      "fold_index": 12,
+      "site_id": "F2_M002.900_P0024.000",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 12,
+        "code_2": 12,
+        "code_3": 12,
+        "code_4": 12,
+        "code_5": 12,
+        "code_6": {
+          "channel_stacked_unet": 25,
+          "temporal_attention_unet": 24
+        }
+      }
+    },
+    {
+      "fold_index": 13,
+      "site_id": "F2_M003.340_P0024.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 13,
+        "code_2": 13,
+        "code_3": 13,
+        "code_4": 13,
+        "code_5": 13,
+        "code_6": {
+          "channel_stacked_unet": 27,
+          "temporal_attention_unet": 26
+        }
+      }
+    },
+    {
+      "fold_index": 14,
+      "site_id": "F2_P001.500_P0028.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 14,
+        "code_2": 14,
+        "code_3": 14,
+        "code_4": 14,
+        "code_5": 14,
+        "code_6": {
+          "channel_stacked_unet": 29,
+          "temporal_attention_unet": 28
+        }
+      }
+    },
+    {
+      "fold_index": 15,
+      "site_id": "F2_P002.380_P0022.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 15,
+        "code_2": 15,
+        "code_3": 15,
+        "code_4": 15,
+        "code_5": 15,
+        "code_6": {
+          "channel_stacked_unet": 31,
+          "temporal_attention_unet": 30
+        }
+      }
+    },
+    {
+      "fold_index": 16,
+      "site_id": "F2_P002.600_P0028.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 16,
+        "code_2": 16,
+        "code_3": 16,
+        "code_4": 16,
+        "code_5": 16,
+        "code_6": {
+          "channel_stacked_unet": 33,
+          "temporal_attention_unet": 32
+        }
+      }
+    },
+    {
+      "fold_index": 17,
+      "site_id": "F2_P003.040_P0021.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 17,
+        "code_2": 17,
+        "code_3": 17,
+        "code_4": 17,
+        "code_5": 17,
+        "code_6": {
+          "channel_stacked_unet": 35,
+          "temporal_attention_unet": 34
+        }
+      }
+    },
+    {
+      "fold_index": 18,
+      "site_id": "F3_M005.540_M0044.000",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 18,
+        "code_2": 18,
+        "code_3": 18,
+        "code_4": 18,
+        "code_5": 18,
+        "code_6": {
+          "channel_stacked_unet": 37,
+          "temporal_attention_unet": 36
+        }
+      }
+    },
+    {
+      "fold_index": 19,
+      "site_id": "F3_M006.640_M0038.000",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 19,
+        "code_2": 19,
+        "code_3": 19,
+        "code_4": 19,
+        "code_5": 19,
+        "code_6": {
+          "channel_stacked_unet": 39,
+          "temporal_attention_unet": 38
+        }
+      }
+    },
+    {
+      "fold_index": 20,
+      "site_id": "F3_M011.040_M0041.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 20,
+        "code_2": 20,
+        "code_3": 20,
+        "code_4": 20,
+        "code_5": 20,
+        "code_6": {
+          "channel_stacked_unet": 41,
+          "temporal_attention_unet": 40
+        }
+      }
+    },
+    {
+      "fold_index": 21,
+      "site_id": "F3_M013.240_M0042.750",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 21,
+        "code_2": 21,
+        "code_3": 21,
+        "code_4": 21,
+        "code_5": 21,
+        "code_6": {
+          "channel_stacked_unet": 43,
+          "temporal_attention_unet": 42
+        }
+      }
+    },
+    {
+      "fold_index": 22,
+      "site_id": "F3_M015.220_M0057.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 22,
+        "code_2": 22,
+        "code_3": 22,
+        "code_4": 22,
+        "code_5": 22,
+        "code_6": {
+          "channel_stacked_unet": 45,
+          "temporal_attention_unet": 44
+        }
+      }
+    },
+    {
+      "fold_index": 23,
+      "site_id": "F3_M020.720_M0058.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 23,
+        "code_2": 23,
+        "code_3": 23,
+        "code_4": 23,
+        "code_5": 23,
+        "code_6": {
+          "channel_stacked_unet": 47,
+          "temporal_attention_unet": 46
+        }
+      }
+    },
+    {
+      "fold_index": 24,
+      "site_id": "F3_M022.040_M0063.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 24,
+        "code_2": 24,
+        "code_3": 24,
+        "code_4": 24,
+        "code_5": 24,
+        "code_6": {
+          "channel_stacked_unet": 49,
+          "temporal_attention_unet": 48
+        }
+      }
+    },
+    {
+      "fold_index": 25,
+      "site_id": "F3_M023.140_M0057.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 25,
+        "code_2": 25,
+        "code_3": 25,
+        "code_4": 25,
+        "code_5": 25,
+        "code_6": {
+          "channel_stacked_unet": 51,
+          "temporal_attention_unet": 50
+        }
+      }
+    },
+    {
+      "fold_index": 26,
+      "site_id": "F3_P018.220_M0071.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 26,
+        "code_2": 26,
+        "code_3": 26,
+        "code_4": 26,
+        "code_5": 26,
+        "code_6": {
+          "channel_stacked_unet": 53,
+          "temporal_attention_unet": 52
+        }
+      }
+    },
+    {
+      "fold_index": 27,
+      "site_id": "F4_M000.260_P0109.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 27,
+        "code_2": 27,
+        "code_3": 27,
+        "code_4": 27,
+        "code_5": 27,
+        "code_6": {
+          "channel_stacked_unet": 55,
+          "temporal_attention_unet": 54
+        }
+      }
+    },
+    {
+      "fold_index": 28,
+      "site_id": "F4_M000.480_P0102.750",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 28,
+        "code_2": 28,
+        "code_3": 28,
+        "code_4": 28,
+        "code_5": 28,
+        "code_6": {
+          "channel_stacked_unet": 57,
+          "temporal_attention_unet": 56
+        }
+      }
+    },
+    {
+      "fold_index": 29,
+      "site_id": "F4_M001.360_P0103.750",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 29,
+        "code_2": 29,
+        "code_3": 29,
+        "code_4": 29,
+        "code_5": 29,
+        "code_6": {
+          "channel_stacked_unet": 59,
+          "temporal_attention_unet": 58
+        }
+      }
+    },
+    {
+      "fold_index": 30,
+      "site_id": "F4_M001.580_P0114.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 30,
+        "code_2": 30,
+        "code_3": 30,
+        "code_4": 30,
+        "code_5": 30,
+        "code_6": {
+          "channel_stacked_unet": 61,
+          "temporal_attention_unet": 60
+        }
+      }
+    },
+    {
+      "fold_index": 31,
+      "site_id": "F4_M001.800_P0104.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 31,
+        "code_2": 31,
+        "code_3": 31,
+        "code_4": 31,
+        "code_5": 31,
+        "code_6": {
+          "channel_stacked_unet": 63,
+          "temporal_attention_unet": 62
+        }
+      }
+    },
+    {
+      "fold_index": 32,
+      "site_id": "F4_M002.460_P0111.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 32,
+        "code_2": 32,
+        "code_3": 32,
+        "code_4": 32,
+        "code_5": 32,
+        "code_6": {
+          "channel_stacked_unet": 65,
+          "temporal_attention_unet": 64
+        }
+      }
+    },
+    {
+      "fold_index": 33,
+      "site_id": "F4_M002.900_P0105.500",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 33,
+        "code_2": 33,
+        "code_3": 33,
+        "code_4": 33,
+        "code_5": 33,
+        "code_6": {
+          "channel_stacked_unet": 67,
+          "temporal_attention_unet": 66
+        }
+      }
+    },
+    {
+      "fold_index": 34,
+      "site_id": "F4_P003.920_P0101.000",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 34,
+        "code_2": 34,
+        "code_3": 34,
+        "code_4": 34,
+        "code_5": 34,
+        "code_6": {
+          "channel_stacked_unet": 69,
+          "temporal_attention_unet": 68
+        }
+      }
+    },
+    {
+      "fold_index": 35,
+      "site_id": "F4_P004.140_P0114.250",
+      "unit_indices": {
+        "code_0": 0,
+        "code_1": 35,
+        "code_2": 35,
+        "code_3": 35,
+        "code_4": 35,
+        "code_5": 35,
+        "code_6": {
+          "channel_stacked_unet": 71,
+          "temporal_attention_unet": 70
+        }
+      }
+    }
+  ],
+  "ordering": "ascending held-out site_id",
+  "specification": "Specification W"
+}
