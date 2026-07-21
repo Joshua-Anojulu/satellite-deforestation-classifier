@@ -153,9 +153,15 @@ than taken on trust, and both of Codex's numbers were exact:
   P(≥4 evaluable)=0.92944 → **0.74626** joint. Codex's 94.95% / 74.63% confirmed to five digits. **The v1
   plan text was wrong** — it advertised the zero-slack figure as if it were the one-slack margin. One-slack
   survival by K: K=7 → 74.6%, K=8 → 89.5%, **K=9 → 96.1%**, so Codex's "K=9, not 7" is right.
-- **#4 verified.** `sea_peat` rank 8 (`F4_M003.120_P0105.500`) is **24.46 km** from rank 1 — inside the
+- **#4 verified.** `sea_peat` rank 8 (`F4_M003.120_P0105.500`) is **24.33 km** from rank 1 — inside the
   50 km inhibition radius. Codex's ~24.5 km confirmed. At K=7 inhibition never binds (all strata retain
   exactly ranks 4-7, zero skips), so v1's shortcut was accidentally correct; at K≥8 it breaks immediately.
+  - **ERRATUM (post-approval, 2026-07-21).** This distance was written as 24.46 km in the plan, this log,
+    and commit `bf00940`'s message. The frozen artifact `specification_w_selection_skips.json` records
+    **24.32701453971571 km**, and re-running the code's own WGS84 `Geod.inv` (`risk/frame.py` `distance_km`)
+    on the actual candidate coordinates reproduces that value exactly. 24.46 km was a spherical/degree
+    approximation the selection code never used. Corrected to 24.33 km throughout the docs; the frame,
+    manifest, and which rank is rejected are unaffected (rejection binds at any distance < 50 km).
 
 **One partial counter-argument, logged rather than used to dismiss the finding (#2).** The *trigger* to
 widen was the 2022 **validation** failure (`amazon_moist` 2/3), which is permitted information under §F,
@@ -519,7 +525,7 @@ on the table, having originally chosen K=7 believing it bought one-slack margin.
 | Stratum | Retained ranks | Skipped |
 |---|---|---|
 | amazon_moist, congo_moist, dry_forest | 1-9 | - |
-| **sea_peat** | 1-7, **9, 10** | **rank 8: 24.46 km from `F4_M002.900_P0105.500`** |
+| **sea_peat** | 1-7, **9, 10** | **rank 8: 24.33 km from `F4_M002.900_P0105.500`** |
 
 A naive "ranks 1-9" walk would have produced the **wrong frame**. Frozen K=9 quantities: **36 sites
 (12 + 24 new) · 144 new site-years · 50.1 GB · 1,260 inner fits · ~32.5x site-fit work · quiet-rate upper

@@ -115,7 +115,7 @@ academic.** Replaying `select_round_robin` at K=9 (verified 2026-07-20):
 | amazon_moist | 1–9 | — |
 | congo_moist | 1–9 | — |
 | dry_forest | 1–9 | — |
-| **sea_peat** | 1–7, **9, 10** | **rank 8 rejected: 24.46 km from `F4_M002.900_P0105.500`** |
+| **sea_peat** | 1–7, **9, 10** | **rank 8 rejected: 24.33 km from `F4_M002.900_P0105.500`** |
 
 A naive rank walk would have produced the **wrong frame**. Deepest rank reached: **10**.
 
@@ -295,7 +295,7 @@ site, across all strata.
 
 Verified numerically: at K=7 the inhibition never binds — all four strata retain exactly ranks 4,5,6,7,
 zero skips — so v1's shortcut coincidentally produced the right 16 sites. **It diverges immediately at
-K=8:** `sea_peat` rank 8 (`F4_M003.120_P0105.500`) is **24.46 km** from rank 1 and the real algorithm
+K=8:** `sea_peat` rank 8 (`F4_M003.120_P0105.500`) is **24.33 km** from rank 1 and the real algorithm
 rejects it. Any K≥8, including the K=9 option in (B), *requires* the replay.
 
 Therefore:
@@ -543,7 +543,7 @@ forecasting study reuses the whole `risk/` package.
 - **Widening may harden the §4 retention gate** by shrinking per-site audit allocations (finding #11). It
   is not yet established that widening is net-positive for the audit.
 - **SAR is unsized.** All figures here are optical only.
-- **`sea_peat` has only 147 candidates** and is where inhibition first binds (rank 8 at 24.46 km). At K=9
+- **`sea_peat` has only 147 candidates** and is where inhibition first binds (rank 8 at 24.33 km). At K=9
   it is the stratum most likely to need deep ranks.
 - **CDSE flakiness.** 144 site-years is ~6× the largest run attempted so far.
 - **Compute at ~32.5× site-fit work** (1,260 inner fits × 34 training sites) is the single largest
