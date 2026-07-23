@@ -26,13 +26,26 @@ from forecast.specification_w import (
     sha256_file,
 )
 from risk.config import REFLECTANCE_BANDS
+from risk.census._inventory_gate import (
+    checksum_validation,
+    incumbent_checksum_issues,
+    write_inventory_exclusive,
+)
 
 BAND_SCHEMAS = {
     "reflectance": tuple(REFLECTANCE_BANDS),
     "dispersion": tuple(REFLECTANCE_BANDS),
-    "clearobs": ("clearobs",),
+    # clearobs is a single UNNAMED band as produced by the openEO graph (verified
+    # against every real composite, incumbent and new); its name is never read
+    # downstream (consumed by index + filename).  Semantics are checked instead.
+    "clearobs": (None,),
     "solar_zenith": ("sunZenithAngles",),
 }
+
+ISSUE_CODES = (
+    "MISSING", "UNEXPECTED", "PROVENANCE", "SCHEMA",
+    "SEMANTIC", "CORRUPT", "ALL_NODATA", "CHECKSUM",
+)
 
 
 @dataclass(frozen=True)
@@ -75,15 +88,32 @@ def expected_inventory(
     return expected
 
 
-def _valid_data_present(source: rasterio.io.DatasetReader) -> bool:
+def _decode_and_check(
+    source: rasterio.io.DatasetReader, kind: str
+) -> tuple[bool, str | None]:
+    """One full-decode pass returning ``(any_valid, semantic_detail)``.
+
+    clearobs is a temporal sum of clear-observation booleans, so its valid pixels
+    must be non-negative and integer-valued.  That invariant reuses this decode
+    rather than re-reading the (large) raster a second time.
+    """
+
     any_valid = False
+    semantic_detail: str | None = None
     for band in range(1, source.count + 1):
         values = source.read(band)  # full read: catches late-block corruption
         valid = source.read_masks(band) > 0
         if np.issubdtype(values.dtype, np.floating):
             valid &= np.isfinite(values)
         any_valid |= bool(valid.any())
-    return any_valid
+        if kind == "clearobs" and semantic_detail is None:
+            observed = values[valid]
+            if observed.size:
+                if np.any(observed < 0):
+                    semantic_detail = "clearobs has negative valid pixels"
+                elif np.any(observed != np.floor(observed)):
+                    semantic_detail = "clearobs has non-integer valid pixels"
+    return any_valid, semantic_detail
 
 
 def _validate_provenance(
@@ -190,11 +220,18 @@ def verify_composites(
                             f"descriptions={source.descriptions}"
                         ),
                     })
-                if not _valid_data_present(source):
+                any_valid, semantic_detail = _decode_and_check(source, artifact.kind)
+                if not any_valid:
                     issues.append({
                         "path": artifact.relative_path,
                         "code": "ALL_NODATA",
                         "detail": "full decode found no valid pixel in any band",
+                    })
+                if semantic_detail is not None:
+                    issues.append({
+                        "path": artifact.relative_path,
+                        "code": "SEMANTIC",
+                        "detail": semantic_detail,
                     })
             checksums[artifact.relative_path] = sha256_file(path)
         except Exception as error:
@@ -204,26 +241,33 @@ def verify_composites(
                 "detail": f"{type(error).__name__}: {str(error)[:160]}",
             })
 
-    if pinned_inventory is not None:
-        pins = json.loads(Path(pinned_inventory).read_text(encoding="utf-8"))
-        if pins != checksums:
-            issues.append({
-                "path": str(Path(pinned_inventory)),
-                "code": "CHECKSUM",
-                "detail": "archive differs from the checksum-pinned inventory",
-            })
+    # Independent integrity anchor: the 144 incumbent files must still match the
+    # hashes the schedule froze when it was created (a mutated incumbent must not
+    # be silently re-pinned).  Then the optional pinned-inventory comparison.
+    issues.extend(incumbent_checksum_issues(manifest, schedule, checksums))
+    pinned_issues, checksum_validation_meta = checksum_validation(checksums, pinned_inventory)
+    issues.extend(pinned_issues)
+
     issue_counts = {
-        code: sum(issue["code"] == code for issue in issues)
-        for code in ("MISSING", "UNEXPECTED", "PROVENANCE", "SCHEMA", "CORRUPT", "ALL_NODATA", "CHECKSUM")
+        code: sum(issue["code"] == code for issue in issues) for code in ISSUE_CODES
     }
     complete = not issues and len(checksums) == EXPECTED_TIFFS
+    # A structurally-valid bootstrap stays `complete` (so inventory generation
+    # works), but only a pinned run whose checksums actually matched may advertise
+    # the archive as analysis-ready.
+    analysis_allowed = (
+        complete
+        and checksum_validation_meta["mode"] == "pinned"
+        and bool(checksum_validation_meta["verified"])
+    )
     return {
         "specification": "Specification W",
         "expected_tiffs": EXPECTED_TIFFS,
         "expected_new_tiffs": NEW_TIFFS,
         "observed_expected_tiffs": len(checksums),
         "complete": complete,
-        "analysis_allowed": complete,
+        "analysis_allowed": analysis_allowed,
+        "checksum_validation": checksum_validation_meta,
         "partial_archive_is_resumable_but_not_analysable": True,
         "issue_counts": issue_counts,
         "issues": issues,
@@ -240,6 +284,12 @@ def main() -> None:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--inventory-output", type=Path)
     args = parser.parse_args()
+    # Preflight the write-once inventory anchor before writing anything, so a
+    # re-run cannot clobber an existing inventory or a previously committed report.
+    if args.inventory_output is not None and args.inventory_output.exists():
+        raise SystemExit(
+            f"refusing to overwrite existing inventory anchor: {args.inventory_output}"
+        )
     report = verify_composites(
         args.manifest, args.schedule, args.root,
         pinned_inventory=args.pinned_inventory,
@@ -251,11 +301,7 @@ def main() -> None:
     else:
         print(rendered, end="")
     if args.inventory_output and report["complete"]:
-        args.inventory_output.parent.mkdir(parents=True, exist_ok=True)
-        args.inventory_output.write_text(
-            json.dumps(report["artifact_sha256"], indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        write_inventory_exclusive(args.inventory_output, report["artifact_sha256"])
     raise SystemExit(0 if report["complete"] else 1)
 
 
