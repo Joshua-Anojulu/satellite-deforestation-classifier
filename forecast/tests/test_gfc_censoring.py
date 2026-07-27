@@ -244,22 +244,33 @@ def test_frozen_pin_drives_release_and_per_tile_checksum_verification(tmp_path):
     assert failed.stdout_bytes == failed.stderr_bytes == 0
 
 
+# Only the timeout case may starve the child; the other faults need a budget
+# comfortably above interpreter startup or they race into CHILD_TIMEOUT.
+_STARVING_TIMEOUT = 0.1
+_GENEROUS_TIMEOUT = 30.0
+
+
 @pytest.mark.parametrize(
-    ("program", "expected_code"),
+    ("program", "expected_code", "timeout_seconds"),
     [
-        ("import sys; print('sealed'); sys.exit(0)", "STREAM_POLICY_VIOLATION"),
-        ("import os; os._exit(5)", "CHILD_FAILED"),
-        ("import time; time.sleep(10)", "CHILD_TIMEOUT"),
+        (
+            "import sys; print('sealed'); sys.exit(0)",
+            "STREAM_POLICY_VIOLATION",
+            _GENEROUS_TIMEOUT,
+        ),
+        ("import os; os._exit(5)", "CHILD_FAILED", _GENEROUS_TIMEOUT),
+        ("import time; time.sleep(600)", "CHILD_TIMEOUT", _STARVING_TIMEOUT),
         (
             "import pathlib,sys; p=pathlib.Path(sys.argv[2]); p.mkdir(); "
             "(p/'unexpected').write_bytes(b'x')",
             "OUTPUT_POLICY_VIOLATION",
+            _GENEROUS_TIMEOUT,
         ),
     ],
     ids=("stream", "crash", "timeout", "stray-file"),
 )
 def test_supervisor_destroys_temp_directory_on_every_exit_path(
-    tmp_path, monkeypatch, program, expected_code
+    tmp_path, monkeypatch, program, expected_code, timeout_seconds
 ):
     worker = tmp_path / "fault_worker.py"
     worker.write_text(program, encoding="utf-8")
@@ -268,7 +279,7 @@ def test_supervisor_destroys_temp_directory_on_every_exit_path(
     transcript = run_censoring(
         request,
         tmp_path / "handoff",
-        timeout_seconds=0.1,
+        timeout_seconds=timeout_seconds,
         temp_parent=tmp_path / "sandbox",
     )
     assert transcript.supervisor_error_code == expected_code
