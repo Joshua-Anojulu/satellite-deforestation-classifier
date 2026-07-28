@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +20,7 @@ from forecast.gfc_censor import (
     run_censoring,
 )
 from forecast.prelift_sandbox import PRE_LIFT_ROLES, run_pre_lift_role
+from forecast.sandbox_process import run_sealed_process
 
 
 def _sha256(path: Path) -> str:
@@ -242,6 +246,48 @@ def test_frozen_pin_drives_release_and_per_tile_checksum_verification(tmp_path):
     failed = run_censoring(pinned_request, tmp_path / "failed")
     assert failed.supervisor_error_code == "CHILD_FAILED"
     assert failed.stdout_bytes == failed.stderr_bytes == 0
+
+
+def test_grandchild_cannot_escape_the_job_object(tmp_path):
+    """A detached grandchild is still killed with the tree.
+
+    The child is created suspended and assigned to the Job Object before it is
+    resumed, so there is no window in which it can spawn an uncontained
+    descendant.  This asserts the containment end-to-end: the grandchild is
+    launched detached, in its own process group, and would outlive its parent —
+    but the job kills it, so its marker is never written.
+    """
+
+    marker = tmp_path / "escaped.txt"
+    worker = tmp_path / "spawner.py"
+    worker.write_text(
+        "import subprocess, sys, time, os\n"
+        "flags = 0\n"
+        "if os.name == 'nt':\n"
+        "    flags = 0x00000008 | 0x00000200\n"  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        "subprocess.Popen(\n"
+        "    [sys.executable, '-c',\n"
+        "     \"import time,sys; time.sleep(4); open(sys.argv[1],'w').write('escaped')\",\n"
+        "     sys.argv[1]],\n"
+        "    creationflags=flags,\n"
+        "    start_new_session=os.name != 'nt',\n"
+        ")\n"
+        "time.sleep(600)\n",
+        encoding="utf-8",
+    )
+
+    result = run_sealed_process(
+        [sys.executable, "-I", str(worker), str(marker)],
+        cwd=tmp_path,
+        env={"SystemRoot": os.environ.get("SystemRoot", ""), "PATH": os.environ.get("PATH", "")},
+        timeout_seconds=1.0,
+    )
+    assert result.timed_out
+
+    # Outlive the grandchild's own delay: if containment failed it would have
+    # written the marker by now.
+    time.sleep(6)
+    assert not marker.exists(), "grandchild escaped the Job Object"
 
 
 # Only the timeout case may starve the child; the other faults need a budget
