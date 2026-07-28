@@ -538,3 +538,42 @@ downgrade provenance from `approved-final` to `approved-stale`. They are binding
    manual verification** — fail-closed must never be implemented as rollback.
 3. **Bind the θ sensitivity's single frozen candidate explicitly before Phase D**, and give fixed outer
    contagion its own benchmark class (it is no longer in the tuned grid, so it needs its own timing).
+
+---
+
+## Implementation deviation 1 — GFC pinning anchor (Phase A, 2026-07-27)
+
+**Approved plan text (Phase A step 10):** "verify each tile against the **independent published MD5** →
+then create the write-once SHA-256 inventory". This originates in Codex round-1 finding #12.
+
+**It cannot be implemented: no such manifest exists.** The official GFC-2024-v1.12 download page
+(`storage.googleapis.com/earthenginepartners-hansen/GFC-2024-v1.12/download.html`) publishes per-layer URL
+listings (`treecover2000.txt`, `lossyear.txt`, `datamask.txt`) and **no checksums of any kind**. Round-1
+#12 was accepted without confirming the manifest existed.
+
+**The governing rule is narrower than the plan asserted.** `FORECAST-PLAN.md` §5 freezes
+"Pin GFC version+md5 (at download...)" — *record* the md5 at download. It never required verification
+against a third-party manifest. §5 as frozen is fully satisfiable.
+
+**Anchor adopted (Josh's decision).** Google Cloud Storage serves, per object and retrievable by `HEAD`
+**without** transferring the file:
+
+- `x-goog-hash: md5=<base64>` — server-computed; verified to decode exactly to the `ETag` hex
+  (`YYAGoCBYN3xXn1Gkx+otIQ==` -> `618006a02058377c579f51a4c7ea2d21` for `lossyear_10S_060W`).
+- `x-goog-generation` — immutable object-version identifier.
+- `Content-Length` — cross-check against bytes received.
+
+**What this guarantee is, stated plainly, so it is never overstated later:**
+
+| Threat | Covered |
+|---|---|
+| Truncated / corrupted transfer (this repo's documented `_download` weakness) | YES — the hash is fetched in a separate request from the bytes |
+| Silent re-publication of a tile under the same name | YES — `x-goog-generation` changes |
+| Substitution at source | **NO** — the same host serves both the bytes and the hash |
+
+It is therefore **stronger than self-hashing and weaker than an independent anchor**. Any later claim of
+"independently verified" GFC provenance is unsupported and must not be made; the correct phrasing is
+"pinned to the publisher's server-computed md5 and object generation at download".
+
+**Plan body unchanged**, so the `approved-final` binding to `030d78fa` still holds; this deviation lives
+in the log by design.
