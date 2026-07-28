@@ -130,11 +130,28 @@ def test_dropping_the_training_origin_would_admit_more():
     assert "terrain_glo30" in without_2020
 
 
-def test_terrain_in_the_registry_is_the_compliant_glo90():
+def test_terrain_is_srtm_not_copernicus():
+    """Copernicus is inadmissible at ANY resolution.
+
+    Both GLO-30 and GLO-90 on AWS are the 2021 release, so the release - not
+    the resolution - is what post-dates the 2020 issue date. Switching
+    resolutions does not fix it; switching products does.
+    """
+
     terrain = next(l for l in REGISTRY if l.name == "terrain")
-    assert terrain.vintage == date(2019, 1, 1)
+    assert terrain.vintage == date(2008, 1, 1)
     assert terrain.is_issue_date_valid(2020), "must clear the training origin"
-    assert "GLO-90" in terrain.source
+    assert "SRTM" in terrain.source
+    assert "Copernicus" not in terrain.source
+
+
+def test_a_2021_release_terrain_would_be_excluded_at_any_resolution():
+    """Guards the reasoning above, so re-adding Copernicus cannot pass quietly."""
+
+    for name in ("terrain_glo30", "terrain_glo90"):
+        decision = evaluate_layer(_layer(name=name, vintage=date(2021, 1, 1)))
+        assert not decision.included
+        assert decision.valid_origins == (2021, 2022)
 
 
 def test_empty_schema_is_refused():

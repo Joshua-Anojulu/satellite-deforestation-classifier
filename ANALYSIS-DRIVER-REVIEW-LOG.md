@@ -645,11 +645,23 @@ day *after* origin 2020's issue date and is inadmissible. The compliant snapshot
 which makes the roads layer **up to twelve months stale**. Accepted and disclosed; roads are slow-moving.
 Scope: 11 country extracts spanning the four strata, ~3.6 GB per origin, ~10.8 GB total.
 
-**Terrain — GLO-30 replaced by GLO-90 (Josh's decision).** The freely available GLO-30 is the **2021
-release**, which post-dates the 2020 issue date. Because 2020 is the **training** origin, admitting it
-would break the frozen-intersection rule. **GLO-90 was released in 2019** and clears all three issue
-dates, so it is used instead: 90 m resampled for the 30 m table, acceptable for smooth terrain covariates.
-Sources: Copernicus DEM 30 m announcement (2020-12-01); AWS Open Data hosts the *2021 release*.
+**Terrain — Copernicus rejected entirely; CGIAR-CSI SRTM v4.1 adopted (Josh's decision).**
+
+*Corrected mid-phase.* The first recommendation was GLO-90, on the reasoning that GLO-30 is the 2021
+release while "GLO-90 was released in 2019". **That was wrong**, and Josh had already decided on it before
+the error surfaced: the AWS Open Data registry states both GLO-30 and GLO-90 "come from Copernicus DEM
+**2021 release**". The *release*, not the resolution, is what post-dates the 2020 issue date, so switching
+resolutions bought nothing. Same failure mode as deviation 1 — a property was asserted without confirming
+the artifact actually had it.
+
+Adopted instead: **CGIAR-CSI SRTM v4.1, 2008 release, 90 m, no authentication** (reachability verified).
+It predates every origin by over a decade, so no vintage argument is needed at all. Terrain is the most
+static covariate in the set, and a 2008 elevation model is not meaningfully staler than a 2021 one for
+slope and elevation. NASADEM (Feb 2020, 30 m) was considered and set aside: it clears the training origin
+by only ten months and needs NASA Earthdata credentials the pipeline does not have.
+
+A regression test now asserts that a 2021-release terrain layer is excluded **at any resolution**, so
+re-adding Copernicus cannot pass quietly.
 
 **Protected areas — excluded under §3 (Josh's decision).** Protected Planet publishes the **current month
 only**; no documented public archive of past monthly releases at stable URLs was found. §3's own rule

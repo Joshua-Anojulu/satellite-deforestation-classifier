@@ -91,12 +91,14 @@ REGISTRY: tuple[StaticLayer, ...] = (
         name="terrain",
         kind="static",
         coverage=GLOBAL,
-        vintage=date(2019, 1, 1),
-        source="Copernicus DEM GLO-90 (2019 release)",
+        vintage=date(2008, 1, 1),
+        source="CGIAR-CSI SRTM v4.1 (2008 release, 90 m)",
         note=(
-            "GLO-90 rather than GLO-30: the freely available GLO-30 is the 2021 "
-            "release, which post-dates the 2020 issue date and would therefore be "
-            "excluded by the intersection rule. 90 m resampled for the 30 m table."
+            "NOT Copernicus DEM. Both GLO-30 and GLO-90 on AWS are the *2021 "
+            "release* -- switching to GLO-90 does not help, because the release, "
+            "not the resolution, is what post-dates the 2020 issue date. SRTM "
+            "v4.1 predates every origin by over a decade. 90 m resampled for the "
+            "30 m table; terrain is the most static covariate in the set."
         ),
     ),
     StaticLayer(
