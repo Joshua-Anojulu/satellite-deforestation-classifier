@@ -627,3 +627,40 @@ cannot demonstrate the boundary -- only an unelevated process can, and that is t
 runs in.
 
 **Plan body unchanged**, so the `approved-final` binding to `030d78fa` still holds.
+
+---
+
+## Implementation deviation 3 — static driver availability (Phase B, 2026-07-28)
+
+**Approved plan text (Phase B step 13):** acquire roads (Geofabrik/OSM ≤ T), protected areas (WDPA
+historical monthly ≤ T) and terrain (Copernicus DEM), each pinned to a snapshot at or before the issue
+date.
+
+Availability was checked **before** writing acquisition code, which is the Phase A lesson (deviation 1 came
+from asserting an anchor that did not exist). Two of the three cannot be acquired as written.
+
+**Roads — compliant, with disclosed staleness.** Geofabrik publishes dated yearly extracts back to 2018,
+but they are dated **1 January**, not year-end. The issue date is 31 December T, so `2021-01-01` is one
+day *after* origin 2020's issue date and is inadmissible. The compliant snapshot is **1 January of T**,
+which makes the roads layer **up to twelve months stale**. Accepted and disclosed; roads are slow-moving.
+Scope: 11 country extracts spanning the four strata, ~3.6 GB per origin, ~10.8 GB total.
+
+**Terrain — GLO-30 replaced by GLO-90 (Josh's decision).** The freely available GLO-30 is the **2021
+release**, which post-dates the 2020 issue date. Because 2020 is the **training** origin, admitting it
+would break the frozen-intersection rule. **GLO-90 was released in 2019** and clears all three issue
+dates, so it is used instead: 90 m resampled for the 30 m table, acceptable for smooth terrain covariates.
+Sources: Copernicus DEM 30 m announcement (2020-12-01); AWS Open Data hosts the *2021 release*.
+
+**Protected areas — excluded under §3 (Josh's decision).** Protected Planet publishes the **current month
+only**; no documented public archive of past monthly releases at stable URLs was found. §3's own rule
+applies: excluded from the primary model, available only as a labelled exploratory sensitivity. Rejected
+alternatives: an authenticated Earth Engine dependency the pipeline does not have, and using a current
+release for historical origins — the latter is a genuine leak risk, since protected-area designation
+plausibly correlates with the outcome.
+
+**Resulting frozen primary schema (the intersection across all three origins):**
+`roads, terrain, rivers, ecoregion, climate` — with `peat` excluded as region-limited (Asia-only, so
+absence would conflate "no peat" with "not surveyed") and `protected_areas` excluded as above. Coverage
+is carried as five explicit `*_covered` features so absence is never encoded as `NaN`.
+
+**Plan body unchanged**, so the `approved-final` binding to `030d78fa` still holds.
