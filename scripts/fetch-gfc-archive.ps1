@@ -56,10 +56,17 @@ if (-not (Get-LocalGroupMember -Group "Users" -Member $Account -ErrorAction Sile
     Write-Host "[skip] $Account is already in Users"
 }
 
-Write-Host "Granting $Account the minimum repo access it needs..."
+Write-Host "Granting $Account the minimum access it needs..."
 & icacls $RepoRoot /grant "${Account}:(OI)(CI)RX" /T /Q | Out-Null
 & icacls $artifacts /grant "${Account}:(OI)(CI)M" /Q | Out-Null
-Write-Host "[ok] repo access granted"
+Write-Host "[ok] repo read+execute, artifacts modify"
+
+# The venv lives inside the interactive profile, whose ACL names neither the
+# worker nor Users -- so without this the account cannot execute python.exe at
+# all, and the task dies before cmd can even create its redirect files.
+$venvRoot = Split-Path (Split-Path $Python -Parent) -Parent
+& icacls $venvRoot /grant "${Account}:(OI)(CI)RX" /T /Q | Out-Null
+Write-Host "[ok] venv read+execute ($venvRoot)"
 
 Write-Host ""
 $cred = Get-Credential -UserName $Account -Message "Password for $Account"
@@ -125,11 +132,33 @@ while ($true) {
     if ($status -notmatch "Running") { break }
 }
 
+# Capture the task's own exit code BEFORE deleting it.  Discarding this is what
+# made the previous failure silent: the wrapper never ran, so both logs were
+# absent and there was nothing left to explain why.
+$lastResult = $null
+try {
+    $lastResult = (Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction Stop).LastTaskResult
+} catch {
+    $lastResult = "unavailable"
+}
+
 Write-Host ""
 Write-Host "--- final stdout ---"
 if (Test-Path $outLog) { Get-Content $outLog -Tail 30 } else { "(no stdout)" }
 Write-Host "--- stderr ---"
 if (Test-Path $errLog) { Get-Content $errLog -Tail 30 } else { "(no stderr)" }
+Write-Host "--- task exit code ---"
+if ($lastResult -is [int]) {
+    "LastTaskResult = $lastResult (0x{0:X8}){1}" -f $lastResult, $(
+        if ($lastResult -eq 0) { " - success" }
+        elseif ($lastResult -eq 267011) { " - task never ran" }
+        elseif ($lastResult -eq 2147942401) { " - ERROR_FILE_NOT_FOUND: the account cannot reach the wrapper or the interpreter" }
+        elseif ($lastResult -eq 2147942405) { " - ERROR_ACCESS_DENIED: the account lacks rights on something in the command" }
+        else { "" }
+    )
+} else {
+    "LastTaskResult = $lastResult"
+}
 
 Invoke-Native { schtasks /delete /TN $TaskName /F } | Out-Null
 Remove-Item $wrapper -ErrorAction SilentlyContinue
