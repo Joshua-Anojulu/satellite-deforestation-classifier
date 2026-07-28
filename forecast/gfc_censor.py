@@ -39,6 +39,8 @@ PRE_LIFT_MASKS = (
 POST_LIFT_MASKS = ("eligible_2022", "positive_2023")
 CENSOR_WORKER = Path(__file__).with_name("gfc_censor_worker.py")
 FROZEN_GFC_RELEASE = "GFC-2024-v1.12"
+#: Mirrors the worker's frozen theta grid; 30 % is the primary population.
+FROZEN_TREECOVER_THRESHOLDS = (10, 25, 30, 50, 75)
 
 
 @dataclass(frozen=True)
@@ -104,8 +106,8 @@ def _validate_handoff(output_dir: Path, phase: str) -> None:
     required = {"phase", "gfc_release", "treecover_threshold", "shape", "crs", "transform", "masks"}
     if set(document) != required or document["phase"] != phase:
         raise ValueError("handoff schema mismatch")
-    if document["treecover_threshold"] != 30:
-        raise ValueError("tree-cover threshold changed")
+    if document["treecover_threshold"] not in FROZEN_TREECOVER_THRESHOLDS:
+        raise ValueError("tree-cover threshold is outside the frozen grid")
     if tuple(document["masks"]) != expected_masks:
         raise ValueError("mask allow-list mismatch")
     shape = tuple(int(value) for value in document["shape"])

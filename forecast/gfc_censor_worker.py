@@ -20,6 +20,11 @@ from affine import Affine
 from rasterio.warp import Resampling, reproject
 
 TREECOVER_THRESHOLD = 30
+#: The frozen theta grid.  30 % is the primary population; the rest are the
+#: prespecified sensitivities, which were previously impossible to run at all
+#: because the threshold was hardcoded.  Only these values are ever accepted, so
+#: no raw treecover2000 value can be probed through the threshold.
+FROZEN_TREECOVER_THRESHOLDS = (10, 25, 30, 50, 75)
 PRE_LIFT_MASKS = (
     "eligible_2020",
     "eligible_2021",
@@ -28,14 +33,25 @@ PRE_LIFT_MASKS = (
     "positive_2022",
 )
 POST_LIFT_MASKS = ("eligible_2022", "positive_2023")
-FORMULAS = {
-    "eligible_2020": "datamask == 1 & treecover2000 >= 30 & (lossyear == 0 | lossyear > 20)",
-    "eligible_2021": "datamask == 1 & treecover2000 >= 30 & (lossyear == 0 | lossyear > 21)",
-    "eligible_2022": "datamask == 1 & treecover2000 >= 30 & (lossyear == 0 | lossyear > 22)",
-    "positive_2021": "eligible_2020 & lossyear == 21",
-    "positive_2022": "eligible_2021 & lossyear == 22",
-    "positive_2023": "eligible_2022 & lossyear == 23",
-}
+def formulas(threshold: int = TREECOVER_THRESHOLD) -> dict[str, str]:
+    """The frozen formulas, rendered at the run's theta.
+
+    `lossyear` here is the RAW Hansen code (1..24), not a year: code 20 means
+    2020.  Keeping one representation is what stops a `lossyear - 2000`
+    formulation from silently emptying every downstream feature.
+    """
+
+    return {
+        "eligible_2020": f"datamask == 1 & treecover2000 >= {threshold} & (lossyear == 0 | lossyear > 20)",
+        "eligible_2021": f"datamask == 1 & treecover2000 >= {threshold} & (lossyear == 0 | lossyear > 21)",
+        "eligible_2022": f"datamask == 1 & treecover2000 >= {threshold} & (lossyear == 0 | lossyear > 22)",
+        "positive_2021": "eligible_2020 & lossyear == 21",
+        "positive_2022": "eligible_2021 & lossyear == 22",
+        "positive_2023": "eligible_2022 & lossyear == 23",
+    }
+
+
+FORMULAS = formulas()
 REQUIRED_LAYERS = ("treecover2000", "datamask", "lossyear")
 
 
@@ -118,11 +134,14 @@ def _sha256(path: Path) -> str:
 
 
 def _validate_request(payload: Mapping[str, Any]) -> tuple[str, tuple[float, ...], list[Path]]:
-    if set(payload) != {"phase", "gfc_release", "bbox", "layers"}:
+    allowed = {"phase", "gfc_release", "bbox", "layers"}
+    if not set(payload) <= allowed | {"treecover_threshold"} or not allowed <= set(payload):
         raise ValueError("request schema mismatch")
     phase = str(payload["phase"])
     if phase not in {"pre_lift", "post_lift"}:
         raise ValueError("invalid phase")
+    if int(payload.get("treecover_threshold", TREECOVER_THRESHOLD)) not in FROZEN_TREECOVER_THRESHOLDS:
+        raise ValueError("tree-cover threshold is outside the frozen grid")
     bbox = tuple(float(value) for value in payload["bbox"])
     if len(bbox) != 4 or not all(np.isfinite(bbox)):
         raise ValueError("invalid bbox")
@@ -221,11 +240,17 @@ def _mosaic_layer(
     return mosaic
 
 
-def _derive_masks(phase: str, arrays: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+def _derive_masks(
+    phase: str,
+    arrays: Mapping[str, np.ndarray],
+    threshold: int = TREECOVER_THRESHOLD,
+) -> dict[str, np.ndarray]:
     treecover = arrays["treecover2000"]
     datamask = arrays["datamask"]
     lossyear = arrays["lossyear"]
-    base = (datamask == 1) & (treecover >= TREECOVER_THRESHOLD)
+    if threshold not in FROZEN_TREECOVER_THRESHOLDS:
+        raise ValueError(f"tree-cover threshold {threshold} is outside the frozen grid")
+    base = (datamask == 1) & (treecover >= threshold)
     eligible = {
         year: base & ((lossyear == 0) | (lossyear > year - 2000))
         for year in (2020, 2021, 2022)
@@ -258,7 +283,8 @@ def _run(request_path: Path, output_dir: Path) -> None:
         )
         for layer in REQUIRED_LAYERS
     }
-    masks = _derive_masks(phase, arrays)
+    threshold = int(payload.get("treecover_threshold", TREECOVER_THRESHOLD))
+    masks = _derive_masks(phase, arrays, threshold)
     output_dir.mkdir(parents=False, exist_ok=False)
     for name, values in masks.items():
         with (output_dir / f"{name}.npy").open("wb") as stream:
@@ -266,7 +292,7 @@ def _run(request_path: Path, output_dir: Path) -> None:
     handoff = {
         "phase": phase,
         "gfc_release": str(payload["gfc_release"]),
-        "treecover_threshold": TREECOVER_THRESHOLD,
+        "treecover_threshold": threshold,
         "shape": [height, width],
         "crs": crs.to_string(),
         "transform": list(transform)[:6],
@@ -274,7 +300,7 @@ def _run(request_path: Path, output_dir: Path) -> None:
             name: {
                 "file": f"{name}.npy",
                 "dtype": "bool",
-                "formula": FORMULAS[name],
+                "formula": formulas(threshold)[name],
             }
             for name in masks
         },

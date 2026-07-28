@@ -53,13 +53,50 @@ class SiteResult:
     eligible_px_test_origin: int
 
 
-def count_components(positive_mask: np.ndarray) -> int:
-    """Frozen 8-connectivity event algorithm with the two-pixel floor."""
+#: 4-connectivity structuring element; the frozen sensitivity to the primary
+#: 8-connectivity rule, which was previously impossible to run because the
+#: structure was hardcoded.
+CONNECTIVITY_4 = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)
+FROZEN_CONNECTIVITIES = (8, 4)
 
-    labelled, count = ndimage.label(np.asarray(positive_mask, dtype=bool), structure=CONNECTIVITY_8)
+
+def _structure(connectivity: int) -> np.ndarray:
+    if connectivity == 8:
+        return CONNECTIVITY_8
+    if connectivity == 4:
+        return CONNECTIVITY_4
+    raise ValueError(f"connectivity {connectivity} is outside the frozen set")
+
+
+def label_components(
+    positive_mask: np.ndarray, connectivity: int = 8
+) -> tuple[np.ndarray, np.ndarray]:
+    """Label mapped loss components and return their sizes.
+
+    Returns ``(labels, sizes)`` where ``sizes[i]`` is the pixel count of label
+    ``i + 1``.  Takes a boolean mask, so no loss year is ever exposed.  The
+    caller applies the two-pixel floor; keeping labels and sizes available is
+    what makes the 4-connectivity sensitivity and per-scale support
+    restriction possible.
+    """
+
+    labelled, count = ndimage.label(
+        np.asarray(positive_mask, dtype=bool), structure=_structure(connectivity)
+    )
     if count == 0:
+        return labelled, np.zeros(0, dtype=np.int64)
+    return labelled, np.bincount(labelled.ravel())[1:].astype(np.int64)
+
+
+def count_components(positive_mask: np.ndarray, connectivity: int = 8) -> int:
+    """Frozen event algorithm with the two-pixel floor.
+
+    8-connectivity is primary; 4-connectivity is the frozen sensitivity.
+    """
+
+    _, sizes = label_components(positive_mask, connectivity)
+    if sizes.size == 0:
         return 0
-    sizes = np.bincount(labelled.ravel())[1:]
     return int((sizes >= MIN_COMPONENT_PX).sum())
 
 
