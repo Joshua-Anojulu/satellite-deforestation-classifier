@@ -1,0 +1,14 @@
+{
+  "analysis_allowed": true,
+  "complete": true,
+  "expected_files": 63,
+  "issue_counts": {
+    "CHECKSUM": 0,
+    "LENGTH": 0,
+    "MISSING": 0,
+    "UNEXPECTED": 0
+  },
+  "issues": [],
+  "observed_files": 63,
+  "release": "GFC-2024-v1.12"
+}
