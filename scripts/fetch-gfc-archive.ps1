@@ -70,9 +70,23 @@ Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
 # Benign when the task does not exist yet; judged on exit code, not stderr.
 Invoke-Native { schtasks /delete /TN $TaskName /F } | Out-Null
 
-# `cd /d` so `-m` finds the package on sys.path without PYTHONPATH surviving the
-# logon switch.
-$command = "cmd /c cd /d `"$RepoRoot`" && `"$Python`" -m forecast.gfc_archive > `"$outLog`" 2> `"$errLog`""
+# The repo path contains spaces ("Satellite Image Classifier"), and schtasks /TR
+# re-parses its argument, so an inline command with embedded quotes is read as
+# extra options ("Invalid argument/option - 'Image'").  Put the command in a
+# wrapper .cmd at a space-free path instead, so /TR needs no quoting at all.
+# C:\Users\Public is reachable by the worker; the repo is not, without the grant
+# above, and the profile never is.
+$wrapper = "C:\Users\Public\satclf-gfc-fetch.cmd"
+@"
+@echo off
+cd /d "$RepoRoot"
+"$Python" -m forecast.gfc_archive > "$outLog" 2> "$errLog"
+"@ | Set-Content -Path $wrapper -Encoding ASCII
+Write-Host "[ok] wrote wrapper $wrapper"
+
+# `cd /d` inside the wrapper puts the repo root on sys.path, so `-m` resolves
+# without PYTHONPATH having to survive the logon switch.
+$command = $wrapper
 
 Write-Host "Registering task as $Account..."
 $created = Invoke-Native {
@@ -118,6 +132,7 @@ Write-Host "--- stderr ---"
 if (Test-Path $errLog) { Get-Content $errLog -Tail 30 } else { "(no stderr)" }
 
 Invoke-Native { schtasks /delete /TN $TaskName /F } | Out-Null
+Remove-Item $wrapper -ErrorAction SilentlyContinue
 $plain = $null
 Write-Host ""
 Write-Host "Task removed. Full logs: $outLog / $errLog"
