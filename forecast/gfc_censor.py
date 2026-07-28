@@ -20,6 +20,13 @@ from typing import Any, Mapping
 
 import numpy as np
 
+from ._atomic_publish import (
+    create_placeholder,
+    publish_container,
+    read_container,
+    write_container,
+)
+from ._embargo_seal import verify_seal
 from .sandbox_process import run_sealed_process
 
 PRE_LIFT_MASKS = (
@@ -32,6 +39,22 @@ PRE_LIFT_MASKS = (
 POST_LIFT_MASKS = ("eligible_2022", "positive_2023")
 CENSOR_WORKER = Path(__file__).with_name("gfc_censor_worker.py")
 FROZEN_GFC_RELEASE = "GFC-2024-v1.12"
+
+
+@dataclass(frozen=True)
+class EmbargoSeal:
+    """The trust root a post-lift run is checked against.
+
+    Replaces the old ``sealed_artifact_hashes`` mapping, which proved nothing:
+    any non-empty mapping of 64-character strings was admitted, so
+    ``{"all-frozen-artifacts": "a" * 64}`` passed with no artifact existing.
+    """
+
+    seal_path: Path
+    artifact_root: Path
+    seal_store: Path
+    approved_tree_shas: tuple[str, ...]
+    expected_artifacts: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -128,7 +151,7 @@ def run_censoring(
     *,
     timeout_seconds: float = 60.0,
     temp_parent: str | Path | None = None,
-    sealed_artifact_hashes: Mapping[str, str] | None = None,
+    seal: EmbargoSeal | None = None,
     transition_log: str | Path | None = None,
     transition_utc: str | None = None,
 ) -> CensorTranscript:
@@ -140,12 +163,8 @@ def run_censoring(
     phase = str(request.get("phase", ""))
     if phase not in {"pre_lift", "post_lift"}:
         return _empty_transcript(returncode=64, code="INVALID_REQUEST")
-    if phase == "post_lift":
-        if not sealed_artifact_hashes or transition_log is None:
-            return _empty_transcript(returncode=64, code="EMBARGO_NOT_SEALED")
-        for name, digest in sealed_artifact_hashes.items():
-            if not name or len(str(digest)) != 64:
-                return _empty_transcript(returncode=64, code="EMBARGO_NOT_SEALED")
+    if phase == "post_lift" and (seal is None or transition_log is None):
+        return _empty_transcript(returncode=64, code="EMBARGO_NOT_SEALED")
 
     parent = Path(temp_parent).resolve() if temp_parent is not None else None
     if parent is not None:
@@ -191,16 +210,6 @@ def run_censoring(
         except (OSError, ValueError, json.JSONDecodeError):
             return _empty_transcript(returncode=65, code="OUTPUT_POLICY_VIOLATION")
 
-        publish_dir = destination.with_name(destination.name + ".publishing")
-        if publish_dir.exists():
-            raise FileExistsError(f"Publish staging path exists: {publish_dir}")
-        try:
-            shutil.copytree(output_dir, publish_dir)
-            os.replace(publish_dir, destination)
-        finally:
-            if publish_dir.exists():
-                shutil.rmtree(publish_dir)
-
         transcript = CensorTranscript(
             child_exit_status=result.returncode,
             supervisor_error_code="OK",
@@ -211,22 +220,129 @@ def run_censoring(
             file_sha256=digests,
         )
 
-    if phase == "post_lift":
-        log_path = Path(transition_log).resolve()  # type: ignore[arg-type]
-        if log_path.exists():
-            raise FileExistsError(f"Embargo transition log already exists: {log_path}")
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
+        if phase == "pre_lift":
+            publish_dir = destination.with_name(destination.name + ".publishing")
+            if publish_dir.exists():
+                raise FileExistsError(f"Publish staging path exists: {publish_dir}")
+            try:
+                shutil.copytree(output_dir, publish_dir)
+                os.replace(publish_dir, destination)
+            finally:
+                if publish_dir.exists():
+                    shutil.rmtree(publish_dir)
+            return transcript
+
+        # --- post-lift: one sealed container, one commit ---------------------
+        #
+        # The masks and the transition record are published as a SINGLE object,
+        # so a crash can never leave `positive_2023` readable with no record
+        # that the embargo lifted.  "Exactly one of the two published" is not
+        # representable.
+        return _publish_post_lift(
+            output_dir=output_dir,
+            names=names,
+            destination=destination,
+            seal=seal,  # type: ignore[arg-type]
+            transition_log=Path(transition_log),  # type: ignore[arg-type]
+            transition_utc=transition_utc,
+            transcript=transcript,
+        )
+
+
+def _publish_post_lift(
+    *,
+    output_dir: Path,
+    names: tuple[str, ...],
+    destination: Path,
+    seal: EmbargoSeal,
+    transition_log: Path,
+    transition_utc: str | None,
+    transcript: CensorTranscript,
+) -> CensorTranscript:
+    """Verify the seal under the transition lock, then commit one container."""
+
+    # A separate exclusive lock file provides mutual exclusion.  It is NOT the
+    # transition record: `open("x")` creates a durable object a crash can
+    # strand, which is why the record travels inside the committed container.
+    lock_path = destination.with_name(destination.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        lock_handle = open(lock_path, "x")
+    except FileExistsError:
+        return _empty_transcript(returncode=64, code="TRANSITION_IN_PROGRESS")
+
+    try:
+        # Hashes are recomputed here, while the lock is held: a verification
+        # taken outside it is only a statement about the instant it was taken.
+        verification = verify_seal(
+            seal.seal_path,
+            seal.artifact_root,
+            approved_tree_shas=seal.approved_tree_shas,
+            expected_artifacts=seal.expected_artifacts,
+            seal_store=seal.seal_store,
+        )
+        if not verification.verified:
+            return _empty_transcript(returncode=64, code="EMBARGO_NOT_SEALED")
+
+        if transition_log.exists():
+            raise FileExistsError(f"Embargo transition record already exists: {transition_log}")
+
+        record = {
             "event": "gfc_2023_embargo_lift",
             "timestamp_utc": transition_utc or datetime.now(timezone.utc).isoformat(),
-            "sealed_artifact_hashes": dict(sorted(sealed_artifact_hashes.items())),  # type: ignore[union-attr]
+            "generating_tree_sha": verification.generating_tree_sha,
+            "sealed_artifact_count": verification.artifact_count,
             "handoff_files": dict(transcript.file_sha256),
         }
-        log_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        payload = {name: (output_dir / name).read_bytes() for name in names}
+
+        # Staging and backup sit beside the destination so all three share one
+        # volume, which ReplaceFileW requires.
+        staging = destination.with_name(destination.name + ".staging")
+        backup = destination.with_name(destination.name + ".backup")
+        write_container(payload, record, staging)
+        create_placeholder(destination)
+        outcome = publish_container(staging, destination, backup)
+
+        if not outcome.committed:
+            # `exposed` is never downgraded to a rollback here; the caller reads
+            # the status and follows the roll-forward action.
+            code = "EMBARGO_EXPOSED" if outcome.exposed else "PUBLISH_FAILED"
+            return _empty_transcript(returncode=65, code=code)
+
+        transition_log.parent.mkdir(parents=True, exist_ok=True)
+        transition_log.write_text(
+            json.dumps(record, indent=2, sort_keys=True, allow_nan=False) + "\n",
             encoding="utf-8",
         )
-    return transcript
+        if staging.exists():
+            staging.unlink()
+        return transcript
+    finally:
+        lock_handle.close()
+        if lock_path.exists():
+            lock_path.unlink()
+
+
+def _load_handoff_container(path: Path) -> tuple[dict[str, Any], dict[str, np.ndarray]]:
+    """Read a published post-lift container back into handoff form."""
+
+    import io
+
+    payload, record = read_container(path)
+    document = json.loads(payload["handoff.json"].decode("utf-8"))
+    document["transition_record"] = record
+    arrays = {
+        name: np.load(io.BytesIO(payload[entry["file"]]), allow_pickle=False)
+        for name, entry in document["masks"].items()
+    }
+    return document, arrays
+
+
+def load_transition_record(path: str | Path) -> dict[str, Any]:
+    """Read only the transition record from a published container."""
+
+    return read_container(Path(path))[1]
 
 
 def request_from_frozen_pin(
@@ -259,9 +375,15 @@ def request_from_frozen_pin(
 
 
 def load_handoff(directory: str | Path) -> tuple[dict[str, Any], dict[str, np.ndarray]]:
-    """Load an already-censored handoff; no raw GFC capability is involved."""
+    """Load an already-censored handoff; no raw GFC capability is involved.
+
+    Accepts either a pre-lift handoff directory or a post-lift container file,
+    since post-lift publishes masks and the transition record as one object.
+    """
 
     directory = Path(directory)
+    if directory.is_file():
+        return _load_handoff_container(directory)
     document = json.loads((directory / "handoff.json").read_text(encoding="utf-8"))
     phase = str(document.get("phase", ""))
     _validate_handoff(directory, phase)

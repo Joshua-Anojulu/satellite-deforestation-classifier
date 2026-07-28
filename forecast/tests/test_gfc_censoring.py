@@ -19,12 +19,40 @@ from forecast.gfc_censor import (
     request_from_frozen_pin,
     run_censoring,
 )
+from forecast._embargo_seal import build_seal
 from forecast.prelift_sandbox import PRE_LIFT_ROLES, run_pre_lift_role
 from forecast.sandbox_process import run_sealed_process
 
 
+_APPROVED_TREE = "0123456789abcdef0123456789abcdef01234567"
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _valid_seal(root: Path) -> censor.EmbargoSeal:
+    """Build a genuine seal: real artifacts, real digests, worker-owned store."""
+
+    store = root / "store"
+    artifacts = root / "artifacts"
+    store.mkdir(parents=True, exist_ok=True)
+    artifacts.mkdir(parents=True, exist_ok=True)
+    (artifacts / "manifest.json").write_text('{"frozen": true}', encoding="utf-8")
+    document = build_seal(
+        artifacts,
+        generating_tree_sha=_APPROVED_TREE,
+        result_namespace="specification_w_exploratory",
+        artifacts=["manifest.json"],
+    )
+    (store / "seal.json").write_text(json.dumps(document), encoding="utf-8")
+    return censor.EmbargoSeal(
+        seal_path=store / "seal.json",
+        artifact_root=artifacts,
+        seal_store=store,
+        approved_tree_shas=(_APPROVED_TREE,),
+        expected_artifacts=("manifest.json",),
+    )
 
 
 def _write_tile(path: Path, values: np.ndarray, transform: Affine) -> Path:
@@ -195,24 +223,25 @@ def test_post_lift_complete_transcript_collapses_every_year_after_2023(tmp_path)
     logs = []
     for index, lossyear in enumerate(variants):
         request = _one_tile_request(tmp_path / f"raw-{index}", lossyear, phase="post_lift")
-        output = tmp_path / f"handoff-{index}"
+        output = tmp_path / f"handoff-{index}.container"
         log = tmp_path / f"lift-{index}.json"
         result = run_censoring(
             request,
             output,
             temp_parent=tmp_path / "sandbox",
-            sealed_artifact_hashes={"all-frozen-artifacts": "a" * 64},
+            seal=_valid_seal(tmp_path / f"seal-{index}"),
             transition_log=log,
             transition_utc="2030-01-01T00:00:00+00:00",
         )
+        assert result.succeeded, result.supervisor_error_code
         transcripts.append(result.observable())
-        contents.append(_published_bytes(output))
+        contents.append(output.read_bytes())
         logs.append(log.read_bytes())
 
     assert transcripts.count(transcripts[0]) == len(transcripts)
     assert contents.count(contents[0]) == len(contents)
     assert logs.count(logs[0]) == len(logs)
-    _, masks = load_handoff(tmp_path / "handoff-0")
+    _, masks = load_handoff(tmp_path / "handoff-0.container")
     assert masks["positive_2023"].tolist() == (fixed == 23).tolist()
 
 
@@ -223,6 +252,75 @@ def test_post_lift_refuses_to_run_before_artifacts_are_sealed(tmp_path):
     transcript = run_censoring(request, tmp_path / "handoff")
     assert transcript.supervisor_error_code == "EMBARGO_NOT_SEALED"
     assert not (tmp_path / "handoff").exists()
+
+
+def test_post_lift_rejects_a_forged_seal(tmp_path):
+    """The exact forgery the old implementation admitted must now fail.
+
+    `sealed_artifact_hashes={"all-frozen-artifacts": "a"*64}` used to be
+    accepted with no artifact existing at all.
+    """
+
+    root = tmp_path / "seal-forged"
+    store = root / "store"
+    artifacts = root / "artifacts"
+    store.mkdir(parents=True)
+    artifacts.mkdir(parents=True)
+    (artifacts / "manifest.json").write_text("{}", encoding="utf-8")
+    (store / "seal.json").write_text(json.dumps({
+        "schema_version": 1,
+        "generating_tree_sha": _APPROVED_TREE,
+        "result_namespace": "specification_w_exploratory",
+        "artifacts": {"all-frozen-artifacts": "a" * 64},
+    }), encoding="utf-8")
+
+    forged = censor.EmbargoSeal(
+        seal_path=store / "seal.json",
+        artifact_root=artifacts,
+        seal_store=store,
+        approved_tree_shas=(_APPROVED_TREE,),
+        expected_artifacts=("manifest.json",),
+    )
+    request = _one_tile_request(
+        tmp_path / "raw-forged", np.zeros((2, 2), dtype=np.uint8), phase="post_lift"
+    )
+    transcript = run_censoring(
+        request,
+        tmp_path / "handoff-forged.container",
+        temp_parent=tmp_path / "sandbox-forged",
+        seal=forged,
+        transition_log=tmp_path / "lift-forged.json",
+    )
+    assert transcript.supervisor_error_code == "EMBARGO_NOT_SEALED"
+    assert not (tmp_path / "handoff-forged.container").exists()
+    assert not (tmp_path / "lift-forged.json").exists()
+
+
+def test_post_lift_publishes_masks_and_record_as_one_object(tmp_path):
+    """Never exactly one: the record travels inside the committed container."""
+
+    lossyear = np.array([[23, 0], [0, 22]], dtype=np.uint8)
+    request = _one_tile_request(tmp_path / "raw-one", lossyear, phase="post_lift")
+    output = tmp_path / "handoff-one.container"
+    log = tmp_path / "lift-one.json"
+    result = run_censoring(
+        request,
+        output,
+        temp_parent=tmp_path / "sandbox-one",
+        seal=_valid_seal(tmp_path / "seal-one"),
+        transition_log=log,
+        transition_utc="2030-01-01T00:00:00+00:00",
+    )
+    assert result.succeeded
+
+    document, masks = load_handoff(output)
+    record = censor.load_transition_record(output)
+    assert record["event"] == "gfc_2023_embargo_lift"
+    assert record["generating_tree_sha"] == _APPROVED_TREE
+    assert masks["positive_2023"].tolist() == (lossyear == 23).tolist()
+    # The staging copy is not left behind readable.
+    assert not output.with_name(output.name + ".staging").exists()
+    assert not output.with_name(output.name + ".lock").exists()
 
 
 def test_frozen_pin_drives_release_and_per_tile_checksum_verification(tmp_path):
