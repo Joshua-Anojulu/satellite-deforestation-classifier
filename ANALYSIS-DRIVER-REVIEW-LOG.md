@@ -577,3 +577,53 @@ It is therefore **stronger than self-hashing and weaker than an independent anch
 
 **Plan body unchanged**, so the `approved-final` binding to `030d78fa` still holds; this deviation lives
 in the log by design.
+
+---
+
+## Implementation deviation 2 — raw-GFC isolation mechanism (Phase 0.7, 2026-07-28)
+
+**Approved plan text (Phase 0 step 7):** "A **dedicated least-privilege local account** owns the raw GFC
+directory; the sealed worker runs under it, the interactive analysis account is denied."
+
+**The design is sound; it is unusable on this machine.** Launching *any* process as a second local account
+failed six distinct ways on Windows 11 Home:
+
+1. `Start-Process -Credential` -> `Access is denied` (`CreateProcessWithLogonW` refuses to be called from
+   an elevated process dropping to a standard user).
+2. Scheduled task -> `LastTaskResult = 267011` (never ran).
+3. `SeBatchLogonRight` suspected missing -> it was already held, listed by **name** not SID; the grant
+   script's own verification only matched the SID form and reported a false `[FAIL]`.
+4. Task then reported `LastTaskResult = 0` while producing no output whatsoever.
+5. Root cause of (4): `C:\Users\Public` grants write to `NT AUTHORITY\INTERACTIVE` and
+   `NT AUTHORITY\SERVICE`; a credentialed task runs as **BATCH**, which is in neither, so the redirect
+   targets could not be created.
+6. With an explicitly-granted run directory, `cmd` still never executed -- the step marker, the first line
+   of the wrapper, was never written, while the scheduler still reported success.
+
+Critically this blocks **analysis time**, not just acquisition: the sealed worker must read the tiles too,
+so a design that can never launch as the worker account cannot work at all.
+
+**Mechanism adopted (Josh's decision): the UAC split token.** The directory grants `Administrators` and
+`SYSTEM` and nothing else. The interactive user has **no entry**, so an unelevated process -- which is what
+analysis code is -- has no access; an elevated one reaches it through `Administrators`.
+
+**No deny ACE.** An explicit deny outranks the `Administrators` allow and locks out elevated access too:
+that is exactly what broke acquisition (observed: a 647 MB tile downloaded and verified, then `os.replace`
+raised `WinError 5`, because icacls `(R)` covers `SYNCHRONIZE`/`READ_CONTROL` that the rename's open
+needs). Absence of a grant is what denies the unelevated user.
+
+**What changed about the guarantee, stated plainly:**
+
+| | Previous design | Adopted |
+|---|---|---|
+| Distinguishes | principals (worker vs analysis account) | privilege levels (elevated vs not) |
+| Analysis code (unelevated) can read tiles | no | no |
+| **Any** elevated process can read tiles | no | **yes** |
+| Works on this machine | **no** | yes |
+
+It remains an OS mechanism, not a convention. It is weaker in exactly one way: privilege level rather than
+identity. `require_enforced()` now refuses an **elevated** caller as well, because an elevated observation
+cannot demonstrate the boundary -- only an unelevated process can, and that is the context analysis code
+runs in.
+
+**Plan body unchanged**, so the `approved-final` binding to `030d78fa` still holds.

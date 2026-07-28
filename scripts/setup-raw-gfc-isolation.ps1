@@ -1,75 +1,83 @@
-# Provision raw-GFC process isolation.  RUN ELEVATED (Administrator).
+# Establish elevation-based raw-GFC isolation.  RUN ELEVATED (Administrator).
 #
-# Why this exists: child processes inherit the parent's Windows token, so
-# `icacls` alone cannot separate the sealed GFC worker from analysis code
-# running under the same account.  Anything the worker can read, a sibling
-# child of the analysis account can read too.  Real separation needs a second
-# security principal, and creating one requires administrator rights -- which
-# is why this is a script a human runs once rather than something the pipeline
-# attempts on its own.
+# Goal, unchanged: code running as the ordinary analysis user must not be able
+# to READ raw lossyear.  Denying write was never the point.
 #
-# After running it, verify from a NORMAL (non-elevated) shell:
-#   $env:PYTHONPATH = "<repo root>"
-#   & C:\Users\josha\.venvs\satclf\Scripts\python.exe -m pytest forecast/tests/test_raw_gfc_isolation.py -q
-# The live both-directions test stops skipping and must pass.
+# Mechanism (deviation 2).  The first design gave the tiles to a dedicated
+# least-privilege account and denied the interactive one.  Sound, and unusable
+# here: launching any process as a second local account failed six ways on
+# Windows 11 Home, and it blocks analysis time too, since the sealed worker must
+# read the tiles as well.
+#
+# So the boundary is the UAC split token.  The directory grants Administrators
+# and SYSTEM and nothing else.  An UNELEVATED process has no entry, hence no
+# access; an ELEVATED one reaches it through Administrators.  Analysis code runs
+# unelevated; the sealed worker and the downloader are launched elevated.
+#
+# NO DENY ACE.  An explicit deny outranks the Administrators allow and locks out
+# elevated access as well -- that is exactly what broke acquisition before.
+# Absence of a grant is what denies the unelevated user.
+#
+# Trade-off, stated so it is never glossed: ANY elevated process can read the
+# tiles, not only the sealed worker.  This distinguishes privilege levels, where
+# the previous design distinguished principals.
 
 [CmdletBinding()]
 param(
-    [string]$Account = "satclf-gfc-worker",
-    [string]$RawRoot = "C:\Users\josha\ml-data\deforestation-risk\hansen",
-    [string]$AnalysisUser = $env:USERNAME
+    [string]$RawRoot   = "C:\Users\josha\ml-data\deforestation-risk\hansen",
+    [string]$OldAccount = "satclf-gfc-worker",
+    [switch]$RemoveOldAccount
 )
 
 $ErrorActionPreference = "Stop"
 
-$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw "This script must run elevated. Right-click PowerShell -> Run as Administrator."
 }
 
-Write-Host "Account      : $Account"
-Write-Host "Raw GFC root : $RawRoot"
-Write-Host "Denying read : $AnalysisUser"
+$analysisUser = $env:USERNAME
+Write-Host "Raw GFC root  : $RawRoot"
+Write-Host "Analysis user : $analysisUser (must have NO entry when this finishes)"
 Write-Host ""
 
-# 1. The dedicated least-privilege principal.
-if (Get-LocalUser -Name $Account -ErrorAction SilentlyContinue) {
-    Write-Host "[skip] local account already exists"
-} else {
-    $password = Read-Host -AsSecureString "Password for $Account"
-    New-LocalUser -Name $Account `
-                  -Description "Sealed GFC reader" `
-                  -Password $password `
-                  -PasswordNeverExpires | Out-Null
-    Write-Host "[ok] created local account"
-}
-
-# Keep it out of every group that would grant interactive reach.
-foreach ($group in @("Users", "Administrators")) {
-    if (Get-LocalGroupMember -Group $group -Member $Account -ErrorAction SilentlyContinue) {
-        Remove-LocalGroupMember -Group $group -Member $Account -ErrorAction SilentlyContinue
-        Write-Host "[ok] removed $Account from $group"
-    }
-}
-
-# 2. The raw tile directory.
 New-Item -ItemType Directory -Force $RawRoot | Out-Null
 
-# 3. ACLs.  Inheritance is broken FIRST: an inherited grant to the interactive
-#    account would otherwise survive the deny ACE and silently defeat it.
-& icacls $RawRoot /inheritance:r | Out-Null
-Write-Host "[ok] broke ACL inheritance"
-
-& icacls $RawRoot /grant "${Account}:(OI)(CI)F" | Out-Null
-& icacls $RawRoot /grant "Administrators:(OI)(CI)F" | Out-Null
-& icacls $RawRoot /deny  "${AnalysisUser}:(OI)(CI)R" | Out-Null
-Write-Host "[ok] granted worker + Administrators, denied $AnalysisUser"
-
-Write-Host ""
-Write-Host "Effective permissions:"
+Write-Host "Current ACL:"
 & icacls $RawRoot
+Write-Host ""
+
+# Reset to inherited, then break inheritance again from a clean base.  Doing it
+# in this order clears the old deny ACE and the old worker grant without having
+# to name every entry.
+& icacls $RawRoot /reset /T /Q | Out-Null
+& icacls $RawRoot /inheritance:r | Out-Null
+Write-Host "[ok] cleared previous ACEs and broke inheritance"
+
+& icacls $RawRoot /grant "Administrators:(OI)(CI)F" /Q | Out-Null
+& icacls $RawRoot /grant "SYSTEM:(OI)(CI)F" /Q | Out-Null
+Write-Host "[ok] granted Administrators and SYSTEM only"
+
+# Belt and braces: if a grant for the interactive user survived somehow, drop it.
+& icacls $RawRoot /remove:g "$analysisUser" /T /Q | Out-Null
+Write-Host "[ok] removed any grant for $analysisUser"
+
+if ($RemoveOldAccount) {
+    if (Get-LocalUser -Name $OldAccount -ErrorAction SilentlyContinue) {
+        Remove-LocalUser -Name $OldAccount
+        Write-Host "[ok] deleted the now-unused local account $OldAccount"
+    }
+} elseif (Get-LocalUser -Name $OldAccount -ErrorAction SilentlyContinue) {
+    Write-Host "[note] local account $OldAccount is now unused."
+    Write-Host "       Re-run with -RemoveOldAccount to delete it."
+}
 
 Write-Host ""
-Write-Host "Done. Re-run the isolation tests from a NORMAL shell to confirm both"
-Write-Host "directions: the worker succeeds and the analysis account is denied."
+Write-Host "Resulting ACL:"
+& icacls $RawRoot
+Write-Host ""
+Write-Host "Verify from a NORMAL (unelevated) shell -- that is the only context"
+Write-Host "in which the boundary is observable:"
+Write-Host '  $env:PYTHONPATH = "C:\Users\josha\OneDrive\Documents\Satellite Image Classifier"'
+Write-Host '  & C:\Users\josha\.venvs\satclf\Scripts\python.exe -m pytest forecast/tests/test_raw_gfc_isolation.py -q'
