@@ -78,6 +78,49 @@ class CensorTranscript:
 
         return asdict(self)
 
+    def _project(self, predictor: bool) -> dict[str, object]:
+        selected = tuple(
+            name for name in self.file_names
+            if _is_predictor_artifact(name) == predictor
+        )
+        chosen = set(selected)
+        return {
+            "child_exit_status": self.child_exit_status,
+            "supervisor_error_code": self.supervisor_error_code,
+            "stdout_bytes": self.stdout_bytes,
+            "stderr_bytes": self.stderr_bytes,
+            "file_names": selected,
+            "file_sizes": tuple(item for item in self.file_sizes if item[0] in chosen),
+            "file_sha256": tuple(item for item in self.file_sha256 if item[0] in chosen),
+        }
+
+    def predictor_projection(self) -> dict[str, object]:
+        """The eligibility/predictor half of the transcript.
+
+        The transcript carries ONE combined name/size/hash inventory, so a
+        changed label hash necessarily changes it even when the predictors are
+        untouched.  Future-mutation noninterference is therefore compared on
+        this projection: predictors must not depend on anything after T, while
+        labels legitimately do.
+        """
+
+        return self._project(predictor=True)
+
+    def label_projection(self) -> dict[str, object]:
+        """The label half of the transcript, which future mutation MAY change."""
+
+        return self._project(predictor=False)
+
+
+def _is_predictor_artifact(name: str) -> bool:
+    """Partition published artifacts into predictor/eligibility vs label.
+
+    ``handoff.json`` is metadata (file names, dtypes, static formulas) and is
+    invariant to pixel data, so it belongs to the predictor projection.
+    """
+
+    return not Path(name).name.startswith("positive_")
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
