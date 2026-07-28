@@ -345,3 +345,116 @@ def write_inventory_once(path: str | Path, inventory: Mapping[str, object]) -> P
     with path.open("x", encoding="utf-8") as sink:
         sink.write(json.dumps(inventory, indent=2, sort_keys=True, allow_nan=False) + "\n")
     return path
+
+
+def _url_exists(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, method="HEAD")):
+            return True
+    except Exception:
+        return False
+
+
+def acquire(
+    sites: Sequence[Mapping[str, object]],
+    root: str | Path,
+    *,
+    index: Mapping[str, object] | None = None,
+    origins: Sequence[int] = ORIGINS,
+    log=print,
+) -> list[dict[str, object]]:
+    """Preflight every URL, then download what is missing or unverified.
+
+    Unlike the GFC archive these are PREDICTORS, not the outcome layer, so they
+    live outside the elevation-locked raw-GFC directory and need no privileged
+    context.
+    """
+
+    root = Path(root)
+    index = index if index is not None else load_geofabrik_index()
+
+    regions = required_osm_regions(sites, index)
+    log(f"derived {len(regions)} OSM regions from site footprints")
+    resolved = resolve_available_regions(regions, index, origins, exists=_url_exists)
+    substituted = set(regions) - set(resolved)
+    if substituted:
+        log(f"substituted {sorted(substituted)} -> {sorted(set(resolved) - set(regions))} "
+            "(no dated archive at every origin)")
+
+    tiles = required_srtm_tiles(sites)
+    log(f"derived {len(tiles)} SRTM tiles")
+
+    log("preflight: fetching publisher metadata for every file...")
+    remotes: list[RemoteFile] = []
+    for region, url in sorted(resolved.items()):
+        for origin in origins:
+            remotes.append(head_remote(
+                "roads", f"{region}@{origin}", osm_snapshot_url(url, origin), origin
+            ))
+    for tile in tiles:
+        remotes.append(head_remote("terrain", tile, srtm_tile_url(tile)))
+    total = sum(r.content_length for r in remotes)
+    with_md5 = sum(1 for r in remotes if r.md5)
+    log(f"preflight ok: {len(remotes)} files, {total / 1e9:.2f} GB, "
+        f"{with_md5} with a publisher md5")
+
+    records: list[dict[str, object]] = []
+    for index_of, remote in enumerate(remotes, 1):
+        subdir = "osm" if remote.kind == "roads" else "srtm"
+        suffix = ".osm.pbf" if remote.kind == "roads" else ".zip"
+        name = remote.url.rsplit("/", 1)[-1] if remote.kind == "roads" else f"{remote.key}{suffix}"
+        target = root / subdir / name
+        if target.is_file() and target.stat().st_size == remote.content_length:
+            digest = hashlib.sha256()
+            with target.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(4 * 1024 * 1024), b""):
+                    digest.update(chunk)
+            sha256 = digest.hexdigest()
+            log(f"[{index_of}/{len(remotes)}] have {name}")
+        else:
+            log(f"[{index_of}/{len(remotes)}] fetching {name} "
+                f"({remote.content_length / 1e6:.0f} MB)")
+            sha256 = download_remote(remote, target)
+        record = asdict(remote)
+        record["sha256"] = sha256
+        record["path"] = str(target.relative_to(root)).replace("\\", "/")
+        records.append(record)
+    return records
+
+
+def main() -> None:
+    """CLI entry point.  Needs no elevation: these are predictors, not labels."""
+
+    import argparse
+
+    from risk.config import DATA_ROOT
+
+    parser = argparse.ArgumentParser(description="Acquire and pin the static drivers.")
+    parser.add_argument("--manifest", type=Path,
+                        default=Path(__file__).with_name("artifacts") / "specification_w_manifest.json")
+    parser.add_argument("--root", type=Path, default=Path(DATA_ROOT) / "external" / "static")
+    parser.add_argument("--inventory", type=Path,
+                        default=Path(__file__).with_name("artifacts") / "static_archive_inventory.json")
+    args = parser.parse_args()
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    records = acquire(manifest["sites"], args.root)
+    inventory = build_inventory(records)
+
+    if args.inventory.exists():
+        existing = json.loads(args.inventory.read_text(encoding="utf-8"))
+        if existing != inventory:
+            raise SystemExit(
+                f"refusing to overwrite the write-once inventory at {args.inventory}; "
+                "the archive no longer matches what was pinned"
+            )
+        print(f"inventory unchanged: {args.inventory}")
+    else:
+        write_inventory_once(args.inventory, inventory)
+        print(f"wrote write-once inventory: {args.inventory}")
+    print(f"files={inventory['file_count']} "
+          f"with_publisher_md5={inventory['files_with_publisher_md5']}")
+
+
+if __name__ == "__main__":
+    main()
