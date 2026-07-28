@@ -23,6 +23,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# PowerShell 5.1 turns a native command's stderr into ErrorRecords, and under
+# $ErrorActionPreference = "Stop" that is TERMINATING -- so a benign
+# "task does not exist" from schtasks /delete would kill the script.  Native
+# calls run through this helper and are judged on their exit code instead.
+function Invoke-Native {
+    param([Parameter(Mandatory)][scriptblock]$Block)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { & $Block 2>&1 } finally { $ErrorActionPreference = $previous }
+}
+
 $identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -56,20 +67,29 @@ $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($cred.Password))
 
 Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
-& schtasks /delete /TN $TaskName /F 2>$null | Out-Null
+# Benign when the task does not exist yet; judged on exit code, not stderr.
+Invoke-Native { schtasks /delete /TN $TaskName /F } | Out-Null
 
 # `cd /d` so `-m` finds the package on sys.path without PYTHONPATH surviving the
 # logon switch.
 $command = "cmd /c cd /d `"$RepoRoot`" && `"$Python`" -m forecast.gfc_archive > `"$outLog`" 2> `"$errLog`""
 
 Write-Host "Registering task as $Account..."
-& schtasks /create /TN $TaskName /TR $command /SC ONCE /ST 00:00 `
-           /RU $Account /RP $plain /RL LIMITED /F
-if ($LASTEXITCODE -ne 0) { throw "schtasks /create failed with $LASTEXITCODE" }
+$created = Invoke-Native {
+    schtasks /create /TN $TaskName /TR $command /SC ONCE /ST 00:00 `
+             /RU $Account /RP $plain /RL LIMITED /F
+}
+if ($LASTEXITCODE -ne 0) {
+    $created | ForEach-Object { Write-Host $_ }
+    throw "schtasks /create failed with exit code $LASTEXITCODE"
+}
 
 Write-Host "Starting acquisition. ~10.92 GB; resumable if interrupted."
-& schtasks /run /TN $TaskName | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "schtasks /run failed with $LASTEXITCODE" }
+$started = Invoke-Native { schtasks /run /TN $TaskName }
+if ($LASTEXITCODE -ne 0) {
+    $started | ForEach-Object { Write-Host $_ }
+    throw "schtasks /run failed with exit code $LASTEXITCODE"
+}
 
 Write-Host ""
 Write-Host "Running. Tailing progress -- Ctrl+C here does NOT stop the task."
@@ -85,7 +105,9 @@ while ($true) {
             $lastLine = $lines.Count
         }
     }
-    $status = (& schtasks /query /TN $TaskName /FO LIST | Select-String "Status:") -replace '.*:\s*', ''
+    $query = Invoke-Native { schtasks /query /TN $TaskName /FO LIST }
+    if ($LASTEXITCODE -ne 0) { break }
+    $status = ($query | Select-String "Status:") -replace '.*:\s*', ''
     if ($status -notmatch "Running") { break }
 }
 
@@ -95,7 +117,7 @@ if (Test-Path $outLog) { Get-Content $outLog -Tail 30 } else { "(no stdout)" }
 Write-Host "--- stderr ---"
 if (Test-Path $errLog) { Get-Content $errLog -Tail 30 } else { "(no stderr)" }
 
-& schtasks /delete /TN $TaskName /F 2>$null | Out-Null
+Invoke-Native { schtasks /delete /TN $TaskName /F } | Out-Null
 $plain = $null
 Write-Host ""
 Write-Host "Task removed. Full logs: $outLog / $errLog"
