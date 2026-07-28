@@ -41,10 +41,17 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 $artifacts = Join-Path $RepoRoot "forecast\artifacts"
-# Logs go somewhere the worker can write and you can read.  Your profile is not
-# such a place -- the worker has no access to it.
-$outLog = "C:\Users\Public\gfc-fetch-out.txt"
-$errLog = "C:\Users\Public\gfc-fetch-err.txt"
+
+# Logs need a directory the worker can write under a BATCH logon.  C:\Users\Public
+# is NOT such a place: its write ACEs are granted to NT AUTHORITY\INTERACTIVE and
+# NT AUTHORITY\SERVICE, and a credentialed scheduled task is neither -- it runs as
+# BATCH, which appears nowhere in that ACL.  That is why an earlier run reported
+# exit code 0 while producing no log files at all: the redirects could not be
+# created.  So use a dedicated directory and grant the worker explicitly.
+$runDir = "C:\satclf-run"
+$outLog = "$runDir\gfc-fetch-out.txt"
+$errLog = "$runDir\gfc-fetch-err.txt"
+$marker = "$runDir\gfc-fetch-steps.txt"
 
 # A logon session requires group membership; setup-raw-gfc-isolation.ps1 stripped
 # every group, which is stricter than useful.  The deny ACE is against the
@@ -73,7 +80,11 @@ $cred = Get-Credential -UserName $Account -Message "Password for $Account"
 $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($cred.Password))
 
-Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $runDir | Out-Null
+& icacls $runDir /grant "${Account}:(OI)(CI)M" /Q | Out-Null
+Write-Host "[ok] run directory writable by the worker ($runDir)"
+Remove-Item $outLog, $errLog, $marker -ErrorAction SilentlyContinue
+
 # Benign when the task does not exist yet; judged on exit code, not stderr.
 Invoke-Native { schtasks /delete /TN $TaskName /F } | Out-Null
 
@@ -83,11 +94,17 @@ Invoke-Native { schtasks /delete /TN $TaskName /F } | Out-Null
 # wrapper .cmd at a space-free path instead, so /TR needs no quoting at all.
 # C:\Users\Public is reachable by the worker; the repo is not, without the grant
 # above, and the profile never is.
-$wrapper = "C:\Users\Public\satclf-gfc-fetch.cmd"
+$wrapper = "$runDir\satclf-gfc-fetch.cmd"
+# Step markers so a failure can never again be silent: whatever the last recorded
+# step is, that is where the account's reach ended.
 @"
 @echo off
+echo step1-cmd-started >> "$marker"
 cd /d "$RepoRoot"
+echo step2-cd-repo-exit=%ERRORLEVEL% >> "$marker"
 "$Python" -m forecast.gfc_archive > "$outLog" 2> "$errLog"
+echo step3-python-exit=%ERRORLEVEL% >> "$marker"
+echo step4-done >> "$marker"
 "@ | Set-Content -Path $wrapper -Encoding ASCII
 Write-Host "[ok] wrote wrapper $wrapper"
 
@@ -160,8 +177,19 @@ if ($lastResult -is [int]) {
     "LastTaskResult = $lastResult"
 }
 
+Write-Host "--- steps reached ---"
+if (Test-Path $marker) {
+    Get-Content $marker
+} else {
+    Write-Host "(marker never created - cmd itself never ran as this account)"
+}
+
 Invoke-Native { schtasks /delete /TN $TaskName /F } | Out-Null
-Remove-Item $wrapper -ErrorAction SilentlyContinue
 $plain = $null
 Write-Host ""
-Write-Host "Task removed. Full logs: $outLog / $errLog"
+# Artifacts are deliberately LEFT IN PLACE: deleting them is what made the
+# earlier failures undiagnosable.
+Write-Host "Artifacts kept for inspection in $runDir"
+Write-Host "  logs   : $outLog / $errLog"
+Write-Host "  steps  : $marker"
+Write-Host "  wrapper: $wrapper"
