@@ -286,6 +286,56 @@ def test_a_failed_verification_discards_the_partial(tmp_path):
     assert not target.exists()
 
 
+def test_cached_digest_is_reused_only_when_the_length_still_matches(tmp_path):
+    """Re-hashing everything on each resume is what stalls a interrupted run.
+
+    The cache is trusted only while the file's length still matches, so a
+    truncated or replaced file falls back to a real hash.
+    """
+
+    from forecast.static_archive import cached_sha256, store_sha256
+
+    target = tmp_path / "x.pbf"
+    target.write_bytes(b"0123456789")
+    store_sha256(target, "a" * 64)
+
+    assert cached_sha256(target, 10) == "a" * 64
+    assert cached_sha256(target, 11) is None, "length mismatch must invalidate the cache"
+
+    target.write_bytes(b"012")
+    assert cached_sha256(target, 10) is None
+
+
+def test_missing_or_malformed_sidecar_is_ignored(tmp_path):
+    from forecast.static_archive import cached_sha256, store_sha256
+
+    target = tmp_path / "x.pbf"
+    target.write_bytes(b"0123456789")
+    assert cached_sha256(target, 10) is None
+
+    store_sha256(target, "tooshort")
+    assert cached_sha256(target, 10) is None
+
+
+def test_plan_round_trips_so_later_passes_skip_the_preflight(tmp_path):
+    from forecast.static_archive import load_plan, save_plan
+
+    remotes = [
+        RemoteFile("roads", "peru@2020", "https://example/peru.pbf", 2020, 123, ""),
+        RemoteFile("terrain", "srtm_26_14", "https://example/t.zip", None, 456, "ab" * 16),
+    ]
+    assert load_plan(tmp_path) is None
+    save_plan(tmp_path, remotes)
+    assert load_plan(tmp_path) == remotes
+
+
+def test_a_corrupt_plan_is_ignored_rather_than_crashing(tmp_path):
+    from forecast.static_archive import PLAN_FILENAME, load_plan
+
+    (tmp_path / PLAN_FILENAME).write_text("{not json", encoding="utf-8")
+    assert load_plan(tmp_path) is None
+
+
 def test_inventory_states_the_weaker_anchor_and_counts_publisher_digests():
     records = [
         {"kind": "roads", "key": "peru@2020", "md5": "", "sha256": "a"},

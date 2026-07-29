@@ -384,6 +384,59 @@ def write_inventory_once(path: str | Path, inventory: Mapping[str, object]) -> P
     return path
 
 
+PLAN_FILENAME = ".acquisition-plan.json"
+
+
+def _sidecar(target: Path) -> Path:
+    return target.with_name(target.name + ".sha256")
+
+
+def cached_sha256(target: Path, expected_length: int) -> str | None:
+    """Return a previously computed digest, if it still describes this file.
+
+    Re-hashing every completed file on each resume is what stops a repeatedly
+    interrupted run from converging: the fixed cost grows with the archive until
+    it consumes the whole window before a single new byte is fetched.  The
+    sidecar is only trusted when the length still matches, and it is written
+    only after the file has been verified.
+    """
+
+    side = _sidecar(target)
+    if not side.exists() or not target.is_file():
+        return None
+    if target.stat().st_size != expected_length:
+        return None
+    digest = side.read_text(encoding="utf-8").strip()
+    return digest if len(digest) == 64 else None
+
+
+def store_sha256(target: Path, digest: str) -> None:
+    _sidecar(target).write_text(digest + "\n", encoding="utf-8")
+
+
+def save_plan(root: Path, remotes: Sequence[RemoteFile]) -> Path:
+    """Persist the resolved acquisition plan so later passes skip the preflight."""
+
+    path = root / PLAN_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps([asdict(r) for r in remotes], indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def load_plan(root: Path) -> list[RemoteFile] | None:
+    path = root / PLAN_FILENAME
+    if not path.exists():
+        return None
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+        return [RemoteFile(**row) for row in rows]
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+
+
 def _url_exists(url: str) -> bool:
     try:
         with urllib.request.urlopen(urllib.request.Request(url, method="HEAD")):
@@ -408,32 +461,44 @@ def acquire(
     """
 
     root = Path(root)
-    index = index if index is not None else load_geofabrik_index()
 
-    regions = required_osm_regions(sites, index)
-    log(f"derived {len(regions)} OSM regions from site footprints")
-    resolved = resolve_available_regions(regions, index, origins, exists=_url_exists)
-    substituted = set(regions) - set(resolved)
-    if substituted:
-        log(f"substituted {sorted(substituted)} -> {sorted(set(resolved) - set(regions))} "
-            "(no dated archive at every origin)")
+    # Reuse a saved plan when one exists.  Re-deriving regions, re-resolving
+    # availability (39 HEADs) and re-preflighting (64 HEADs) on every pass is
+    # pure overhead once the answer is known, and a pass that spends its whole
+    # window on that overhead downloads nothing at all -- which is exactly what
+    # happened on pass 4.
+    remotes = load_plan(root)
+    if remotes:
+        log(f"reusing saved plan: {len(remotes)} files "
+            f"({sum(r.content_length for r in remotes) / 1e9:.2f} GB)")
+    else:
+        index = index if index is not None else load_geofabrik_index()
+        regions = required_osm_regions(sites, index)
+        log(f"derived {len(regions)} OSM regions from site footprints")
+        resolved = resolve_available_regions(regions, index, origins, exists=_url_exists)
+        substituted = set(regions) - set(resolved)
+        if substituted:
+            log(f"substituted {sorted(substituted)} -> "
+                f"{sorted(set(resolved) - set(regions))} "
+                "(no dated archive at every origin)")
 
-    tiles = required_srtm_tiles(sites)
-    log(f"derived {len(tiles)} SRTM tiles")
+        tiles = required_srtm_tiles(sites)
+        log(f"derived {len(tiles)} SRTM tiles")
 
-    log("preflight: fetching publisher metadata for every file...")
-    remotes: list[RemoteFile] = []
-    for region, url in sorted(resolved.items()):
-        for origin in origins:
-            remotes.append(head_remote(
-                "roads", f"{region}@{origin}", osm_snapshot_url(url, origin), origin
-            ))
-    for tile in tiles:
-        remotes.append(head_remote("terrain", tile, srtm_tile_url(tile)))
-    total = sum(r.content_length for r in remotes)
-    with_md5 = sum(1 for r in remotes if r.md5)
-    log(f"preflight ok: {len(remotes)} files, {total / 1e9:.2f} GB, "
-        f"{with_md5} with a publisher md5")
+        log("preflight: fetching publisher metadata for every file...")
+        remotes = []
+        for region, url in sorted(resolved.items()):
+            for origin in origins:
+                remotes.append(head_remote(
+                    "roads", f"{region}@{origin}", osm_snapshot_url(url, origin), origin
+                ))
+        for tile in tiles:
+            remotes.append(head_remote("terrain", tile, srtm_tile_url(tile)))
+        total = sum(r.content_length for r in remotes)
+        with_md5 = sum(1 for r in remotes if r.md5)
+        log(f"preflight ok: {len(remotes)} files, {total / 1e9:.2f} GB, "
+            f"{with_md5} with a publisher md5")
+        save_plan(root, remotes)
 
     records: list[dict[str, object]] = []
     for index_of, remote in enumerate(remotes, 1):
@@ -441,17 +506,23 @@ def acquire(
         suffix = ".osm.pbf" if remote.kind == "roads" else ".zip"
         name = remote.url.rsplit("/", 1)[-1] if remote.kind == "roads" else f"{remote.key}{suffix}"
         target = root / subdir / name
-        if target.is_file() and target.stat().st_size == remote.content_length:
+        cached = cached_sha256(target, remote.content_length)
+        if cached is not None:
+            sha256 = cached
+            log(f"[{index_of}/{len(remotes)}] have {name} (cached digest)")
+        elif target.is_file() and target.stat().st_size == remote.content_length:
             digest = hashlib.sha256()
             with target.open("rb") as stream:
                 for chunk in iter(lambda: stream.read(4 * 1024 * 1024), b""):
                     digest.update(chunk)
             sha256 = digest.hexdigest()
-            log(f"[{index_of}/{len(remotes)}] have {name}")
+            store_sha256(target, sha256)
+            log(f"[{index_of}/{len(remotes)}] have {name} (hashed)")
         else:
             log(f"[{index_of}/{len(remotes)}] fetching {name} "
                 f"({remote.content_length / 1e6:.0f} MB)")
             sha256 = download_remote(remote, target)
+            store_sha256(target, sha256)
         record = asdict(remote)
         record["sha256"] = sha256
         record["path"] = str(target.relative_to(root)).replace("\\", "/")
