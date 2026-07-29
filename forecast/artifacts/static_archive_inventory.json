@@ -1,0 +1,654 @@
+{
+  "file_count": 64,
+  "files": {
+    "roads/argentina@2020": {
+      "content_length": 201825731,
+      "key": "argentina@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/argentina-200101.osm.pbf",
+      "sha256": "9b7c5075472bfbd0d2a9e92a12ac3a8ce5daddd74ebb2156ec7bd322a933c1d3",
+      "url": "https://download.geofabrik.de/south-america/argentina-200101.osm.pbf"
+    },
+    "roads/argentina@2021": {
+      "content_length": 248673987,
+      "key": "argentina@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/argentina-210101.osm.pbf",
+      "sha256": "571e414f7491e2fb3ab3f6d015ba938edc2707117324cb8fdb963b03d1cdaf0c",
+      "url": "https://download.geofabrik.de/south-america/argentina-210101.osm.pbf"
+    },
+    "roads/argentina@2022": {
+      "content_length": 281623548,
+      "key": "argentina@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/argentina-220101.osm.pbf",
+      "sha256": "e81a5f400e2d54bbbabd5165c2811bcdbee1c552189623dd480a7b41fd7c8728",
+      "url": "https://download.geofabrik.de/south-america/argentina-220101.osm.pbf"
+    },
+    "roads/bolivia@2020": {
+      "content_length": 90879210,
+      "key": "bolivia@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/bolivia-200101.osm.pbf",
+      "sha256": "47fdf71e4ff72b5f1da7a5135d911fac57a496ad8e9037995c8c1036ab7bb974",
+      "url": "https://download.geofabrik.de/south-america/bolivia-200101.osm.pbf"
+    },
+    "roads/bolivia@2021": {
+      "content_length": 104128155,
+      "key": "bolivia@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/bolivia-210101.osm.pbf",
+      "sha256": "cc64e32328874ba99bb5f011bc5b8b9589a46ecdcfd581fa869e1e94069daca1",
+      "url": "https://download.geofabrik.de/south-america/bolivia-210101.osm.pbf"
+    },
+    "roads/bolivia@2022": {
+      "content_length": 116691562,
+      "key": "bolivia@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/bolivia-220101.osm.pbf",
+      "sha256": "497bec1bef71bb5ddf36c79bc5b78d42d1b444b080ceb75f19ca75f31c942141",
+      "url": "https://download.geofabrik.de/south-america/bolivia-220101.osm.pbf"
+    },
+    "roads/centro-oeste@2020": {
+      "content_length": 65642498,
+      "key": "centro-oeste@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/centro-oeste-200101.osm.pbf",
+      "sha256": "07625adf701721f7d84ff761b32deb57fffee406de7bbb9921ad7db7249afb24",
+      "url": "https://download.geofabrik.de/south-america/brazil/centro-oeste-200101.osm.pbf"
+    },
+    "roads/centro-oeste@2021": {
+      "content_length": 86792230,
+      "key": "centro-oeste@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/centro-oeste-210101.osm.pbf",
+      "sha256": "ca6504b0ac1fff3eb6a60a0248f6043d293d79167603b9318312fed81e75f7c1",
+      "url": "https://download.geofabrik.de/south-america/brazil/centro-oeste-210101.osm.pbf"
+    },
+    "roads/centro-oeste@2022": {
+      "content_length": 106451118,
+      "key": "centro-oeste@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/centro-oeste-220101.osm.pbf",
+      "sha256": "0cdcf594b502e78313f4962071513d6db572bfa783056f466b7a42e0143ef063",
+      "url": "https://download.geofabrik.de/south-america/brazil/centro-oeste-220101.osm.pbf"
+    },
+    "roads/colombia@2020": {
+      "content_length": 146709214,
+      "key": "colombia@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/colombia-200101.osm.pbf",
+      "sha256": "2890d3b2e1e10ffbcad8222361360a83ebdcbda580713a073728478677045812",
+      "url": "https://download.geofabrik.de/south-america/colombia-200101.osm.pbf"
+    },
+    "roads/colombia@2021": {
+      "content_length": 189525470,
+      "key": "colombia@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/colombia-210101.osm.pbf",
+      "sha256": "05b5385905ece55e6bcc992c9de83083c15c84b37134b4af1e16d4f4f1fe3e78",
+      "url": "https://download.geofabrik.de/south-america/colombia-210101.osm.pbf"
+    },
+    "roads/colombia@2022": {
+      "content_length": 214146599,
+      "key": "colombia@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/colombia-220101.osm.pbf",
+      "sha256": "2fede92ef237e40ae1b35478df6e80427541b335f2a97a6a3279e64cdb33a071",
+      "url": "https://download.geofabrik.de/south-america/colombia-220101.osm.pbf"
+    },
+    "roads/congo-democratic-republic@2020": {
+      "content_length": 178644122,
+      "key": "congo-democratic-republic@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/congo-democratic-republic-200101.osm.pbf",
+      "sha256": "6c4c6e5a5c797f6d51c76b68d46a919bdc81905116e2c572d0ef437962b81f28",
+      "url": "https://download.geofabrik.de/africa/congo-democratic-republic-200101.osm.pbf"
+    },
+    "roads/congo-democratic-republic@2021": {
+      "content_length": 224297280,
+      "key": "congo-democratic-republic@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/congo-democratic-republic-210101.osm.pbf",
+      "sha256": "7d16188ab986eaaf86e5ecfc26eee76494dc862e972dc9ae891d18793c484a91",
+      "url": "https://download.geofabrik.de/africa/congo-democratic-republic-210101.osm.pbf"
+    },
+    "roads/congo-democratic-republic@2022": {
+      "content_length": 334759077,
+      "key": "congo-democratic-republic@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/congo-democratic-republic-220101.osm.pbf",
+      "sha256": "f9aefa0e5ac4658b17b16be48de87b52fb009580970f10efa176fb34d948ea5c",
+      "url": "https://download.geofabrik.de/africa/congo-democratic-republic-220101.osm.pbf"
+    },
+    "roads/haiti-and-domrep@2020": {
+      "content_length": 65390476,
+      "key": "haiti-and-domrep@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/haiti-and-domrep-200101.osm.pbf",
+      "sha256": "a5ea2a7f5f7933cab7c79104c6a84bfd0bcdd60ea3d02fabbc8ae37994b2dd82",
+      "url": "https://download.geofabrik.de/central-america/haiti-and-domrep-200101.osm.pbf"
+    },
+    "roads/haiti-and-domrep@2021": {
+      "content_length": 72624420,
+      "key": "haiti-and-domrep@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/haiti-and-domrep-210101.osm.pbf",
+      "sha256": "1fede71076e68174998b4f1185c82d24d54f34d8763c8b5530de514c2dc38aad",
+      "url": "https://download.geofabrik.de/central-america/haiti-and-domrep-210101.osm.pbf"
+    },
+    "roads/haiti-and-domrep@2022": {
+      "content_length": 78075719,
+      "key": "haiti-and-domrep@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/haiti-and-domrep-220101.osm.pbf",
+      "sha256": "88b958aaa1011792aff52d354bb797177312ef1f85e36cfb13084f32ac5c6c87",
+      "url": "https://download.geofabrik.de/central-america/haiti-and-domrep-220101.osm.pbf"
+    },
+    "roads/indonesia@2020": {
+      "content_length": 1015696432,
+      "key": "indonesia@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/indonesia-200101.osm.pbf",
+      "sha256": "9b4abb2e0298f4faf8ddfa18cdf05ae8b9ec63f6c88a05cbfd2f363b7227b9a2",
+      "url": "https://download.geofabrik.de/asia/indonesia-200101.osm.pbf"
+    },
+    "roads/indonesia@2021": {
+      "content_length": 1241251390,
+      "key": "indonesia@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/indonesia-210101.osm.pbf",
+      "sha256": "cb691762d06f2071c16007e372b87d7968c6ed240b7020cc692915486d44ded4",
+      "url": "https://download.geofabrik.de/asia/indonesia-210101.osm.pbf"
+    },
+    "roads/indonesia@2022": {
+      "content_length": 1433374352,
+      "key": "indonesia@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/indonesia-220101.osm.pbf",
+      "sha256": "d2ee9f56b16c39e6c378b6580d38420058d8f7e94f31e90c1a00e253be69d346",
+      "url": "https://download.geofabrik.de/asia/indonesia-220101.osm.pbf"
+    },
+    "roads/malaysia-singapore-brunei@2020": {
+      "content_length": 114708929,
+      "key": "malaysia-singapore-brunei@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/malaysia-singapore-brunei-200101.osm.pbf",
+      "sha256": "9598899fd95cda1a29ca2abb1e90d5454e604cc0e3dcf40c9ea32d3d6c6f8876",
+      "url": "https://download.geofabrik.de/asia/malaysia-singapore-brunei-200101.osm.pbf"
+    },
+    "roads/malaysia-singapore-brunei@2021": {
+      "content_length": 168839893,
+      "key": "malaysia-singapore-brunei@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/malaysia-singapore-brunei-210101.osm.pbf",
+      "sha256": "c2f3337eceaaa5d4eda687b774b90f0abec609f35509d8b51097a09a3e9efcf4",
+      "url": "https://download.geofabrik.de/asia/malaysia-singapore-brunei-210101.osm.pbf"
+    },
+    "roads/malaysia-singapore-brunei@2022": {
+      "content_length": 186468790,
+      "key": "malaysia-singapore-brunei@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/malaysia-singapore-brunei-220101.osm.pbf",
+      "sha256": "d1f606846286fd1cdb8c5b368a4a5786901ed646b5b541aba4acf5c85765d5b8",
+      "url": "https://download.geofabrik.de/asia/malaysia-singapore-brunei-220101.osm.pbf"
+    },
+    "roads/nordeste@2020": {
+      "content_length": 128435878,
+      "key": "nordeste@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/nordeste-200101.osm.pbf",
+      "sha256": "5201c332f0bf69315ea4984b20212e514e60df99148684fd7b569f8bf4aefbf6",
+      "url": "https://download.geofabrik.de/south-america/brazil/nordeste-200101.osm.pbf"
+    },
+    "roads/nordeste@2021": {
+      "content_length": 241495101,
+      "key": "nordeste@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/nordeste-210101.osm.pbf",
+      "sha256": "15601584c3b2399b7ed611d416bab70dc469437bd5bedd74c2d257bffa254154",
+      "url": "https://download.geofabrik.de/south-america/brazil/nordeste-210101.osm.pbf"
+    },
+    "roads/nordeste@2022": {
+      "content_length": 283845258,
+      "key": "nordeste@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/nordeste-220101.osm.pbf",
+      "sha256": "defaf73066b9ff0b483853ff56a16dbbd4904a606c3fae0218853d98aa68aacf",
+      "url": "https://download.geofabrik.de/south-america/brazil/nordeste-220101.osm.pbf"
+    },
+    "roads/norte@2020": {
+      "content_length": 64249443,
+      "key": "norte@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/norte-200101.osm.pbf",
+      "sha256": "6002c3a22e4608faa314225f7a567b6d7cd202d5c64cff954e870b2ea8dc872a",
+      "url": "https://download.geofabrik.de/south-america/brazil/norte-200101.osm.pbf"
+    },
+    "roads/norte@2021": {
+      "content_length": 89766018,
+      "key": "norte@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/norte-210101.osm.pbf",
+      "sha256": "bfb61281b191338248276b41d3b1061cd82722b78c7a3df196d6a7938372b4b3",
+      "url": "https://download.geofabrik.de/south-america/brazil/norte-210101.osm.pbf"
+    },
+    "roads/norte@2022": {
+      "content_length": 98216510,
+      "key": "norte@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/norte-220101.osm.pbf",
+      "sha256": "e86d71546862fab3577a38221507ab5973ca3c93e57c9e54bc45a07d1813ce9a",
+      "url": "https://download.geofabrik.de/south-america/brazil/norte-220101.osm.pbf"
+    },
+    "roads/paraguay@2020": {
+      "content_length": 79456279,
+      "key": "paraguay@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/paraguay-200101.osm.pbf",
+      "sha256": "68ed54b25b27134ca22314d9213285efc46382fec7c119b35988632b98545b19",
+      "url": "https://download.geofabrik.de/south-america/paraguay-200101.osm.pbf"
+    },
+    "roads/paraguay@2021": {
+      "content_length": 92995543,
+      "key": "paraguay@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/paraguay-210101.osm.pbf",
+      "sha256": "80b989108064f65a8dab1741581e6543213975e47d69f0cc3825579dca9e5f3e",
+      "url": "https://download.geofabrik.de/south-america/paraguay-210101.osm.pbf"
+    },
+    "roads/paraguay@2022": {
+      "content_length": 123815822,
+      "key": "paraguay@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/paraguay-220101.osm.pbf",
+      "sha256": "4193cf5ee49fb8e29969ee4db0ecfaf531ea4462b5b6ee4fec71ce2d2ae728e9",
+      "url": "https://download.geofabrik.de/south-america/paraguay-220101.osm.pbf"
+    },
+    "roads/peru@2020": {
+      "content_length": 119562440,
+      "key": "peru@2020",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2020,
+      "path": "osm/peru-200101.osm.pbf",
+      "sha256": "f62b99a7886735fac4a71a739fc2556a769072dc98e3156397e4409f08b86f86",
+      "url": "https://download.geofabrik.de/south-america/peru-200101.osm.pbf"
+    },
+    "roads/peru@2021": {
+      "content_length": 168818841,
+      "key": "peru@2021",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2021,
+      "path": "osm/peru-210101.osm.pbf",
+      "sha256": "4a40f7d94e02e97c706fbe0e4a3dad3e2544bffd950eae4b76e62a3a401f0901",
+      "url": "https://download.geofabrik.de/south-america/peru-210101.osm.pbf"
+    },
+    "roads/peru@2022": {
+      "content_length": 183167912,
+      "key": "peru@2022",
+      "kind": "roads",
+      "md5": "",
+      "origin": 2022,
+      "path": "osm/peru-220101.osm.pbf",
+      "sha256": "a6015433510859e838091cee6ec395e28eb4d70d91babba6b939e78e8e406920",
+      "url": "https://download.geofabrik.de/south-america/peru-220101.osm.pbf"
+    },
+    "terrain/srtm_21_13": {
+      "content_length": 40127157,
+      "key": "srtm_21_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_21_13.zip",
+      "sha256": "feeac96a6cd97e60e30bc351b1e9e95c75850949f48a1333619bb89b14aed6af",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_21_13.zip"
+    },
+    "terrain/srtm_21_14": {
+      "content_length": 42660875,
+      "key": "srtm_21_14",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_21_14.zip",
+      "sha256": "2eb2f3f9d44dac08c742cb6bb244b7f1e984ac34f35c91fae511b97c707ac328",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_21_14.zip"
+    },
+    "terrain/srtm_21_15": {
+      "content_length": 20320331,
+      "key": "srtm_21_15",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_21_15.zip",
+      "sha256": "73871695c8dcdd965d0fc64751368ebb017a015b734da0e76c47355a676e99e8",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_21_15.zip"
+    },
+    "terrain/srtm_22_09": {
+      "content_length": 9639276,
+      "key": "srtm_22_09",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_22_09.zip",
+      "sha256": "4be0ae962130bb11e8d414b54e0e4981306dda3e011ab01ac6ab6349e94d897c",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_22_09.zip"
+    },
+    "terrain/srtm_22_12": {
+      "content_length": 31708709,
+      "key": "srtm_22_12",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_22_12.zip",
+      "sha256": "0f8077bdd1c4f6e7b25be238fedcfda166c314fd48070c5e9c797e3f3fb30b7d",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_22_12.zip"
+    },
+    "terrain/srtm_22_13": {
+      "content_length": 26076987,
+      "key": "srtm_22_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_22_13.zip",
+      "sha256": "ab7969b844f2fcc76ab41cef4009d8fb43edbe6d17444ef1f1175fa4b3667f2e",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_22_13.zip"
+    },
+    "terrain/srtm_23_12": {
+      "content_length": 30342932,
+      "key": "srtm_23_12",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_23_12.zip",
+      "sha256": "837298d4a76259d9a983bfb68c67ef7ed3accd7650dcd88c352e4dfa764c1cfd",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_23_12.zip"
+    },
+    "terrain/srtm_23_14": {
+      "content_length": 26926536,
+      "key": "srtm_23_14",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_23_14.zip",
+      "sha256": "d418bed0796d8bd43dc2639b3eead3ebbed1e0271a66e5c850a92dfec12d597e",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_23_14.zip"
+    },
+    "terrain/srtm_24_12": {
+      "content_length": 35393685,
+      "key": "srtm_24_12",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_24_12.zip",
+      "sha256": "13fa404a58ad1e8927a8a35ea01493b8a2134a8fa3301df407060041c87c4221",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_24_12.zip"
+    },
+    "terrain/srtm_24_14": {
+      "content_length": 24861160,
+      "key": "srtm_24_14",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_24_14.zip",
+      "sha256": "5cd85452732dd805b3769a58f3ac132bca10294bffc09c46305019ee5626940d",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_24_14.zip"
+    },
+    "terrain/srtm_24_15": {
+      "content_length": 28145775,
+      "key": "srtm_24_15",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_24_15.zip",
+      "sha256": "56c6d4c2dbbd4c135e23c27857d4382fa9861a06c8eb91d1a89af9acee0b6dee",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_24_15.zip"
+    },
+    "terrain/srtm_24_17": {
+      "content_length": 28041263,
+      "key": "srtm_24_17",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_24_17.zip",
+      "sha256": "2766106c4761f3dd63be10248c80f6cea99eddfe0be974c9139e513e3a2b912f",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_24_17.zip"
+    },
+    "terrain/srtm_25_16": {
+      "content_length": 25236312,
+      "key": "srtm_25_16",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_25_16.zip",
+      "sha256": "1429f17b2a7a16d75ded3d98e21ff7a12b90bd28330e589a3393f62c59f3ba8d",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_25_16.zip"
+    },
+    "terrain/srtm_25_17": {
+      "content_length": 24929669,
+      "key": "srtm_25_17",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_25_17.zip",
+      "sha256": "e9f72d8abfe011a2c0594dff29c4cd39910d19f41cce1147f5908cb531930f9b",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_25_17.zip"
+    },
+    "terrain/srtm_26_13": {
+      "content_length": 30483868,
+      "key": "srtm_26_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_26_13.zip",
+      "sha256": "df7e3c8e4c43eb5d95c9aab17f38e2c5398f88063232a505ff23bb98bc91518f",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_26_13.zip"
+    },
+    "terrain/srtm_28_14": {
+      "content_length": 31834806,
+      "key": "srtm_28_14",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_28_14.zip",
+      "sha256": "15357bd0816f831ab1b87b53bba45f60ba78d54e49ba62600d8cc28d5dcf8bd8",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_28_14.zip"
+    },
+    "terrain/srtm_28_15": {
+      "content_length": 34318261,
+      "key": "srtm_28_15",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_28_15.zip",
+      "sha256": "6b6682d5ee4bea8d206766441bd1ef6464d22c16354d133b3c011194ad3ff5fe",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_28_15.zip"
+    },
+    "terrain/srtm_29_14": {
+      "content_length": 33008792,
+      "key": "srtm_29_14",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_29_14.zip",
+      "sha256": "b53a3119a433c44e554313b4d656129d02c22c6322b20a97e6ca36ca800795cf",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_29_14.zip"
+    },
+    "terrain/srtm_40_13": {
+      "content_length": 28927179,
+      "key": "srtm_40_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_40_13.zip",
+      "sha256": "c826b29b054f66a592823be606d5a04bebb6a6dede81b8c0931c2886033077bd",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_40_13.zip"
+    },
+    "terrain/srtm_41_12": {
+      "content_length": 29264027,
+      "key": "srtm_41_12",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_41_12.zip",
+      "sha256": "1a4e4d5dec64176b1b5d3955f50dc6e822701f495992bb8eb86afdddc8026f5c",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_41_12.zip"
+    },
+    "terrain/srtm_41_13": {
+      "content_length": 32660993,
+      "key": "srtm_41_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_41_13.zip",
+      "sha256": "4287384d32b45fe28780b99bdd63f7ba2846c3c88df7532460df83a2c700ff3a",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_41_13.zip"
+    },
+    "terrain/srtm_42_12": {
+      "content_length": 33067690,
+      "key": "srtm_42_12",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_42_12.zip",
+      "sha256": "fd9303260d41ea2d1d59e705b44c6580a33dc6ae0076f9efceff03ebb88e1b0d",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_42_12.zip"
+    },
+    "terrain/srtm_42_13": {
+      "content_length": 38993160,
+      "key": "srtm_42_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_42_13.zip",
+      "sha256": "44d93c1359d7dc688cd842708c5947e7ae2edf9d3dba6e785f535363270aa105",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_42_13.zip"
+    },
+    "terrain/srtm_57_12": {
+      "content_length": 19676279,
+      "key": "srtm_57_12",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_57_12.zip",
+      "sha256": "47051d3def6a5b5cd963b85c29afe29c631b934a816177fe0daecc3f76aa00af",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_57_12.zip"
+    },
+    "terrain/srtm_57_13": {
+      "content_length": 24418407,
+      "key": "srtm_57_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_57_13.zip",
+      "sha256": "de3bf04cc7accc4cb0d9659f2bd1c182c18527d1fd2434dcbac76c0495aad10a",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_57_13.zip"
+    },
+    "terrain/srtm_58_13": {
+      "content_length": 4496488,
+      "key": "srtm_58_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_58_13.zip",
+      "sha256": "a2c414b2efbb3e90cfe5d36d678096fdc9446ae95ca4cebfaa1a3d854c45ebf9",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_58_13.zip"
+    },
+    "terrain/srtm_59_12": {
+      "content_length": 26125570,
+      "key": "srtm_59_12",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_59_12.zip",
+      "sha256": "43ecf4f25a98c90f6c33e8a191da630705c9e6524b35f7c6e8509f0d1202f629",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_59_12.zip"
+    },
+    "terrain/srtm_59_13": {
+      "content_length": 20079630,
+      "key": "srtm_59_13",
+      "kind": "terrain",
+      "md5": "",
+      "origin": null,
+      "path": "srtm/srtm_59_13.zip",
+      "sha256": "1e40fef8d14c67aace298dbfc7991a0786aee2011f987a436b469427b9edbcaf",
+      "url": "https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/srtm_59_13.zip"
+    }
+  },
+  "files_with_publisher_md5": 0,
+  "origins": [
+    2020,
+    2021,
+    2022
+  ],
+  "pinning_anchor": "URL + content length + sha256 on receipt only. NEITHER source offers a publisher checksum: Geofabrik publishes no .md5 sidecar for dated archives, and SRTM's ETag is not a plain md5 (measured: 0 of 28 tiles returned a usable digest). This detects a truncated or corrupted transfer and nothing about the source, so it is WEAKER than the GFC archive, which carries the publisher's own md5 and object generation. NOT an independent third-party manifest.",
+  "schema_version": 1,
+  "srtm_version": "SRTM v4.1 (CGIAR-CSI, 2008 release)"
+}
