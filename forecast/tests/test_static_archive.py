@@ -173,9 +173,10 @@ def test_only_a_plain_hex_etag_counts_as_an_md5():
 
 
 class _Response:
-    def __init__(self, body=b"", headers=None):
+    def __init__(self, body=b"", headers=None, status=200):
         self._body = io.BytesIO(body)
         self.headers = headers or {}
+        self.status = status
 
     def read(self, size=-1):
         return self._body.read(size)
@@ -219,6 +220,70 @@ def test_download_returns_sha256(tmp_path):
     digest = download_remote(_remote(body), target, opener=lambda u: _Response(body))
     assert digest == hashlib.sha256(body).hexdigest()
     assert target.read_bytes() == body
+
+
+def test_interrupted_transfer_resumes_from_the_partial(tmp_path):
+    """A 1 GB file interrupted at 700 MB must not restart from zero.
+
+    The existing bytes seed the digests, so verification still covers the whole
+    file rather than only the resumed tail.
+    """
+
+    body = b"0123456789abcdefghij"
+    target = tmp_path / "x.pbf"
+    partial = target.with_name(target.name + ".partial")
+    partial.write_bytes(body[:8])
+
+    seen = {}
+
+    def opener(request):
+        seen["range"] = request.get_header("Range")
+        return _Response(body[8:], status=206)
+
+    digest = download_remote(_remote(body), target, opener=opener)
+
+    assert seen["range"] == "bytes=8-", "must request only the missing tail"
+    assert target.read_bytes() == body
+    assert digest == hashlib.sha256(body).hexdigest(), "digest must cover the WHOLE file"
+    assert not partial.exists()
+
+
+def test_a_server_ignoring_range_is_handled_without_corruption(tmp_path):
+    """If the server replies 200 with the whole file, the seeded digests are
+    wrong - so they must be reset rather than concatenated onto the partial."""
+
+    body = b"0123456789abcdefghij"
+    target = tmp_path / "x.pbf"
+    target.with_name(target.name + ".partial").write_bytes(body[:8])
+
+    # Status 200 = Range ignored, whole body returned.
+    digest = download_remote(_remote(body), target, opener=lambda r: _Response(body, status=200))
+
+    assert target.read_bytes() == body, "must not be partial+whole concatenated"
+    assert digest == hashlib.sha256(body).hexdigest()
+
+
+def test_an_oversized_partial_is_discarded(tmp_path):
+    body = b"0123456789"
+    target = tmp_path / "x.pbf"
+    target.with_name(target.name + ".partial").write_bytes(b"x" * 999)
+
+    digest = download_remote(_remote(body), target, opener=lambda r: _Response(body))
+    assert target.read_bytes() == body
+    assert digest == hashlib.sha256(body).hexdigest()
+
+
+def test_a_failed_verification_discards_the_partial(tmp_path):
+    """Wrong bytes must not be left behind for a later run to 'resume'."""
+
+    body = b"a complete extract"
+    target = tmp_path / "x.pbf"
+    partial = target.with_name(target.name + ".partial")
+
+    with pytest.raises(ValueError, match="length mismatch"):
+        download_remote(_remote(body), target, opener=lambda r: _Response(body[:4]))
+    assert not partial.exists(), "a short transfer is unverifiable and must be dropped"
+    assert not target.exists()
 
 
 def test_inventory_states_the_weaker_anchor_and_counts_publisher_digests():

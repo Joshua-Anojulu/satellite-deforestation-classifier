@@ -284,16 +284,49 @@ def download_remote(remote: RemoteFile, destination: Path,
     md5 = hashlib.md5()
     sha256 = hashlib.sha256()
     received = 0
+
+    # Resume a partial transfer rather than restarting it.  These files run to
+    # ~1 GB and the process is routinely interrupted, so discarding a
+    # part-downloaded file each time makes progress unreliable.  The existing
+    # bytes are hashed first to seed the digests, so verification still covers
+    # the whole file.
+    resume_from = 0
+    if partial.exists():
+        existing = partial.stat().st_size
+        if 0 < existing < remote.content_length:
+            with partial.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(chunk_bytes), b""):
+                    md5.update(chunk)
+                    sha256.update(chunk)
+            resume_from = existing
+            received = existing
+        else:
+            # Empty, or somehow >= the expected length: start over.
+            partial.unlink()
+
+    request = urllib.request.Request(remote.url)
+    if resume_from:
+        request.add_header("Range", f"bytes={resume_from}-")
+
     try:
-        with opener(remote.url) as response, partial.open("wb") as sink:
-            while True:
-                chunk = response.read(chunk_bytes)
-                if not chunk:
-                    break
-                md5.update(chunk)
-                sha256.update(chunk)
-                received += len(chunk)
-                sink.write(chunk)
+        with opener(request) as response:
+            # A server that ignores Range replies 200 with the WHOLE file; the
+            # seeded digests would then be wrong, so reset and take it fresh.
+            if resume_from and getattr(response, "status", 200) != 206:
+                md5 = hashlib.md5()
+                sha256 = hashlib.sha256()
+                received = 0
+                resume_from = 0
+            mode = "ab" if resume_from else "wb"
+            with partial.open(mode) as sink:
+                while True:
+                    chunk = response.read(chunk_bytes)
+                    if not chunk:
+                        break
+                    md5.update(chunk)
+                    sha256.update(chunk)
+                    received += len(chunk)
+                    sink.write(chunk)
         if received != remote.content_length:
             raise ValueError(
                 f"length mismatch for {remote.url}: "
@@ -304,10 +337,14 @@ def download_remote(remote: RemoteFile, destination: Path,
                 f"md5 mismatch for {remote.url}: "
                 f"expected {remote.md5}, computed {md5.hexdigest()}"
             )
-        partial.replace(destination)
-    finally:
+    except ValueError:
+        # Verification failed, so the bytes on disk are wrong: discard them.
+        # Distinct from a transport error below, where they are merely
+        # incomplete and worth resuming.
         if partial.exists():
             partial.unlink()
+        raise
+    partial.replace(destination)
     return sha256.hexdigest()
 
 
