@@ -278,6 +278,12 @@ Material problems remain. The round-1 provenance, layout, polygon, and basic ato
 The “manifest published last” correction is directionally sound, but the hierarchy and cache identity must be frozen before it becomes a real resumable commit contract. No files were modified.
 
 VERDICT: REVISE
+### Claude's response (round 2)
+
+All sixteen findings accepted. The parser was replaced wholesale rather than patched: pyogrio cannot
+supply node references (#3), so v3 moved to a raw pyosmium way stream, which simultaneously dissolves #2,
+#5 and #8. The two sections below are the measurement and the reframing that produced v3.
+
 ### Benchmark: pyosmium single-pass way stream (tests round-2 finding #1) — NEGATIVE
 
 pyosmium 4.3.1 installed (`cp314` wheel). `osm.Way.nodes` **does** expose raw node references, so round-2
@@ -339,6 +345,64 @@ reads the **OSM data model** and not GDAL's rendered layers:
 
 Checkpoints remain, but for **crash resilience** rather than to fit a seven-minute ceiling.
 
+## Round 3 — codex
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed)
+- reviewed body_sha256: 12d1e8f5994724870dc23c64b6d0f5fc4ff60df680fd8f8afcceaba06a77dae7
+- verdict: REVISE (2 critical, 5 high, 3 medium)
+
+Trend across rounds: 16 -> 16 -> 10 findings; criticals 5 -> 4 -> 2. The first round where the
+reviewer accepted the plan's framing and attacked only its mechanics.
+
+### Critique (verbatim)
+
+Material problems remain. The human-launched-job reframing is legitimate, but the specified parser cannot currently produce geometry, and the reconciliation, lineage, and publication contracts remain incomplete.
+
+1. **Critical: the frozen pyosmium call cannot enable geometry.** [`FileProcessor(path, osmium.osm.WAY)`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:66>) excludes nodes, so `.with_locations()` raises `RuntimeError`; pyosmium explicitly requires nodes to reach the location cache. [Pyosmium documentation](https://docs.osmcode.org/pyosmium/latest/user_manual/04-Working-with-Filters/)
+
+   **Fix:** Use `FileProcessor(path, NODE | WAY).with_locations(index).with_filter(EntityFilter(WAY))`, then benchmark that exact pipeline.
+
+2. **Critical: node-sequence reconstruction is solving a nonexistent fragment problem and can manufacture a way absent from every source.** Geofabrik states that cross-border ways remain complete, so same-origin, same-ID/version records with unequal ordered node lists indicate source inconsistency; “unique consistent global sequence” is also undefined for repeated nodes, closed-cycle rotations, reversals, and competing supersequences. [Geofabrik technical details](https://download.geofabrik.de/technical.html)
+
+   **Fix:** Require exact ordered node-reference equality for duplicate same-version ways and fail preflight on any mismatch instead of reconstructing sequences.
+
+3. **High: the node-index entry gate has no pass condition.** [`indonesia-220101` completion](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:92>) alone is not a gate: it specifies no wall-clock, peak-RSS, temporary-disk, or projected-corpus ceiling, while the 2.7-hour estimate excludes the required node decoding, index creation, geometry, masking, and output.
+
+   **Fix:** Freeze resource ceilings and benchmark the complete largest-file pipeline under each candidate index backend, authorizing the corpus only when runtime, RSS, disk, and extrapolated total all pass.
+
+4. **High: interrupted file-backed indexes are outside the durability contract.** `sparse_file_array` requires managed backing storage, while installed pyosmium’s `FileProcessor` internally ignores missing-location errors; the plan neither defines fresh-versus-reused index files nor requires every retained node reference to have a valid coordinate. [Osmium index documentation](https://docs.osmcode.org/osmium/latest/osmium-index-types.html)
+
+   **Fix:** Create a fresh per-attempt index in a capacity-checked temporary directory, explicitly reject every missing/invalid retained node location, and delete it only after the region commit succeeds.
+
+5. **High: the manifest hierarchy is not yet a crash-consistent commit protocol.** [The stage manifest references regions](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:120>), but does not explicitly bind the three origin datasets, lineage artifacts, schemas, or child-manifest digests; atomic manifest publication, directory durability, validation order, lock order, and atomic pointer replacement are also unspecified.
+
+   **Fix:** Define a hash-linked DAG covering every consumer artifact, publish each manifest via same-directory temporary file → fsync → atomic replace → directory flush, then atomically update the pointer only after full DAG revalidation under a fixed lock order.
+
+6. **High: the 1,000 m lineage graph still constrains Plan B.** [“Saturation curve”](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:135>) has no sampled radii, statistic, denominator, or fail/expand rule, and same-ID ways moved beyond the spatial radius can disappear despite having direct identity evidence.
+
+   **Fix:** Either move candidate generation entirely to Plan B, or include equal-ID edges unconditionally and define a broader superset plus explicit outer-radius saturation criteria that fail closed when unsaturated.
+
+7. **High: the lineage schema remains non-deterministic.** It does not define the candidate distance predicate, “centre,” exact union-based aggregate formula, all origin pairs, site-specific edge key, component construction, or how closed ways participate; moreover, `way_closed` is not a GeoParquet geometry type while the metrics assume line lengths and buffers.
+
+   **Fix:** Freeze a complete edge schema and formulas, storing every raw traversal as an ordered `LineString` plus `is_closed`, with closed-way area semantics explicitly excluded.
+
+8. **Medium: shard manifests do not provide parser resumability.** Pyosmium supplies no durable input cursor here, so a kill during a file still requires rebuilding its node index and rescanning that file; committed output parts reduce rewriting but not lost parsing work.
+
+   **Fix:** Declare the whole input file as the smallest restart boundary and quantify worst-case rework, or introduce a separately committed resumable intermediate with a validated cursor.
+
+9. **Medium: the coverage-margin claim contradicts the historical-polygon caveat.** [Plan A says margins let Plan C verify coverage](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:84>), but current-vintage `.poly` files cannot prove the 2020–2022 extract boundary.
+
+   **Fix:** Separate processing-mask margin from current-polygon margin and keep historical source availability `UNKNOWN` regardless of either value.
+
+10. **Medium: the long-running operating model lacks live observability.** Final per-file counts cannot diagnose a stalled index, disk exhaustion, suspension, or pathological geometry during a multi-hour human-run job.
+
+   **Fix:** Emit a periodic non-authoritative progress journal containing file, node/way counts, rate, RSS, index size, free disk, and last committed manifest.
+
+No files were modified.
+
+VERDICT: REVISE
+
 ### Entry gate (round-3 finding #3) — PASSED on wall-clock, INCOMPLETE on resources
 
 Codex's round-3 #1 was confirmed exactly: `FileProcessor(path, WAY).with_locations()` raises
@@ -383,3 +447,223 @@ ceiling. v4 must either install `psutil` and re-measure, or state the memory cei
 of the system: a bbox read for whole-file timestamps, the `lines` layer for all highway ways, and now my
 own loop overhead for parser throughput. The reviewer caught the first two; the third surfaced only
 because its API correction produced a number 16x off mine.
+
+### Entry gate, second pass — ALL ROWS PASS
+
+The first pass could not supply resource ceilings because `psutil` is absent. Rather than add a dependency
+to the analysis environment for a measurement, peak working set is read from `GetProcessMemoryInfo` via
+`ctypes`. The probe was validated against a deliberate 600 MB allocation first (0.015 -> 0.644 GB), so it
+is known to track allocation rather than return a constant.
+
+The second pass also applies §1.5's **full** per-node validation — every node of every retained way — where
+the first pass checked only each way's first node. That is the pipeline the plan specifies, so it is the
+binding measurement.
+
+| condition | ceiling | measured | |
+|---|---|---|---|
+| largest-file wall-clock | <= 45 min | **22.5 min** (1348 s) | PASS |
+| projected corpus wall-clock | <= 6 h | **~2.26 h** | PASS |
+| peak working set | <= 50 % RAM (17.0 GB) | **6.58 GB (19.3 %)** | PASS |
+| geometry availability | 100 % | **4,839,062 / 4,839,062** | PASS |
+| ways with missing/invalid node location | 0 | **0** | PASS |
+| temporary index disk | n/a | 0 bytes | PASS |
+
+**This deletes a branch of the plan rather than documenting one.** Working set peaked at 6.58 GB during
+node reading, then held flat at ~3.7 GB for the entire way pass -- the index is fully built before the
+first way is emitted, so the peak is structural, not a trend a bigger file extends. `indonesia-220101` is
+the largest extract (1433 MB of 8641 MB total; next largest 1241 MB), giving a 2.6x margin. So `flex_mem`
+is frozen as the sole backend and the on-disk `sparse_file_array` branch is removed -- and with it the
+whole of Codex's #4: no index file to orphan on a kill, no temp-directory capacity check, no
+fresh-versus-reused question.
+
+**A fourth wrong number of mine, found while filling this table.** The corpus was projected over 9.42 GB --
+the size of the *entire* static archive, including the non-OSM layers. The OSM subset is **8.64 GB**. So
+v3's "2.7 hours" was wrong in all three of its components: ways/MB low by 2.35x, throughput low by ~2.5x,
+and the corpus 9 % too large. Partial mutual cancellation is not corroboration.
+
+Cost of the stricter check, stated plainly: 18.3 min -> 22.5 min (+23 %) for validating every node instead
+of the first. Worth it -- installed pyosmium ignores missing-location errors internally, so without the
+per-node check the plan's geometry-completeness claim would rest on the parser's silence.
+
+### Testing Codex #2's premise instead of trusting it — node-sequence equality, origin 2020
+
+Finding #2 replaced v3's node-sequence reconciliation with exact ordered equality, on the strength of
+Geofabrik's documented guarantee that cross-border ways are kept complete. That makes an **external
+document** load-bearing for a rule that halts the whole corpus run, so it was measured. Node *references*
+need no location index, so this is cheap: `FileProcessor(path, WAY)` with no `.with_locations()`.
+
+All seven land-border region pairs at origin `200101`, 3,524,174 retained ways loaded across 7 regions:
+
+| pair | shared IDs | node-seq mismatches | version mismatches |
+|---|---|---|---|
+| argentina x bolivia | 871 | 0 | 0 |
+| argentina x paraguay | 19,825 | 0 | 0 |
+| bolivia x paraguay | 266 | 0 | 0 |
+| bolivia x peru | 471 | 0 | 0 |
+| norte x nordeste | 8,105 | 0 | 0 |
+| norte x centro-oeste | 2,578 | 0 | 0 |
+| nordeste x centro-oeste | 253 | 0 | 0 |
+| **total** | **32,369** | **0** | **0** |
+
+Every cross-region duplicate is byte-identical in its ordered node references. Two consequences:
+
+1. **The fail-closed rule is safe on this corpus** -- it will not halt on data that actually exists.
+2. **v3's reconciliation machinery would never have run once.** It was not merely unnecessary, as #2
+   argued; it was pure risk surface, capable only of manufacturing a way present in no source.
+
+This also independently corroborates round-1's observation of 871 conflict-free Argentina/Bolivia IDs,
+now at the stricter node-sequence level rather than version level.
+
+Scope limit, stated rather than glossed: origins 2021 and 2022 are unchecked, and only land-border pairs
+were compared. The plan's risk section says so.
+
+## Round 4 — codex
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (PINNED, see below) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed; thread_id echoed and matched)
+- reviewed body_sha256: fdbc5449f5afcdd7b58bf1fbbee726f0779f321c47ccb5bb24e3928c328f367d
+- verdict: REVISE (1 critical, 6 high, 2 medium)
+
+Trend: 16 -> 16 -> 10 -> 9 findings; criticals 5 -> 4 -> 2 -> 1.
+
+**Version gate fired before this round.** The Codex CLI auto-updated to 0.146.0 mid-review, outside the
+adapter's `verified_versions: ">=0.130 <0.146"`, which fails closed to UNVERIFIED. 0.146.0 also shipped the
+known-broken sandbox layout for this box (helpers in `codex-resources/`, absent from `bin/`). Repairing it
+would not have made it *verified*, and the acceptance test's mandatory positive control needs `--yolo`,
+which is classifier-blocked for Claude. So round 4 was pinned to the still-installed, still-repaired
+0.145.0 release binary — inside the verified range and the exact version rounds 1-3 ran on, preserving CLI,
+session and model across all four rounds. Canary re-run in the target repo first: replied BLOCKED, no file
+created, `git status` unchanged.
+
+### Critique (verbatim)
+
+Material problems remain. The quantitative parser gate is substantially better, and omitting directory flush is defensible under the plan’s limited durability claim, but several contracts still overclaim their evidence.
+
+1. **Critical: the frozen selection predicate has a measured mismatch.** The review log says the suffix predicate matched 234,593 ways while direct lookup matched 234,570, yet calls them “identical”; until those 23 ways are explained, [§1.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:115>) is known not to preserve the same population.
+
+   **Fix:** Materialize the 23-way set difference, classify its tag keys, expand the frozen direct-key list as necessary, and require equality against a reference predicate over all 36 extracts.
+
+2. **High: identical node references do not imply identical geometry.** A referenced node can move between regional build cutoffs without changing the containing way’s version, timestamp, tags, or node-reference list; [§4](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:201>) could therefore silently choose between differing coordinate sequences.
+
+   **Fix:** Require exact resolved-coordinate-sequence equality as well as node-reference equality, reporting conflicting node IDs, coordinates, regions, and header timestamps.
+
+3. **High: the gate is bound to a validation harness, not demonstrably to the production stage.** The plan attributes 22.5 minutes to full node validation but does not state that the measured path also performed every `LineString` construction, exact-mask intersection, dispatch, serialization, hashing, and publication; no checked-in harness or immutable measurement artifact binds the result to future parser code.
+
+   **Fix:** Rerun the gate through the production parser-to-committed-region path and record its source hash, command, input digest, dependency versions, counters, resource trace, and output digest.
+
+4. **High: compressed file size does not prove that Indonesia is the worst `flex_mem` case.** `flex_mem` switches representations according to node cardinality and ID density; sparse storage scales by node count while dense storage depends on the largest node ID, neither of which is ordered by compressed PBF bytes. [Osmium index documentation](https://docs.osmcode.org/osmium/latest/osmium-index-types.html)
+
+   **Fix:** Keep the single backend, but preflight node cardinality/ID statistics or enforce the memory ceiling independently for every file and remove the claim that largest compressed size proves the binding memory case.
+
+5. **High: the 0.5% saturation rule is a scientific cutoff and does not prove completeness.** A site dominated by many short-distance edges can pass while rare but important renumbered/split roads lie beyond 2 km; [the criterion](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:297>) observes nothing in the 2–5 km guard and directly determines what Plan B may inspect.
+
+   **Fix:** Emit unconditional identity edges plus a queryable spatial index and let Plan B choose spatial candidate generation, or emit the complete guard-bounded superset without an edge-count acceptance threshold.
+
+6. **High: the lineage aggregate output is still not fully specified.** Components span three origins, but `A` and `B` in [§6.5](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:318>) are not keyed to an origin pair, aggregate columns are absent from the frozen edge schema, and `component_id`, buffer parameters, Hausdorff variant, and zero-length policy remain undefined.
+
+   **Fix:** Define a separate aggregate table keyed by site, unordered origin pair, canonical component hash, and tolerance, while freezing geometry-operator parameters and degenerate-geometry handling.
+
+7. **High: the Windows protocol handles returned errors, not abrupt termination.** A kill or power loss during `ReplaceFileW` produces no `winerror` for `classify`; restart may find destination, staging, and backup in any documented intermediate arrangement, while the current helper’s `recover()` merely returns prose and [does not call `FlushFileBuffers`](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/forecast/_atomic_publish.py:178>).
+
+   **Fix:** Add an executable startup classifier that validates the three files by digest/identity and deterministically rolls forward or fails closed, and implement a checked `FlushFileBuffers` call before replacement.
+
+8. **Medium: local-NTFS and locking assumptions are not enforced by the reused helper.** Its local/reparse check is not called by `publish_container`, does not inspect reparse-point ancestors or verify the filesystem/drive type, and the plan fixes lock order without naming a crash-releasing Windows lock primitive.
+
+   **Fix:** Make publication itself require a named local-NTFS root, validate its full ancestor chain and volume type, and use handle-held `LockFileEx` locks released automatically on process death.
+
+9. **Medium: the duplicate preflight evidence is overstated.** [The plan concludes the rule will not halt “this corpus”](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:230>) from 2020 land-border pairs while explicitly admitting that 2021, 2022, and other overlaps remain unchecked.
+
+   **Fix:** Describe the measurement as evidence for the tested subset only and make the full three-origin overlap preflight an authorization gate rather than later proof.
+
+The absence of directory flush specifically leaves NTFS namespace changes vulnerable to being lost or reordered across sudden power failure; that limitation is acceptable if the plan promises only atomic visibility and implements the missing restart validation above.
+
+No files were modified.
+
+VERDICT: REVISE
+### Claude's response (round 4) — all 9 accepted; the critical was mine
+
+**#1 was a real error, and my first attempt to investigate it was also wrong.** v4's log said two
+predicates matched "the same ways (234,593 vs 234,570)" and called them identical. They differ by 23.
+
+First census attempt counted "ways carrying an unfrozen `:highway` key", saw `not:highway`,
+`source:highway`, `historic:highway`, and I concluded the suffix predicate was over-matching and my frozen
+list was fine. **That accounting was wrong**: most of those ways also carry plain `highway` and are
+retained by both predicates, so they prove nothing. Rewritten to isolate the true SET DIFFERENCE — ways the
+suffix predicate retains that the frozen predicate does not — the answer points in BOTH directions:
+
+| key | in set difference | disposition | why |
+|---|---|---|---|
+| `was:highway` | yes | **retain — v4 MISSED IT** | standard lifecycle prefix |
+| `area:highway` | yes | **retain — v4 MISSED IT** | established tagging for road areas |
+| `not:highway` | yes | exclude | negative assertion: states it is *not* that road |
+| `source:highway` | no (co-occurs with `highway`) | exclude | metadata about the tag's provenance |
+| `historic:highway` | no | exclude | historic designation, not a carriageway |
+
+Per-file set differences measured so far: norte-200101 = 4 (`not:`), haiti-and-domrep-200101 = 1 (`was:`),
+centro-oeste-200101 = 18 (`area:`), haiti-and-domrep-210101 = 1 (`was:`), haiti-and-domrep-220101 = 3
+(`area:` 2, `was:` 1).
+
+So Codex was substantially right and my snap reading was half wrong: **two genuine keys were missing**, and
+three would have been wrongly swept in by a bare suffix rule. The fix is a frozen per-key disposition
+table plus a run-time assertion that fails closed on any unknown `*:highway` namespace.
+
+**The census is slow for the exact reason v3's benchmark was slow** — enumerating `*:highway` keys requires
+scanning every tag of every way, the generator cost I diagnosed two rounds ago. Here it is unavoidable.
+Coverage is therefore partial (6 of 36 at submission) and the plan says so rather than claiming the corpus.
+**The run-time assertion, not the census, is what makes that safe.**
+
+**#2 is a hole I would not have found.** A node can move between regional build cutoffs without touching
+the containing way's version, timestamp, tags or node-reference list. So my 32,369-pair result — which
+compared node references only — could not have detected it. §4.3 now requires resolved-coordinate equality
+too, and #9's point that the result was overclaimed is accepted.
+
+**#7 and #8 verified against the code, not taken on trust.** All three claims hold:
+`FlushFileBuffers` appears nowhere in the repo; `assert_local_non_reparse` is called only from
+`forecast/tests/test_atomic_publish.py` and never from `publish_container` (which calls
+`assert_same_volume` alone) — so the plan's claim that the helper "rejects OneDrive" was **false as a
+statement about production behaviour**; and `recover()` returns a state-table string while `classify()`
+only maps a *returned* winerror, so abrupt termination leaves nothing to classify.
+
+**#5 is the third consecutive round finding Plan A bounding Plan B's science** — 250 m, then 1000/2000 m
+with a saturation curve, then a 0.5 % acceptance test. The cutoff was never the problem; Plan A owning it
+was. Plan A now emits identity edges plus a spatial index and generates no spatial candidates at all.
+
+## Round 5 — codex (FINAL — MAX_ROUNDS reached)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed; thread_id echoed and matched)
+- reviewed body_sha256: 9082a610776787f6d4129c607120d954acb6681368d1dbcfe359ba4c4a3ca296
+- verdict: REVISE (1 critical, 4 high, 1 medium)
+
+Trend across the full loop: **16 -> 16 -> 10 -> 9 -> 6** findings; criticals **5 -> 4 -> 2 -> 1 -> 1**.
+The cap was reached while the plan was still converging, not because the argument stalled.
+
+### Critique (verbatim)
+
+Material defects remain.
+
+1. **Critical — “identity edges at any distance” is impossible with 5 km dispatch.** A way moved outside the site window in another origin is discarded before the identity join, so the promised edge cannot exist. The arbitrary-separation test can pass on synthetic inputs while production remains incomplete. [§2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:194>) contradicts [§6.1](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:418>).
+
+   **Fix:** Compute per-site identity closure across all origins—retaining every counterpart of any site-relevant `osm_id` regardless of window intersection, with an `outside_window` flag—before publishing identity edges.
+
+2. **High — Plan B is not actually free to choose any radius.** A spatial index over a finite 5 km window is complete only for a defined anchor domain and radius; candidates beyond the boundary are missing, especially for anchors near that boundary. The plan also admits Plan C could exceed the guard, directly contradicting “neither Plan B nor Plan C can need a discarded road.” [§2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:197>) [§6.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:422>) [risk](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:534>)
+
+   **Fix:** Freeze the anchor domain and emit `max_complete_radius_m` per site; require Plans B/C to stay within it or reopen Plan A, and specify a portable index schema—or let Plan B build its own ephemeral index from GeoParquet.
+
+3. **High — the coordinate preflight is ordered before the data needed to run it.** Resolved coordinates are “already retained” only after the node index and parser have produced region records; obtaining them before the corpus run requires another full node-and-way pass, not the claimed cheap preflight. [§4.3](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:290>) [§4.6](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:324>)
+
+   **Fix:** Authorize region-checkpoint parsing first, run coordinate preflight from all committed region checkpoints, then gate deduplication/origin publication—or explicitly budget a separate full-corpus preflight parse.
+
+4. **High — the NTFS startup classifier is still a requirement, not an executable protocol.** “Recognised intermediate arrangement” has no exhaustive existence/digest/file-identity matrix, no explicit expected old/new identities for root manifests and pointers, no backup-cleanup rule, and no requirement to recover while holding the same locks. Concurrent restarts can therefore race, while a surviving backup can interfere with the next replacement. [§5.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:375>) [§5.4](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:394>)
+
+   **Fix:** Freeze the complete three-path state table and idempotent action for every state, including cleanup, and require classification/recovery under the ordered `LockFileEx` locks with deterministic expected digests.
+
+5. **High — 22.5 minutes is still overstated as worst-case restart cost.** The plan correctly calls it a parser floor and says compressed size does not order runtime or memory, then later calls it measured worst-case production rework and calls Indonesia the binding memory case. That unsupported figure is used to reject resumable intermediates. [§3](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:234>) [§10.1](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:485>) [risk](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:528>)
+
+   **Fix:** Delete both binding-case claims and base the restart decision on the production-path ceiling or measured maximum committed-region duration, revisiting resumability if that bound is unacceptable.
+
+6. **Medium — `historic:highway` is classified too aggressively.** The assertion cannot protect this case because `historic:highway` is deliberately subtracted from the reference predicate. Its use is documented as inconsistent and can denote a previously valid characteristic, so declaring it categorically “not a present or former carriageway” is itself a scientific decision and can irreversibly hide lineage from Plan B. [predicate table](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:157>) [OpenStreetMap lifecycle documentation](https://wiki.openstreetmap.org/wiki/Lifecycle_prefix)
+
+   **Fix:** Retain ambiguous `historic:highway` records with their raw tags and limit exclusion to unambiguous negative or metadata namespaces such as `not:` and `source:`.
+
+VERDICT: REVISE
