@@ -313,3 +313,73 @@ index at materially greater cost.
 The common thread is that each was specified from what a tool *ought* to do rather than from a measured
 run, and each survived until something measured it. Plan A needs a structurally different shape — persisted
 per-region intermediates accumulated across multiple bounded runs — not another revision of the same one.
+
+### Reframing after the benchmark — the window was never the pipeline's constraint
+
+The negative benchmark was interpreted wrongly at first. Re-measured, one pyosmium pass over the **entire
+corpus** costs **2.7 hours** (12,658 ways/s measured; ~121 M ways projected across 36 files, 9.42 GB),
+while the per-site pyogrio alternative costs **7.2 hours for the three Indonesia files alone**.
+
+pyosmium is ~3x cheaper overall. It was rejected for two rounds because 21 min/file exceeds the **6-11
+minute background window** — but that window constrains **Claude's background execution**, not the machine
+and not the pipeline. Josh ran the 10.92 GB GFC acquisition to completion in his own elevated terminal
+with no such ceiling. Three successive designs were therefore shaped around an artefact of the assistant's
+tooling, mistaken for a property of the problem.
+
+Adopting a raw way stream also dissolves several findings rather than answering them, because pyosmium
+reads the **OSM data model** and not GDAL's rendered layers:
+
+| finding | how it dissolves |
+|---|---|
+| r1 #1 `lines` omits highway ways (0.107 %) | no GDAL layers exist in a raw way stream |
+| r2 #2 disjoint union envelope 202x oversized | dispatch to exact site masks during the single pass |
+| r2 #3 pyogrio cannot supply node references | `osm.Way.nodes` exposes them directly |
+| r2 #5 lifecycle-only ways filtered out | raw tags are visible before any predicate |
+| r2 #8 area highway ways vs line schema | raw ways carry their own closed/open geometry |
+
+Checkpoints remain, but for **crash resilience** rather than to fit a seven-minute ceiling.
+
+### Entry gate (round-3 finding #3) — PASSED on wall-clock, INCOMPLETE on resources
+
+Codex's round-3 #1 was confirmed exactly: `FileProcessor(path, WAY).with_locations()` raises
+`RuntimeError: Nodes not read from file`. Its prescribed fix works:
+`FileProcessor(NODE|WAY).with_locations().with_filter(EntityFilter(WAY))`.
+
+Complete pipeline on the worst-case file, `indonesia-220101` (1433 MB):
+
+| | measured |
+|---|---|
+| ways streamed | **43,250,208** |
+| highway ways | 4,839,062 |
+| with valid geometry | **4,839,062 (100 %)** |
+| elapsed | **1096 s = 18.3 min** |
+| rate | 39,475 ways/s incl. node decoding + location index |
+| peak RSS | **NOT MEASURED — `psutil` absent** |
+
+**A prior benchmark of mine was wrong and had driven three rounds of design.** The earlier
+"12,658 ways/s, >21 min, single-pass infeasible" figure was inflated by my own predicate, which ran a
+generator over every tag of every non-highway way. Measured against a direct key lookup on the same file:
+
+| predicate | rate |
+|---|---|
+| `any(k.endswith(':highway') ...)` (mine) | 17,849 ways/s |
+| direct key lookups | **46,467 ways/s (2.6x)** |
+
+Both matched the same ways (234,593 vs 234,570). So the conclusion that a single pass was infeasible came
+from loop overhead, not from pyosmium.
+
+**Two of my projections were also wrong, in opposite directions.** The file holds 43.25 M ways
+(**30,182 ways/MB**), not the ~12,840 ways/MB I assumed — low by 2.35x — while my rate estimate was ~3x
+too low. The errors partly cancelled, so v3's "2.7 hours" landed near the corrected **2.0 hours** by
+coincidence rather than by being right. Corpus: **~284 M ways, ~2.0 hours**, largest file **18.3 min
+measured**.
+
+**The gate is therefore only partially satisfied.** Wall-clock and corpus projection pass; **peak RSS and
+temporary-disk ceilings remain unverified** because `psutil` is not installed. The run completing without
+an OOM kill is weak evidence that the default `flex_mem` index fit in 31.7 GB, and is not recorded as a
+ceiling. v4 must either install `psutil` and re-measure, or state the memory ceiling as unverified.
+
+**Pattern worth naming.** Three times this session a measured subset or artefact was stated as a property
+of the system: a bbox read for whole-file timestamps, the `lines` layer for all highway ways, and now my
+own loop overhead for parser throughput. The reviewer caught the first two; the third surfaced only
+because its API correction produced a number 16x off mine.
