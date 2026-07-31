@@ -156,3 +156,160 @@ far larger sample than my 77,664.
 **All 16 findings accepted. Revision deferred pending the preflight in finding #16**, which is the
 right sequencing: two of my claims died to more thorough measurement, so v2 should be written against
 real numbers from all 36 extracts rather than another round of assertions.
+
+### Preflight results (Codex finding #16) — read-only, 22 of 36 extracts
+
+Run before revising, because two of my four measured claims had just been falsified by more thorough
+measurement. Read-only; nothing written to the archive. Stopped at 22/36 once every finding had reached
+100 % consistency — the remaining files were unlikely to change a conclusion, and the largest are
+individually infeasible (below).
+
+**1. A `lines`-only read loses data in EVERY file.**
+
+| | |
+|---|---|
+| files with highway features outside `lines` | **22 / 22 (100 %)** |
+| highway features in `lines` | 10,605,634 |
+| highway features in `multipolygons` | **11,340 (0.107 %)** |
+
+Small but systematic, across every region and origin. My "roads are ways, ways are lines" reasoning was
+tidy and wrong.
+
+**2. The timestamp assertion would reject 21 of 22 archives.** Nearly every extract contains edits made
+*during* its nominal snapshot day (`norte-200101` → `2020-01-01 19:22`, `haiti-210101` →
+`2021-01-01 13:26`, `haiti-220101` → `2022-01-01 17:51`). Only `centro-oeste-220101` predates its date.
+My original 2019-12-31 figure came from a **bbox subset**, not the file.
+
+**3. Whole-file parsing of the largest extracts is infeasible here.** Scan-only cost (bbox read: scans the
+whole file, materialises almost nothing) is linear at **0.22 s/MB across a 13× size range**; full
+materialisation costs **~8.5×** that.
+
+| extract | size | scan-only | full parse |
+|---|---|---|---|
+| paraguay-200101 | 79 MB | 24.0 s | 155 s (1.96 s/MB) |
+| congo-democratic-republic-200101 | 179 MB | 38.6 s | 335 s (1.87 s/MB) |
+| indonesia-200101 | 1016 MB | **219.4 s** | **~32 min (projected)** |
+| indonesia-220101 | 1433 MB | — | **~45 min (projected)** |
+
+Observed execution window: **~6–11 minutes** (pass 2 completed one 335 s file and was killed during the
+second). So a whole-file parse of any Indonesia extract is 3–7× the available window — finding #12
+confirmed by measurement rather than extrapolation.
+
+**Consequence, and it inverts the superseded plan's reasoning.** That plan chose one-pass-per-file over
+per-site reads because per-site looked ~9× costlier — a conclusion drawn from a 20 s bbox read I had
+mistaken for the dominant cost. Measured properly, **the scan is cheap and linear; materialisation is the
+expense.** A bbox read of the 1 GB Indonesia file takes 3.7 minutes and fits the window comfortably.
+
+## Round 2 — codex
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed)
+- reviewed body_sha256: 03ccff3ca1e9673725e2fef57aed31923f67d4c46273216f5ba84cfd6d610c58
+- verdict: REVISE (4 critical, 11 high, 1 medium)
+
+### Critique (verbatim)
+
+Material problems remain. The round-1 provenance, layout, polygon, and basic atomicity corrections are substantially better, but the parser/runtime combination is still not executable within the measured window.
+
+1. **Critical: one per-site shard still exceeds the Indonesia execution window.** At 1,433 MB and 0.22 s/MB, each layer scan costs about 315 seconds; the three-layer unit in [§§1–2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:53>) therefore costs roughly 15.8 minutes before materialisation or publication, already beyond the observed 6–11 minutes.
+
+   **Fix:** Use one direct OSM way-stream pass that dispatches records to every site mask, and make a measured `indonesia-220101` completion below a conservative hard window an entry gate rather than final proof.
+
+2. **Critical: a bbox cannot represent a disjoint site-window union.** The seven Indonesian site boxes have a combined area of about 0.385 deg², but their enclosing bbox is 34.32 deg²—roughly 89× larger—so [the union-bbox fast path](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:66>) may materialize a substantial cross-country corridor; “if it overruns” is not a usable trigger because the process is killed before recording the decision.
+
+   **Fix:** Freeze the shard plan before parsing from measured estimates and use the exact union of disjoint window masks, never their rectangular envelope.
+
+3. **Critical: pyogrio cannot supply the node-reference proof required by deduplication.** Its actual schemas expose reconstructed geometry plus `osm_id`/`osm_way_id`, not raw way-node sequences; `other_relations` contains relation `GeometryCollection`s rather than ways, so [§4.4](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:97>) is impossible through `open_arrow` regardless of whether `pyarrow` is pinned.
+
+   **Fix:** Pin a direct PBF parser such as pyosmium, process only raw ways in one stream with node locations/references, and handle relations under a separate explicit contract if they are wanted.
+
+4. **Critical: “site window” has no completeness boundary.** Plan A promises that Plan C will not reparse, but [§9 deliberately defines no support radius](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:149>); unbuffered site reads omit roads needed near feature edges and omit lineage candidates up to 250 m outside the window.
+
+   **Fix:** Freeze a conservative extraction guard covering at least candidate radius plus tolerance and the maximum downstream road support, or reverse Plan A/Plan C sequencing so Plan C supplies that contract first.
+
+5. **High: the supposedly lossless cache still filters out lifecycle-only roads.** The non-null `highway` predicate in [§1](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:55>) excludes `disused:highway`, `proposed:highway`, and similar ways before their full tag maps can be preserved; the plan itself acknowledges this unresolved failure at line 198.
+
+   **Fix:** Freeze the selection predicate as `highway` or any explicitly enumerated lifecycle-highway key, while retaining the full canonical tag map for every match.
+
+6. **High: the geometry relationship rules reject safe cases and accept an underspecified one.** A subset can safely yield the maximal copy, compatible partial overlaps can reconstruct one unique node sequence, and three fragments are not unsafe merely because there are three; conversely, endpoint contact alone does not prove an unambiguous ordered way.
+
+   **Fix:** Reconcile each group as ordered node-ID sequences, accept only a unique consistent global sequence—including identical, subset, overlap, and N-fragment cases—and fail only on ambiguity, branching, coordinate conflict, or gaps.
+
+7. **High: the fail-closed geometry branches are not included in the real overlap preflight.** Only version conflicts are preflighted, so an otherwise legitimate subset or three-region group can still halt after expensive parsing despite being explicitly expected by the state machine.
+
+   **Fix:** Preflight every duplicate group’s version, tags, timestamp, node-sequence relationship, and geometry classification before starting cache construction.
+
+8. **High: area highway ways do not fit the line-based lineage schema.** `multipolygons` supplies polygonal highway areas, but [§6](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:115>) defines line lengths, line buffers, and endpoint-oriented relationships without stating whether a plaza’s perimeter, area, or raw ring is the audited object.
+
+   **Fix:** Preserve polygon ways as a separate geometry class and freeze dimension-appropriate lineage metrics, leaving any conversion to road centreline semantics to Plan B or Plan C.
+
+9. **High: the candidate-generation parameters still constrain Plan B’s scientific decision.** A 250 m radius censors every possible edge beyond it, while a 10 m buffer fixes which realignments receive overlap; Plan B can lower a cutoff but cannot recover omitted pairs or recompute the claimed distributions from the graph, exactly as [the risk section admits](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:200>).
+
+   **Fix:** Demonstrate candidate saturation at wider radii and emit raw distances plus overlap metrics at multiple frozen tolerances, or let Plan B own both tolerance and classification cutoff.
+
+10. **High: the lineage metric formulas and CRS are not deterministic at pair level.** “UTM zone of the way’s centroid” does not say which side chooses the CRS and can make A→B differ from B→A; buffered IoU is an area ratio, while “intersection over each side’s length in geodesic metres” is dimensionally ambiguous, and aggregate coverage is undefined.
+
+   **Fix:** Freeze one symmetric CRS per site or candidate component and specify exact formulas: buffered-area IoU, length-of-A-inside-buffer-B divided by length A, its reciprocal, union-based aggregate coverage, and all origin pairs emitted.
+
+11. **High: `unresolved` still imports classification language into Plan A.** Before Plan B selects a cutoff, a candidate with negligible overlap is neither resolved nor unresolved; only graph degree is objectively known.
+
+   **Fix:** Emit `no_candidate` for degree-zero nodes and candidate-degree/metric distributions for all others, reserving `resolved` and `unresolved` for Plan B.
+
+12. **High: cache identity omits semantic inputs.** [§10.1](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:158>) hashes code and dependencies but does not name the PBF hash, site-manifest hash, exact window/mask geometry, shard plan, or polygon inputs; output rehashing cannot detect a valid cached artifact built for different site windows.
+
+   **Fix:** Put every input digest, site/mask specification, shard-plan version, normalization parameters, and stage-specific auxiliary hash into the cache key and completion manifest.
+
+13. **High: the dirty-tree hash reintroduces unrelated invalidation.** Hashing all “dirty working-tree content” means an uncommitted documentation edit invalidates caches even though the proof only checks an unrelated committed documentation change.
+
+   **Fix:** Hash dirty content only for the exact parser, configuration, schema, and dependency files that can affect the stage.
+
+14. **High: the manifest is a valid final commit idea but not yet a shard commit protocol.** One global manifest published last safely commits the final stage, but [per-shard checkpoints](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:165>) require their own commit markers or every shard completed before a kill remains an orphan; this also conflicts with the promise of exactly 36 checkpoint Parquets.
+
+   **Fix:** Publish a hashed manifest last for every shard, a region manifest referencing all shard parts, and a final stage manifest referencing all region/origin outputs; define the 36 checkpoints as logical manifests rather than single files.
+
+15. **High: cache-key locking does not necessarily protect logical publication.** Two different valid cache keys can run concurrently and race if both publish to the same three origin-level destinations; [§10.4](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:164>) only serializes equal keys.
+
+   **Fix:** Keep every artifact under its content-addressed key and update any shared consumer pointer under a separate logical-dataset publication lock.
+
+16. **Medium: the header check proves no lookahead but not the named January snapshot.** A June or November PBF would satisfy `header_timestamp <= 31 Dec T`, and the fallback phrase “replication timestamp / content timestamp” has no precedence or missing-field rule.
+
+   **Fix:** Require an authoritative header field, enforce `feature_max <= header_timestamp <= issue_date`, and validate the header against a nominal archive-date window derived from all 36 real headers.
+
+The “manifest published last” correction is directionally sound, but the hierarchy and cache identity must be frozen before it becomes a real resumable commit contract. No files were modified.
+
+VERDICT: REVISE
+### Benchmark: pyosmium single-pass way stream (tests round-2 finding #1) — NEGATIVE
+
+pyosmium 4.3.1 installed (`cp314` wheel). `osm.Way.nodes` **does** expose raw node references, so round-2
+finding #3 is correct that pyogrio cannot supply them and pyosmium can. But the throughput answer is
+negative.
+
+Streaming `indonesia-220101.osm.pbf` (1433 MB), ways only, tags + node references, **no geometry**:
+
+| ways streamed | elapsed |
+|---|---|
+| 4,000,000 | 357 s |
+| 8,000,000 | 821 s |
+| 12,000,000 | 1,045 s |
+| 16,000,000 | **1,264 s (21 min)** — not finished |
+| 18,000,000 | *discarded — see below* |
+
+**The 18M reading of 41,388 s is discarded as invalid.** Every preceding 2M-way interval cost 100–190 s;
+11.5 hours for the same increment is not compute. The machine evidently suspended and wall-clock continued
+through it. Reporting it as parse time would be wrong.
+
+**Conclusion: >21 minutes and incomplete, against a 6–11 minute window — the single-pass design fails.**
+This is also a *floor*: no geometry was reconstructed, which additionally requires an osmium node-location
+index at materially greater cost.
+
+**Three parsing designs have now been invalidated by measurement**, each after being specified as sound:
+
+| design | why it failed | how it was found |
+|---|---|---|
+| `GetNextFeature()` / `ogr2ogr` | `osgeo` and the CLIs are not installed | probe |
+| pyogrio bbox-to-site-union | disjoint union envelope 89× oversized; **no node references** | reviewer arithmetic + API check |
+| pyosmium single way-stream | **>21 min for one 1.4 GB file**, incomplete, before geometry | this benchmark |
+
+The common thread is that each was specified from what a tool *ought* to do rather than from a measured
+run, and each survived until something measured it. Plan A needs a structurally different shape — persisted
+per-region intermediates accumulated across multiple bounded runs — not another revision of the same one.

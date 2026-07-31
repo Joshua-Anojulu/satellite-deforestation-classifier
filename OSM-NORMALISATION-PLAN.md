@@ -2,191 +2,228 @@
 review_provenance:
   schema_version: 2
   status: in-progress
-  rounds: []
-  historical_cross_model_review: false
+  rounds:
+    - round: 1
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+      body_sha256: 37c951dfa7a2000227012b15bfe682bf9589d803e9ad50bbefd49660b65d4878
+      verdict: REVISE
+  historical_cross_model_review: true
   final_body_cross_model_approved: false
   degraded_rounds: []
 ---
 
 # Plan A: OSM normalisation infrastructure for Specification W
-_Locked via grill — by Claude + Josh_
+_Locked via grill — by Claude + Josh · revised after Codex round 1 and a read-only preflight_
 
-> **Position in the sequence.** Plan A of three, superseding part of `STATIC-FEATURES-PLAN.md`
-> (`reviewed-unapproved`, closed after 3 Codex rounds). It absorbs that review's round-3 findings **#5**
-> (sequencing depended on machinery scheduled after the audit) and **#7** (dedup and lineage not safely
-> executable). **Plan B** (roads vintage audit) and **Plan C** (feature extraction) both consume this
-> plan's output and are not written yet.
+> **Position.** Plan A of three, superseding part of `STATIC-FEATURES-PLAN.md` (`reviewed-unapproved`).
+> **Plan B** (vintage audit) and **Plan C** (feature extraction) consume this plan's output and are not
+> written yet.
 
 ## Goal
 
 Turn the 36 acquired `.osm.pbf` extracts into a normalised, deduplicated, provenance-pinned road-network
-cache that Plan B and Plan C can both consume without re-parsing a byte. This plan makes **no scientific
-decisions**: it selects no road tiers, computes no features, and takes no position on the roads vintage.
-It exists because both successor plans need the same parsed, deduplicated input, and because the earlier
-attempt discovered that its audit depended on parsing machinery that had not been specified.
+cache that Plan B and Plan C consume without re-parsing. This plan makes **no scientific decisions**: it
+selects no road tiers, computes no features, sets no classification thresholds, and takes no position on
+the roads vintage.
+
+**Three claims in v1 were false and are corrected here.** A read-only preflight over **22 of 36 extracts**
+(finding #16) established the facts below; v1 asserted them from bbox subsets.
+
+## Measured facts this plan is built on
+
+| Fact | Measurement |
+|---|---|
+| A `lines`-only read **loses data** | **22/22 files** carry highway features in `multipolygons`; 11,340 of 10,616,974 (**0.107 %**) |
+| `max(osm_timestamp)` **does not** precede the snapshot date | **21/22 files** contain edits made during their nominal snapshot day |
+| Scan cost is linear and cheap | **0.22 s/MB** across a 13× size range (79 MB → 1016 MB) |
+| Materialisation is the expense | full parse ≈ **8.5× scan**; 1.87–1.96 s/MB |
+| Whole-file parsing of the largest extracts is **infeasible** | indonesia-200101 ≈ **32 min**, -220101 ≈ **45 min**, against an observed window of **~6–11 min** |
+| A bbox read of the 1 GB extract **is** feasible | **219 s** |
+| `osm_changeset` is stripped at source | 0 nonzero across 504,944 lines (reviewer's larger sample) |
+| `osgeo` / `ogr2ogr` unavailable | confirmed by reviewer |
 
 ## Approach
 
-### 1. The parsing stack is constrained, and the constraint is measured
+### 1. Read every way-bearing layer, not just `lines`
 
-The superseded plan specified dataset-level interleaved reading via `GetNextFeature()` or `ogr2ogr`.
-**Neither is available here**: `osgeo` is not installed and `ogr2ogr`/`ogrinfo` are not on `PATH`.
-Available: **pyogrio 0.13.0 bundling GDAL 3.12.4**, which exposes `set_gdal_config_options`.
+v1 claimed roads are ways and ways are `lines`. GDAL routes area-tagged ways to `multipolygons`, and
+**every profiled file** proved it. The parser consumes **`lines`, `multipolygons` and `other_relations`**,
+filters each to non-null `highway`, and records per-layer counts so the split is visible in the manifest
+rather than assumed. Ways recovered from `multipolygons` retain their original element type.
 
-1.1 **Only the `lines` layer is read**, exactly once per file. The concern that per-layer pyogrio reads
-    re-traverse the file is real but moot when a single layer is needed: roads are ways, and ways are
-    `lines`. One layer, one traversal.
-1.2 **A repo-local `osmconf.ini`** is committed, derived from the pyogrio-bundled copy with
-    `osm_version=yes`, `osm_timestamp=yes`, `osm_changeset=yes` for all layers, and the `attributes` list
-    extended with the tags Plan B's cross-tab needs. It is selected via `OSM_CONFIG_FILE`, **set before
-    the first read**, and its **sha256 is recorded in every cache key and in the manifest** — parsed
-    geometry and attributes depend on it.
-1.3 **Verified working**: with this configuration pyogrio returns `osm_id`, `osm_version`,
-    `osm_timestamp`, `osm_changeset` alongside the tag columns.
+### 2. Bbox-limited reads to site windows — the scan/materialise asymmetry decides this
 
-### 2. `osm_changeset` is permanently unavailable, and lineage is designed around that
+v1 chose one-pass-per-file over per-site reads because per-site *looked* ~9× costlier. That was drawn from
+a 20 s bbox read mistaken for the dominant cost. Measured: **the scan is 0.22 s/MB and linear;
+materialisation is ~8.5× more.**
 
-Measured across **77,764 features in two extracts**: `osm_changeset` is **0 for every feature, with no
-nulls** — Geofabrik strips changeset and user identifiers from public extracts, as its download page
-states. Enabling it in `osmconf.ini` changes nothing, because the field is absent from the source.
+2.1 Each file is read **once per layer**, with a bbox covering the **union of that file's site windows**,
+    so the scan happens once and materialisation is confined to the region actually needed.
+2.2 **If a file's union window still overruns the execution window, it shards by site** — each site's
+    window is an independently valid, independently committed unit. This is the sub-file resumability
+    finding #12 demanded: a killed Indonesia parse must not commit nothing.
+2.3 **Streaming API is pinned.** Bulk `read_dataframe` materialises everything; if a window is large
+    enough to need streaming, `pyogrio.open_arrow` is used and **`pyarrow` is pinned as a dependency** —
+    it is not currently installed, which v1 overlooked.
 
-The superseded plan's lineage design required changeset. It cannot. **Lineage uses `osm_id`,
-`osm_version`, `osm_timestamp` and geometry instead**, with timestamp supplying the edit-ordering signal
-changeset would have given. Both substitutes are fully populated: `osm_version` ranges 1–75 with no nulls,
-`osm_timestamp` has no nulls.
+### 3. Snapshot provenance from the PBF header, not feature maxima
 
-**A free provenance check falls out of this.** In the `200101` extract the maximum `osm_timestamp` is
-2019-12-31 19:55 — strictly before the snapshot date. Plan A therefore **asserts
-`max(osm_timestamp) < snapshot_date` per extract** and fails closed otherwise, which independently
-corroborates that a dated extract really is the state it claims. Nothing else in the pipeline checks this.
+v1 asserted `max(osm_timestamp) < snapshot_date` as a "free integrity check". It would have **rejected 21
+of 22 valid archives**, because extracts routinely contain edits from during their nominal snapshot day.
+Worse, a feature maximum is only a *lower* bound on dataset recency and cannot authenticate a snapshot at
+all.
 
-### 3. Normalise every highway-tagged way, not only the tiers
-
-The cache retains **every way with a non-null `highway` tag**, because Plan B's cross-tab is what decides
-whether the tier lists are right, and filtering to them first would assume the answer and make
-excluded-tag accounting impossible — the exact self-contradiction the superseded plan was caught on.
-
-Per way: `osm_id`, `osm_version`, `osm_timestamp`, raw `highway` value, `surface`, `tracktype`, `access`,
-any lifecycle prefix (`disused:`, `proposed:`, `construction`), the source region and origin, and geometry.
-Written as **GeoParquet per `(origin, region)`** — 36 files — under
-`ml-data/deforestation-risk/external/static/normalised/`, outside the repo.
+Replaced by: **parse the PBF header's `osmosis_replication_timestamp` / content timestamp**, record it,
+and require **it** and every feature timestamp to be **no later than the origin's issue date (31 Dec T)**.
+That is a real bound on the archive; the feature maximum is reported as an observation, never as proof.
 
 ### 4. Deduplication within an origin
 
-Overlapping extracts are deliberate: the Argentina/Bolivia straddling site pulls both country files, so a
-way crossing that border appears in each, and each copy is **clipped at its extract boundary**.
+4.1 Key is **`(origin, osm_type, osm_id)`**.
+4.2 **Same-ID/version groups must agree on everything before merging**: exact equality of `osm_timestamp`
+    **and the canonical full tag map**, not version alone. v1 checked only version, so a timestamp or tag
+    disagreement could have been silently combined under one geometry.
+4.3 **Geometry relationships are classified, not unconditionally unioned.** The reviewer found the first 20
+    Argentina/Bolivia duplicates were **identical full ways, not clipped fragments** — v1's central
+    assumption. Rules: identical copies deduplicate directly; **proven endpoint-contiguous** fragments
+    merge preserving node-reference order; **every other relationship (subset, partial overlap,
+    three-region, disconnected) is reported and fails closed**, never unioned blindly.
+4.4 Raw node-reference order is retained throughout, so merges cannot silently renode or reorder geometry.
+4.5 **Version conflicts halt** — but a **preflight over every real overlap runs first** (the reviewer found
+    0 conflicts in 871 Argentina/Bolivia IDs). If any conflict exists, it is resolved by acquiring a common
+    parent extract or revising the source contract **before** the cache is built, so the halt is an entry
+    condition rather than a stall discovered mid-run.
+4.6 **Assert unique dedup keys**, not "zero global coincident length" — distinct OSM IDs may legitimately
+    trace coincident roads, and v1's assertion would have rejected that. Distinct-ID overlap is reported
+    separately.
 
-4.1 **Key is `(origin, osm_type, osm_id)`** — not `(type, id, version)`. Including version *retains* both
-    copies rather than merging them, which was a defect in the superseded plan.
-4.2 **Version conflicts fail closed.** Overlapping extracts at the same origin are snapshots of the same
-    OSM database on the same date, so the same id must carry the same version. A differing version means
-    the extracts are not the same vintage, which is a provenance failure, not something to resolve by
-    picking a winner. It is reported per id and halts the run.
-4.3 **Same-version fragments are geometrically unioned**, then deduplicated, so a way clipped in two
-    extracts is reassembled rather than either truncated or double-counted.
-4.4 **Assert zero duplicated centreline length** after dedup, and report total length before and after so
-    the reduction is visible rather than assumed.
+### 5. Published layout — parse checkpoints vs published datasets
 
-### 5. Cross-origin lineage — computed, but not classified
+v1 promised 36 per-`(origin, region)` files **and** cross-region deduplication, which are incompatible: a
+merged way either sits in two files or one region becomes an arbitrary owner.
 
-For every way present at more than one origin, emit the raw signals Plan B needs, **without deciding what
-they mean**:
+- **36 per-`(origin, region)` parquet files are parse CHECKPOINTS only**, never consumed downstream.
+- **Three origin-level datasets are published**, partitioned by stable-ID bucket, each way carrying a
+  sorted **`source_regions[]`** array so provenance survives the merge.
 
-- exact `osm_id` matches with their version and timestamp deltas;
-- for ids appearing or disappearing, **candidate geometry matches with their overlap fractions**
-  (intersection over union, and intersection over each side's length), so splits, merges and renumberings
-  are visible as distributions;
-- an **unresolved set**: ids with no acceptable candidate, with their count and centreline length.
+### 6. Lineage — a high-recall candidate graph, frozen here; the cutoff frozen in Plan B
 
-**No overlap threshold is frozen here.** Plan A reports the distribution; **Plan B freezes the cutoff**
-with its decision table, against observed data rather than a number invented in the infrastructure layer.
-That is deliberate: this repo has already had to retract one invented threshold, and the plan that
-consumes a classification should be the plan that defines it.
+v1 deferred the threshold to Plan B but still said "no acceptable candidate", which silently requires an
+acceptance rule. Plan A therefore freezes the **candidate-generation contract** — deliberately high-recall
+— and leaves only the **classification cutoff** to Plan B:
 
-### 6. Extraction polygons acquired and pinned
+- candidate search in a **deterministic metric CRS** (UTM zone of the way's centroid), with a frozen
+  **search radius of 250 m** and a **buffer tolerance of 10 m**, because exact intersections of slightly
+  shifted linework are usually empty;
+- the **complete many-to-many candidate graph**, with pairwise and aggregate coverage metrics
+  (buffered intersection over union, and over each side's length) in **geodesic metres**;
+- an **unresolved set** with count and length.
 
-The `.poly` extraction polygons for the 12 resolved regions were **never acquired** — the existing
-inventory holds only `roads` and `terrain` kinds, and a PBF header bbox is not the extraction polygon.
-Plan A fetches and pins them into a **separate auxiliary write-once inventory**, leaving
-`static_archive_inventory.json` untouched. They serve two purposes here: Plan C needs them for
-`roads_source_available`, and Plan A uses them to **assert that every site's full halo lies inside the
-union of its regions' polygons**, failing closed rather than discovering truncation during feature
-extraction.
+Plan A classifies nothing. Plan B picks the cutoff against these distributions.
 
-### 7. Durability, because this environment interrupts long runs
+### 7. Tag schema — lossless
 
-Phase B's acquisition needed six passes under this environment's background time limits, and one pass
-made zero progress because fixed overhead consumed its whole window.
+v1 selected a handful of attributes while promising no successor would re-parse. Since Plan B defines its
+cross-tab later, and lifecycle-only ways may lack a plain `highway` tag, the cache retains the
+**complete canonical tag map** plus element type and node references for every retained way. Convenience
+columns (`highway`, `surface`, `tracktype`, `access`) are **redundant projections** of that map, not the
+source of truth.
 
-7.1 **Content-addressed cache** keyed by input sha256 + `osmconf.ini` sha256 + resolved
-    GDAL/PROJ/pyogrio versions + code tree SHA. Anything that changes parsed output changes the key.
-7.2 **Per-`(origin, region)` checkpoints**, so an interrupted run resumes at the next unparsed file rather
-    than rescanning.
-7.3 **Atomic stage publication** — each output written to a temporary sibling and renamed only after its
-    assertions pass, so a killed run never leaves a half-written parquet that a later pass mistakes for
-    complete.
-7.4 **An exclusive run lock**, so two passes cannot interleave writes.
-7.5 **Bounded memory**: features processed in chunks; no whole-extract materialisation.
-7.6 **Pin the geospatial stack** in `requirements.txt` — `pyogrio`, `shapely`, `geopandas`, `pyproj`,
-    `rasterio` — which is currently absent entirely, along with the resolved GDAL/PROJ versions in the
-    manifest.
+### 8. Extraction polygons — availability, honestly bounded
 
-### 8. Provenance
+Geofabrik documents `.poly` as the boundary for the **current** extract. The inventory pins 2020–2022
+PBFs and **no contemporaneous polygon exists**, so fetching today's `.poly` cannot establish which
+boundary produced a 2020 archive.
 
-Every input **rehashed before parsing** and checked against `static_archive_inventory.json`; mismatch
-fails closed. The manifest records: recomputed input hashes, the inventory hash and its weak-anchor
-disclaimer verbatim, the auxiliary `.poly` inventory hash, `osmconf.ini` hash, resolved
-GDAL/PROJ/pyogrio versions, code tree SHA, per-file feature counts and total centreline length before and
-after dedup, the version-conflict report, the lineage distributions, the unresolved set, and output hashes.
+Plan A therefore: fetches and pins current `.poly` files as **auxiliary, clearly labelled current-vintage**
+artifacts; searches for dated polygon artifacts and records the outcome; and **marks historical source
+availability UNKNOWN** where none exists, rather than certifying it from a current polygon. Plan C must
+treat `roads_source_available` accordingly.
+
+### 9. Halo — emitted, not assumed
+
+Plan A disclaims feature decisions, so it cannot define "full halo" without importing one. It therefore
+**emits each site's polygon-coverage margin in metres** and leaves the comparison to Plan C, which owns the
+support radius. The existing resolver's 51-pixel contagion default is **not** inherited — it is a
+different quantity for a different feature family.
+
+### 10. Durability
+
+10.1 **Cache identity** hashes the **parser source, `osmconf.ini`, dependency lock, resolved
+     GDAL/PROJ/pyogrio versions, and dirty working-tree content** — not a git commit SHA, which both
+     misses uncommitted parser edits and needlessly invalidates every checkpoint after a docs commit.
+10.2 **A hashed completion manifest, published last, is the sole commit marker.** File existence is not:
+     a kill can land after a parquet rename but before its checkpoint.
+10.3 Outputs are **fsynced and hashed**, and **cached outputs are rehashed before reuse**.
+10.4 A **cache-key-scoped OS advisory lock**, so a stale lockfile cannot wedge the pipeline.
+10.5 Per-**shard** checkpoints (per site where a file shards), not merely per file.
+
+### 11. Provenance
+
+Inputs **rehashed before parsing** against `static_archive_inventory.json`; mismatch fails closed. The
+manifest records recomputed hashes, the inventory hash and weak-anchor disclaimer verbatim, the auxiliary
+polygon inventory with its current-vintage caveat, `osmconf.ini` hash, resolved stack versions, per-layer
+and per-file counts, the overlap-conflict preflight result, lineage distributions, the unresolved set, the
+polygon-coverage margins, and output hashes.
 
 ## Key decisions & tradeoffs
 
-- **pyogrio single-layer reads instead of `GetNextFeature()`**, because `osgeo` and `ogr2ogr` are simply
-  not present. Reading only `lines` makes the one-traversal property hold anyway.
-- **Lineage on id/version/timestamp/geometry, not changeset**, because changeset is stripped at source and
-  no configuration can restore it. Verified, not assumed.
-- **Version conflicts halt rather than resolve.** A "highest version wins" rule would silently paper over a
-  vintage mismatch between extracts, which is a provenance failure worth stopping for.
-- **All highway tags normalised, not just the tiers**, so Plan B can actually decide the tiers.
-- **No overlap threshold frozen here** — Plan A reports distributions, Plan B decides.
-- **No scientific decisions at all** in this plan; that separation is why the three-way split happened.
+- **All way-bearing layers, because 22/22 files proved `lines` alone loses data.** Costs extra reads;
+  0.107 % of features is small but systematic and silent.
+- **Bbox-to-site-union reads with per-site sharding**, reversing v1 — justified by the measured
+  scan/materialise asymmetry, and the only shape that survives a 6–11 minute window against a 45-minute
+  whole-file parse.
+- **Header timestamp, not feature maxima**, because the latter rejects 21/22 valid archives and proves
+  nothing anyway.
+- **Geometry relationships classified and fail-closed**, since the assumed clipped-fragment case was not
+  what the data actually contains.
+- **Candidate generation frozen here, classification frozen in Plan B** — high recall now, judgement later.
+- **Historical polygon availability declared unknown** rather than certified from a current file.
 
 ## Risks / open questions
 
-- **The unresolved-lineage fraction is unknown until this runs.** If it is large, Plan B's audit is
-  weakened, and that would be a reason to revisit the audit design rather than to force a threshold here.
-- **Version conflicts may actually occur** across overlapping Geofabrik extracts if the company rebuilds
-  regions on different schedules. The plan halts if so, which is correct but would block until resolved.
-- **Runtime for the 1.4 GB Indonesia extracts is unmeasured**; a small extract read in 4 s, but that does
-  not extrapolate.
-- **GeoParquet geometry fidelity** for very long ways clipped and re-unioned needs a check that the union
-  is exact rather than simplified.
-- **`osmconf.ini` is derived from the pyogrio-bundled copy**, so a pyogrio upgrade could change the base
-  file underneath it; the hash detects the drift but the resolution is manual.
+- **14 of 36 extracts remain unprofiled**, including all three Indonesia files. The three findings held at
+  100 % across 22, but the largest files are exactly where a surprise would hurt most.
+- **Whether a site-union bbox on Indonesia fits the window is projected, not measured** — the 219 s figure
+  is scan-only with negligible materialisation.
+- **`pyarrow` is not installed**; if streaming proves necessary, that is a new dependency.
+- **The overlap preflight may find real version conflicts**, which would block until the source contract is
+  revised.
+- **Lifecycle-only ways** (`disused:highway=track` with no `highway` key) may be missed by a non-null
+  `highway` filter; the lossless tag map mitigates this only if the filter itself is widened.
+- **250 m / 10 m candidate parameters are chosen, not derived** — deliberately high-recall, and Plan B can
+  only narrow, never widen, what Plan A emits.
 
 ## Out of scope
 
-- **Road tier selection, the vintage decision, and the cross-tab interpretation** — Plan B.
-- **Features, projections, rasterisation, terrain** — Plan C.
-- **Anything touching `lossyear`**, the sealed worker, or the 12-site v11 path.
-- **Re-acquiring or modifying the certified archives**; `static_archive_inventory.json` is never rewritten.
+- Tier selection, the vintage decision, the cross-tab — **Plan B**.
+- Features, projections, rasterisation, terrain — **Plan C**.
+- Anything touching `lossyear`, the sealed worker, or the 12-site v11 path.
+- Re-acquiring or modifying the certified archives; `static_archive_inventory.json` is never rewritten.
 
 ## Proof
 
 From the repo root with `PYTHONPATH` set, using `C:\Users\josha\.venvs\satclf\Scripts\python.exe`:
 
-1. `-m pytest forecast/tests -q` fully green, including: `osmconf.ini` producing `osm_version`/
-   `osm_timestamp` on a fixture extract; the `max(osm_timestamp) < snapshot_date` assertion failing on a
-   doctored fixture; dedup on `(origin, type, id)` reassembling a way clipped across two synthetic
-   extracts with **zero duplicate length**; a version conflict halting the run; lineage emitting overlap
-   distributions **without** classifying; the halo-inside-polygon assertion failing closed on a synthetic
-   truncation; cache keys changing when `osmconf.ini` changes; atomic publication leaving no partial
-   parquet after a simulated kill.
-2. The auxiliary `.poly` write-once inventory, with `static_archive_inventory.json` unchanged (hash
-   compared before and after).
-3. The normalised GeoParquet cache, 36 files, with per-file counts and centreline length before and after
-   dedup.
-4. The lineage report: exact-match counts, overlap distributions, and the unresolved set with its length.
-5. The manifest with recomputed hashes and the pinned stack.
+1. `-m pytest forecast/tests -q` fully green, including: highway features recovered from `multipolygons`
+   on a real extract; the PBF header timestamp parsed and the issue-date bound enforced, with the
+   feature-maximum recorded but non-authoritative; same-ID/version groups rejected on tag or timestamp
+   disagreement; identical / contiguous / overlapping / disconnected geometry cases each hitting their
+   declared branch, with only the first two merging; unique-dedup-key assertion passing where distinct IDs
+   trace coincident roads; candidate graph emitted with metrics and **no** classification; completion
+   manifest as sole commit marker under a simulated kill after rename; cache key changing on a dirty
+   parser edit but **not** on an unrelated docs commit.
+2. The overlap-conflict preflight over every real overlapping region pair, with counts.
+3. The published origin-level datasets with `source_regions[]`, plus the 36 parse checkpoints.
+4. The lineage candidate graph and unresolved set.
+5. The auxiliary polygon inventory, labelled current-vintage, with historical availability marked unknown.
+6. Per-site polygon-coverage margins in metres.
+7. Largest-file runtime measured against the execution window.
 
 Josh runs the proof. Reviewer and builder claims are advisory.
