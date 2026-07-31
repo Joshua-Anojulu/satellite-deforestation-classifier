@@ -962,3 +962,99 @@ Fix: Independently assert that every observed `*:highway` key belongs to the dis
 Fix: Relabel the measurements as Indonesia-only, remove “conservative,” and correct the stage reference.
 
 VERDICT: REVISE
+---
+
+# LOOP 3 — scoped to §5 (commit protocol) only
+
+Loop 2 exhausted its rounds and resolved **deadlocked**. Josh's decision: a third loop scoped to the
+commit protocol alone, leaving the rest of the plan unreviewed rather than unfixed.
+
+Resolved caps: `MAX_ROUNDS` 3, `MAX_ATTEMPTS` 4.
+
+**Why §5 specifically.** Across rounds 7–9 the findings separated cleanly by section:
+
+| round | total | criticals | in §5 |
+|---|---|---|---|
+| 7 | 6 | 1 | 1 |
+| 8 | 10 | 6 | 5 of 6 criticals |
+| 9 | 8 | 2 | 4 of 8, both criticals |
+
+Every §5 critical in rounds 8 and 9 was a defect in the previous round's §5 fix. The data-model half
+converged over the same span.
+
+**Fixed outside §5 before this loop opened** (not submitted for review, but not left broken):
+
+- **§1.2 census COMPLETE** — all 36 extracts, 34,764,774 retained ways, 18 distinct `:highway` keys, set
+  difference 2,740. The table frozen from five extracts was missing `destroyed:` (278 in the difference),
+  `former:` (25), `removed:` (3) and `disabled:` (3) — **309 ways would have been silently dropped**.
+- **§1.2 assertion rewritten** (round-9 #7) from predicate equality to **key membership**. The census
+  proved the hole is real: `indoor:` (86), `note:` (9) and `collapsed:` (3) occur only alongside ordinary
+  `highway`, so they never enter the set difference and boolean equality could never see them. The claim
+  that partial census coverage was safe *because* of that assertion was wrong in both halves.
+- **§6.3 presence table** (round-9 #5) keyed `(site_id, osm_id, origin)`.
+- **§3 soft threshold frozen at 14.0 GB** (round-9 #6); "below 17 GB" froze nothing.
+- **Stale labels** (round-9 #8) — sixth consecutive round.
+
+Reviewer re-checked: PATH `codex` is still 0.146.0, outside `verified_versions`. Pinned to 0.145.0 again.
+
+## Round 10 — codex (loop 3, round 1 of 3 — SCOPED TO §5)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed; thread_id echoed and matched)
+- reviewed body_sha256: de6696c132d1460047c1d829a0a276019521f91b815d40173189ab7f3103dd77
+- verdict: REVISE (2 critical, 4 high, 1 medium) — all in §5, as scoped
+
+**Two of the seven are regressions v10 introduced while fixing round 9.**
+
+**#2 is fatal to the fix I was most pleased with.** v10 put the operation nonce in staging *content* as
+well as in the intent. But `ReplaceFileW`/`MoveFileExW` publish staging's bytes **unchanged** — so a
+per-run nonce either changes `d_new` on every run, destroying deterministic manifests and equal-digest
+reuse, or leaves staging's digest disagreeing with the `d_new` the manifest declares. The nonce now lives
+only in the intent; staging is authenticated by its recorded file ID plus `d_new`.
+
+**#4 is a field I silently deleted.** Rewriting the intent's contents in v10, I dropped the destination's
+pre-mutation file ID — the thing "verified B" was supposed to compare against. The classifier claimed
+identity verification with nothing recorded to verify against. Both identities are now stored, and a valid
+`B` is defined as digest `d_old` **and** the recorded pre-mutation file ID.
+
+**#1 is an overlap I created in the same edit:** `orphan` accepted `B = any` and deleted it, while row 8
+accepts any unverified identity and deletes nothing — the same state meaning two opposite things, and a
+path to destroying an unverified backup. `orphan` now requires `B` absent.
+
+**#3 killed target-derived suffixes.** They are enumerable but not collision-free: an artifact legitimately
+named `foo.__stg` *is* the staging path for target `foo`. Replaced with a same-volume
+`.__txn/<sha256(canonical target path)>/` directory — still enumerable, now collision-resistant.
+
+**#6 is the sharpest.** Write-side DAG validation cannot protect a consumer across a reboot: namespace
+changes may reorder, so the pointer's rename can survive while a child manifest's directory entry does
+not. Every pointer *dereference* now revalidates the full DAG, with startup recovery first.
+
+**#7 is the seventh consecutive round of stale cross-references** — the proof still named a row 0 that no
+longer exists. Regenerated from the current table.
+
+### Critique (verbatim)
+
+§5 still has material defects:
+
+1. **Critical — `orphan` overlaps row 8 and may delete an unverified backup.** `orphan` accepts `B=any`, while row 8 accepts every unverified identity; the same state can therefore mean “delete B” or “delete nothing,” directly contradicting the B-verification rule. [state table](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:609>)  
+Fix: Restrict orphan cleanup to `intent absent, S valid-for-target, B absent`; any B without a valid intent must route to row 8 and never be deleted automatically.
+
+2. **Critical — putting the nonce in staging content breaks manifest identity.** `MoveFileExW`/`ReplaceFileW` publishes staging bytes unchanged, so a fresh nonce either changes `d_new` every run—defeating equal-digest reuse and deterministic manifests—or makes staging’s digest differ from the declared `d_new`. [nonce rule](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:582>)  
+Fix: Keep the nonce only in intent and authenticate staging using its recorded file ID plus `d_new`; any nonce-removal transformation would require additional committed states.
+
+3. **High — target-derived suffixes are enumerable but not collision-free.** A legitimate target named `foo.__stg` occupies exactly the staging path for target `foo`; recovery for `foo` could classify or delete another target.  
+Fix: Reserve and validate the suffix namespace for all targets, or use a dedicated same-volume transaction directory keyed by a collision-resistant hash of the canonical target path.
+
+4. **High — “verified B” remains undefined.** The intent records staging’s file ID but no original destination or expected backup identity, while the classifier claims digest-and-identity comparison and routes an “unverified” B to row 8. [intent fields](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:592>)  
+Fix: Record the pre-mutation destination identity and explicitly define which observable digest/path/identity transition authenticates B after each `ReplaceFileW` outcome.
+
+5. **High — equal-digest no-op is not ordered after recovery.** If `D=d_new` but stale intent/staging/backup artifacts remain, the pre-table no-op can return without classifying or cleaning them, causing the next same-target operation to collide with `CREATE_NEW`.  
+Fix: Under the locks, recover or fail on all remnants first; permit the no-op only when intent, S, and B are absent and the DAG/pointer validate.
+
+6. **High — the power-loss durability claim lacks a mandatory consumer gate.** Because namespace changes may reorder, the pointer rename may survive while a child manifest’s namespace entry does not; validation only before pointer replacement cannot protect a consumer after reboot. [§5.3](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:652>)  
+Fix: Require every pointer dereference to revalidate the complete hash-linked DAG before returning artifacts, with startup recovery completed first.
+
+7. **Medium — the proof still targets the previous table.** It names nonexistent row 0 and does not specifically exercise the new orphan and 2b transitions or the staging-before-intent kill boundary. [proof](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:895>)  
+Fix: Generate tests from the current state variants and inject a kill before and after every adjacent action, including orphan cleanup and each `S → B → intent` deletion.
+
+VERDICT: REVISE

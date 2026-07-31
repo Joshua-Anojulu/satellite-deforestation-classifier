@@ -1,7 +1,7 @@
 ---
 review_provenance:
   schema_version: 2
-  status: deadlocked
+  status: in-progress
   rounds:
     - round: 1
       schema_version: 2
@@ -92,6 +92,17 @@ review_provenance:
       qualifying: true
       session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
       body_sha256: 51b2b12e89b1ed3cd5198d96ad3c26a3fd0ddc1d379323aec2e092db0b79bb74
+      verdict: REVISE
+    - round: 10
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      scope: "section 5 only"
+      session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+      body_sha256: de6696c132d1460047c1d829a0a276019521f91b815d40173189ab7f3103dd77
       verdict: REVISE
   loop_2_note: "rounds 1-6 exhausted both caps and resolved deadlocked at body a325021d; v7 applied all
     four open findings unreviewed; a second loop with fresh caps opens at round 7"
@@ -579,67 +590,82 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
     manifest DAG expects before and after this publish. Classification compares **digest and file
     identity**, never mere existence:
 
-    **Transaction filenames are derived from the TARGET, not from a nonce** (round-9 #4). v9 put the
-    nonce only inside the intent, then promised recovery would inspect "any derived path" — unenumerable
-    if the intent is the thing that went missing. Frozen instead:
+    **Transaction files live in a dedicated same-volume directory, keyed by a hash of the target**
+    (round-10 #3). Target-derived *suffixes* are enumerable but not collision-free: a legitimate artifact
+    named `foo.__stg` occupies exactly the staging path of target `foo`, so recovery for `foo` could
+    classify or delete an unrelated file. Frozen instead, per published directory:
 
-    - staging is `<target>.__stg`, backup is `<target>.__bak`, intent is `<target>.__intent`
-    - all three are **directory-enumerable by target prefix**, so a scan finds remnants with no prior
-      knowledge
-    - the operation nonce lives **inside** the intent and staging as content, used to match them, never to
-      locate them
+    ```
+    <dir>/.__txn/<sha256(canonical target path)>/{staging, backup, intent}
+    ```
 
-    **Staging is created and identified BEFORE the intent is published** (round-9 #1). v9 required the
-    intent to be written before any mutation *and* to contain staging's file ID — which cannot both hold,
-    and row 0 explicitly had `S` absent. Frozen order, entirely under the §5.4 locks:
+    - the `.__txn` directory is **enumerable** — recovery scans it with no prior knowledge, which is what
+      round-9 #4 required
+    - the key is **collision-resistant** and derived from the canonical target path, so no real artifact
+      name can occupy a transaction slot
+    - it is on the **same volume** as the destination, so `ReplaceFileW` and `MoveFileExW` remain valid
 
-    1. create `<target>.__stg` with `CREATE_NEW`, write, **flush**, read back its file ID
-    2. write `<target>.__intent` containing target, `d_old`, `d_new`, staging's file ID, the nonce; **flush**
-    3. mutate `D`
-    4. clean up in the frozen order below
+    **The nonce lives ONLY in the intent** (round-10 #2). v10 put it in staging *content* as well — which
+    is unworkable, because `ReplaceFileW`/`MoveFileExW` publish staging's bytes **unchanged**: a per-run
+    nonce would either change `d_new` on every run, destroying deterministic manifests and equal-digest
+    reuse, or leave staging's digest disagreeing with the declared `d_new`. Staging is authenticated by
+    **its recorded file ID plus `d_new`**, never by embedded content.
 
-    A crash between 1 and 2 leaves staging with **no intent** — an enumerable orphan, deleted on recovery,
+    **The intent records both identities** (round-10 #4). v10 dropped the destination's file ID when the
+    fields were rewritten, leaving "verified B" undefined — the classifier claimed identity comparison with
+    nothing to compare against. The intent contains: target path, `d_old`, `d_new`, **staging's file ID**,
+    **the destination's pre-mutation file ID**, and the nonce.
+
+    **`B` is authenticated by that recorded pre-mutation identity**: after a successful `ReplaceFileW`, the
+    backup is the file that *was* the destination, so a valid `B` has digest `d_old` **and** the recorded
+    pre-mutation file ID. Anything else is unverified.
+
+    **Frozen order, entirely under the §5.4 locks:**
+
+    1. recover first — see the no-op rule below
+    2. create `staging` with `CREATE_NEW`, write, **flush**, read back its file ID
+    3. write `intent` with both identities, **flush**
+    4. mutate `D`
+    5. clean up in the frozen order `S → B → intent`
+
+    A crash between 2 and 3 leaves staging with no intent — an enumerable orphan, safe to delete **only**
     because without an intent nothing has touched `D`.
 
-    **`d_old == d_new` is resolved before the intent is created** (round-9 #2). v9 left rows 0 and 1c both
-    matching that case with opposite actions, so the table was non-deterministic and the no-op existed only
-    in the proof. A verified equal-digest publication is now a **no-op decided under the locks**, before
-    any file is created; the table is never consulted for it.
+    **The equal-digest no-op runs AFTER recovery, not before it** (round-10 #5). v10 decided it first, so a
+    tree with `D = d_new` but stale remnants would return success without cleaning them, and the next
+    operation on that target would then collide with `CREATE_NEW`. The no-op is permitted **only** when
+    intent, `S` and `B` are all absent **and** the DAG and pointer validate; otherwise recovery runs first.
 
     | # | intent | D | S | B | interpretation | action |
     |---|---|---|---|---|---|---|
-    | orphan | absent | any valid | present | any | crash before intent | delete S (and B if present) |
+    | orphan | absent | any valid | valid-for-target | **absent** | crash before intent | delete S |
     | init | present | absent | `d_new` | absent | first publication | **`MoveFileExW(S → D)`** |
     | 1 | absent | `d_new` | absent | absent | complete | none |
     | 1c | present | `d_new` | absent | absent | complete; intent pending | delete intent |
-    | 2 | present | `d_new` | `d_new` | `d_old` | replaced; both temporaries pending | delete S, B, intent |
-    | 2b | present | `d_new` | absent | `d_old` | replaced; B and intent pending | delete B, then intent |
+    | 2 | present | `d_new` | `d_new` | verified `d_old` | replaced; temporaries pending | delete S, B, intent |
+    | 2b | present | `d_new` | absent | verified `d_old` | replaced; B and intent pending | delete B, then intent |
     | 4 | present | `d_old` | `d_new` | absent | not started | `ReplaceFileW(D, S, B)` |
-    | 5 | present | `d_old` | `d_new` | `d_old` | backup taken, replace not done | `ReplaceFileW(D, S, B)` |
+    | 5 | present | `d_old` | `d_new` | verified `d_old` | backup taken, replace not done | `ReplaceFileW(D, S, B)` |
     | 6 | present | absent | `d_new` | absent **or** verified `d_old` | D unlinked; replacement verified | **`MoveFileExW(S → D)`**, then B, then intent |
-    | 7 | present | absent | absent | `d_old` | destination lost, no replacement | **fail closed**; operator restores from B |
-    | 8 | any other combination, or any unverified identity | | | | unrecognised | **fail closed**, delete nothing |
+    | 7 | present | absent | absent | verified `d_old` | destination lost, no replacement | **fail closed**; operator restores from B |
+    | 8 | any other combination, or ANY unverified identity | | | | unrecognised | **fail closed**, delete nothing |
 
-    **Cleanup order is `S → B → intent`, everywhere** (round-9 #3). v9's row 3 said `S` then `B` while the
-    prose rule said `B` then `S`; a kill between them landed in a state no row covered. Row 2 now deletes
-    in that one order and row 2b is the state after `S` is gone, so every kill point during cleanup lands
-    on a covered, idempotent row.
+    **`orphan` requires `B` absent** (round-10 #1). v10's orphan row accepted `B = any` and deleted it,
+    which both overlapped row 8 — the same state meaning "delete B" and "delete nothing" — and could
+    destroy an unverified backup, contradicting the B-verification rule outright. A `B` present without a
+    valid intent now routes to row 8 and is **never** deleted automatically.
 
     **Rules:**
 
-    - **Absent intent does not by itself establish a clean tree.** An NTFS namespace change can be lost or
-      reordered on power loss, so recovery additionally enumerates `<target>.__stg` / `.__bak` and
-      validates the last committed DAG and pointer; a remnant with no intent is the `orphan` row, and
+    - **Absent intent does not by itself establish a clean tree.** Recovery enumerates `.__txn` and
+      validates the last committed DAG and pointer; a lone staging remnant is the `orphan` row, and
       anything else fails closed.
-    - **Staging identity and nonce are verified before `D` is mutated.** A same-digest file from another
-      operation routes to row 8.
-    - **`B` is permitted only absent or verified `d_old`**; any other identity routes to row 8, and
-      **row 8 deletes nothing**.
     - **Never restore from B when S holds `d_new`.**
-    - **The ENTIRE transaction runs under the §5.4 locks in fixed order**, with `CREATE_NEW` for staging
-      and intent, so two simultaneous first publishers cannot both proceed.
+    - **The ENTIRE transaction runs under the §5.4 locks**, with `CREATE_NEW` for staging and intent, so
+      two simultaneous first publishers cannot both proceed.
+    - **Cleanup order is `S → B → intent` everywhere**, with row 2b covering the state between deletions.
     - **Idempotence belongs to the recovery ENTRYPOINT** (`reclassify → act`); the proof invokes it twice
-      from every row.
+      from every row and injects a kill before and after every adjacent action.
 
     **On the directory flush:** the POSIX recipe ends with an `fsync` on the containing directory. Windows
     has no directory-fsync equivalent and `ReplaceFileW` is the atomicity primitive instead, so the plan
@@ -649,9 +675,20 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
     flushed** — and explicitly *not* durability of the NTFS namespace change across sudden power loss,
     which can still be lost or reordered. The startup classifier is what makes that survivable.
 
-5.3 **Validation order:** bottom-up on write (children verified before a parent is published), and
-    **top-down revalidation of the entire DAG from the stage manifest** immediately before the consumer
-    pointer is replaced. A pointer never advances to a DAG that has not just been walked in full.
+5.3 **Validation order, on write AND on read** (round-10 #6). Bottom-up on write (children verified
+    before a parent is published), and top-down revalidation of the entire DAG immediately before the
+    consumer pointer is replaced.
+
+    **But write-side validation alone cannot protect a consumer across a reboot.** Because NTFS namespace
+    changes may reorder under power loss, the pointer's rename can survive while a child manifest's
+    directory entry does not — so a pointer validated at write time can dereference, after a crash, to a
+    DAG that is no longer complete. v10 validated only before pointer replacement and called that
+    sufficient; it is not.
+
+    **Every pointer dereference therefore revalidates the complete hash-linked DAG before returning any
+    artifact, with startup recovery (§5.2) completed first.** A consumer that cannot validate the DAG gets
+    an error, never a partial read. This is what makes the narrow durability claim survivable rather than
+    merely stated.
 
 5.4 **Fixed lock order, always: cache-key lock, then publication lock** (round-2 #15). Artifacts live under
     their content-addressed key; the shared consumer pointer updates under the separate publication lock.
@@ -892,14 +929,20 @@ From the repo root with `PYTHONPATH` set, using `C:\Users\josha\.venvs\satclf\Sc
    showing it *fall* under paging pressure; DAG validation rejecting a parent whose
    child digest was altered; pointer replacement refused when revalidation fails; lock order asserted;
    **`LockFileEx` locks released by killing the owning process**; `publish_container` refusing a reparse
-   or non-NTFS ancestor; **the startup classifier driven through every row of §5.2's state table including `init`, 0, 1c and the
-   destination-conditioned `d_old == d_new` no-op**, with the intent record proven deleted LAST and a kill
-   immediately before and after its deletion proven recoverable; a foreign same-digest staging file routed
-   to row 8; an unverified backup routed to row 8 and **not deleted**; and **two simultaneous first
-   publishers** proven to serialise via `CREATE_NEW` under the fixed locks, with the **recovery ENTRYPOINT** invoked twice from each row and required to
-   reach the same terminal state (replaying a raw `ReplaceFileW` is not the test); roll-forward proven for rows 5 and 6, the latter by atomic rename with **no
-   placeholder and no exposure of backup content**; fail-closed proven for rows 7 and 8; a same-digest file from another operation
-   proven not to satisfy a row; a stale backup proven not to participate in a later publish;
+   or non-NTFS ancestor; **the startup classifier driven through every row of the CURRENT §5.2 table** —
+   `orphan`, `init`, 1, 1c, 2, 2b, 4, 5, 6, 7, 8 (round-10 #7: the proof previously named a row 0 that no
+   longer exists) — with the **recovery ENTRYPOINT** invoked twice from each row and required to reach the
+   same terminal state, since replaying a raw `ReplaceFileW` is not the test; **a kill injected before and
+   after every adjacent action**, specifically the staging-before-intent boundary, each of the
+   `S → B → intent` deletions, and orphan cleanup; `orphan` proven to fire only with `B` absent, and a
+   `B` present without a valid intent proven to route to row 8 and **not** be deleted; a foreign
+   same-digest staging file rejected by file ID; a backup with digest `d_old` but the wrong pre-mutation
+   file ID rejected as unverified; the equal-digest no-op proven to run **after** recovery and to be
+   refused while any remnant exists; a target legitimately named like a transaction file proven not to
+   collide, via the `.__txn/<hash>` layout; two simultaneous first publishers proven to serialise via
+   `CREATE_NEW`; roll-forward proven for rows 5 and 6, the latter by atomic rename with no placeholder;
+   fail-closed proven for rows 7 and 8; **every pointer dereference proven to revalidate the full DAG and
+   to error rather than return a partial read after a simulated reordered-namespace crash**;
    manifest-as-commit at shard, region and stage level under a simulated kill; cache key rejecting an
    artifact built for different site windows; dirty-tree scoping ignoring an unrelated docs edit.
 2. **The §3 gate re-run through the production parser-to-committed-region path**, every row passing, its
