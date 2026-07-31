@@ -732,3 +732,28 @@ mislead an implementer:
 **These three are not reviewed.** The remaining four findings (#1 under-keyed closure, #2 anchor-domain
 geometry, #3 the NTFS state table, #6 commit-charge vs working-set enforcement) are design work and are
 left open for the sign-off decision rather than silently patched.
+
+---
+
+# LOOP 2 — fresh caps, opened after v7
+
+Loop 1 exhausted both caps (rounds 6 of 6, attempts 8 of 8) and resolved **deadlocked** at body
+`a325021d`. Josh's decision: apply all four open findings, then review v7 with a fresh budget.
+
+**v7 applied Codex's prescribed fix for each of the four, and they are UNREVIEWED going in:**
+
+| round-6 finding | fix applied in v7 |
+|---|---|
+| #1 critical — `S` under-keyed | `S = {(site_id, osm_id)}` bound into the manifest DAG; three independent flags (`intersects_window`, `selected_by_predicate`, `closure_only`) replacing one conflated boolean; all six endpoint flags added to the identity-edge schema; pass-1 duplicates suppressed |
+| #2 — anchor domain not geometric | anchors are geometry **clipped** to the site box; `max_complete_radius_m = inf distance(site_box, complement(mask))` in the same per-site UTM projection Plan B uses; closure-only endpoints excluded from Plan B's spatial candidate domain |
+| #3 — NTFS table incomplete | added row 0 (clean pre-publish, which v6 omitted so a classifier would fail closed on a clean tree); `d_old == d_new` no-op; file identity as a row condition; row 6 split by backup digest with the placeholder step named, since `ReplaceFileW` requires an existing destination; idempotence relocated to the reclassify-then-act **entrypoint** |
+| #4 — working set cannot detect swapping | ceiling enforced on **`PrivateUsage`** commit charge, preferably a Job Object hard limit (`forecast/sandbox_process.py` already uses Job Objects); working set demoted to observability only; pass 2 gated on re-measuring peak commit with the real `S` resident |
+
+Resolved caps for loop 2: `MAX_ROUNDS` 3, `MAX_ATTEMPTS` 4. Deliberately tighter than loop 1 — loop 1's
+finding count plateaued at 6 with each revision generating comparable new surface, so an open-ended budget
+is not obviously the right instrument. If loop 2 plateaus too, that is the answer about this plan's
+remaining risk, not a reason to keep spending.
+
+Reviewer re-checked before opening: PATH `codex` is **0.146.0**, still outside `verified_versions`
+(`>=0.130 <0.146`) and still shipping the broken sandbox-helper layout on this box. Pinned to the
+verified, repaired **0.145.0** release binary again, same session, same model.
