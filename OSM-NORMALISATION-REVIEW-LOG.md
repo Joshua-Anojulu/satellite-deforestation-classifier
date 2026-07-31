@@ -1058,3 +1058,86 @@ Fix: Require every pointer dereference to revalidate the complete hash-linked DA
 Fix: Generate tests from the current state variants and inject a kill before and after every adjacent action, including orphan cleanup and each `S → B → intent` deletion.
 
 VERDICT: REVISE
+## Round 11 — codex (loop 3, round 2 of 3 — scoped to §5)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+- reviewed body_sha256: e0c8c4d205cb60b6555f31a39f6b9c8a14ba828998927cb0f1ecba843a8f948b
+- verdict: REVISE (4 critical, 2 high, 1 medium) — all §5
+
+It also answered a question I put to it: **NTFS file IDs can be reused after deletion**, so the identity
+check v11 strengthened had a hole in it.
+
+**Two of the four criticals were consequences of v11's own fixes:**
+
+- The `.__txn/<sha256>` directory fixed the collision problem (round-10 #3) and **destroyed
+  identifiability** — SHA-256 is irreversible, so a scan finds a hash directory and staging bytes but
+  cannot recover the target, the cache-key lock, or `d_new`.
+- The `orphan` rule **contradicted the plan's own power-loss model**: absence of an intent does not prove
+  `D` was never mutated, because reordered namespace persistence can leave staging as the only copy of the
+  new payload. The rule would have deleted it.
+
+### §5 findings by round — the reason v12 abandons the design instead of patching it
+
+| round | §5 findings | §5 criticals |
+|---|---|---|
+| 7 | 1 | 1 |
+| 8 | 5 | 5 |
+| 9 | 4 | 2 |
+| 10 | 7 | 2 |
+| 11 | 7 | 4 |
+
+**Five consecutive rounds, and in each one the new criticals came from the previous round's fix.** The
+nonce that broke digest determinism, the hashed directory that lost identifiability, the orphan rule that
+contradicted the durability model. This is not a run of unlucky oversights: it is a design whose
+correctness depends on reasoning about a multi-file namespace under reordering, and prose specification
+keeps failing precisely there.
+
+### v12 — remove the thing generating the findings
+
+Publication becomes **immutable content-addressed writes plus one pointer swap**. Every artifact is written
+to `<store>/<sha256>` via temp → flush → rename; nothing is ever overwritten, so there is no `d_old`, no
+backup, no intent, and no recovery state machine. The single mutable object is the pointer, whose content
+is the current stage-manifest digest, and every `ReplaceFileW` outcome for it leaves a pointer naming a
+complete DAG. A crash leaves only **unreferenced** artifacts, which recovery never deletes — an offline
+mark-and-sweep removes them, and an interrupted sweep is harmless.
+
+Six of round 11's seven findings dissolve rather than being answered: no state machine (#1), no rows (#2),
+no transaction slots (#3), nothing deleted on recovery (#4), digest rather than file-ID identity (#5), no
+path-derived transaction namespace to canonicalise (#6). #7's snapshot semantics is adopted directly.
+
+The accepted cost is disk — superseded artifacts persist until swept, on a machine already constrained.
+Garbage is recoverable; a corrupted publication is not.
+
+**Codex validated two things explicitly**, which is worth recording after five rounds of criticals: the
+narrow durability wording is defensible, and consumer revalidation correctly converts reordering into a
+hard error rather than a partial read.
+
+### Critique (verbatim)
+
+§5 still has material defects.
+
+1. **Critical: the “complete” table omits clean entry states.** Before an update, `I/S/B` are absent and `D=d_old`; before first publication all four may be absent. Neither state appears in the table, although recovery is mandatory before staging begins. An empty transaction directory created before `S` is another uncovered state. [§5.2 table](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:623>)  
+   **Fix:** Add explicit `clean-existing`, externally-authorised `clean-first`, and empty-slot rows.
+
+2. **Critical: `init` and row 6 overlap.** Both accept `intent=present, D=absent, S=d_new, B=absent`; meanwhile the intent supposedly always contains a pre-mutation destination file ID, which cannot exist for `init`.  
+   **Fix:** Model `prior_destination` as the tagged union `ABSENT | {digest, volume_id, file_id}` and predicate both rows on that field.
+
+3. **Critical: an intentless hashed slot is enumerable but not identifiable.** After the staging-before-intent crash, scanning yields only a SHA-256 directory and `S`; the hash is irreversible, so recovery cannot recover the target, cache-key lock, `d_new`, or meaningfully evaluate `valid-for-target`.  
+   **Fix:** Flush a self-describing owner/pre-intent containing canonical target, cache key, old state, and `d_new` before creating `S`; authenticate `S` by `d_new` afterward.
+
+4. **Critical: the orphan deletion proof contradicts the power-loss model.** Absence of intent does not prove that `D` was never mutated: reordered namespace persistence can leave `D=d_old, S=d_new, B/I=absent` after replacement began. The orphan row then deletes the only new payload, potentially while the pointer names the new DAG.  
+   **Fix:** Never delete intentless staging based solely on path layout; require the pre-intent above or fail closed/quarantine after comparing the committed pointer.
+
+5. **High: file identity is inconsistently and partly unjustifiably authoritative.** Rows with `D=d_new` do not require `D` to carry recorded `S` identity, despite the prose claiming identity comparison. Microsoft guarantees that resulting `D` retains the replacement file’s ID, but does not clearly guarantee the proposed backup-ID invariant across every success/failure/retry path; file IDs may also be reused after deletion. [ReplaceFileW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew), [file-ID semantics](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-by_handle_file_information)  
+   **Fix:** Make digest plus exclusive transaction-path ownership authoritative and IDs diagnostic, or gate implementation on live NTFS tests and require `(volume serial, file ID)` for every applicable `D/S/B` row.
+
+6. **High: “canonical target path” is not a frozen algorithm.** Case aliases, 8.3 names, hard links, and missing first-publication targets can map one NTFS object to different hashes and slots. `GetFullPathName` itself does not canonicalize the supplied name. The plan also does not explicitly apply reparse/volume checks to the sibling `.__txn` chain. [Windows naming rules](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file), [GetFullPathName](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea)  
+   **Fix:** Define canonicalization from an opened parent handle plus validated final component, reject case-sensitive directories and hard-linked targets, reserve `.__txn`, and validate every transaction-path component as local NTFS and non-reparse.
+
+7. **Medium: read-side validation needs snapshot semantics.** Revalidating the DAG does close the integrity gap only if the pointer is read once and consumers use the exact bytes or handles validated; validating paths and reopening them later leaves a TOCTOU gap. [§5.3](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:678>)  
+   **Fix:** Freeze one pointer snapshot per read and return artifacts through handles opened and hashed during that traversal.
+
+The narrow durability wording itself is defensible: it promises atomic visibility and flushed contents, not power-loss durability of namespace changes. Consumer revalidation correctly converts reordering into a hard error rather than a partial read. The unresolved classifier and orphan states prevent the recovery protocol from supporting that claim yet.
+
+VERDICT: REVISE
