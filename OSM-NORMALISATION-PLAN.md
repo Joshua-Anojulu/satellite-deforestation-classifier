@@ -234,16 +234,34 @@ no `if it overruns` trigger that a killed process could never record.
     arbitrary separation") would have **passed on synthetic fixtures while production silently omitted
     exactly the cases the edge exists to catch** — a green test over a hole.
 
-    **Identity closure, as two explicit passes:**
+    **Identity closure — keyed by `(site_id, osm_id)`, not by `osm_id`** (round-6 #1). v6 made `S` a bare
+    set of IDs, which cannot express the thing the flag is for: a way may be **inside** site A's window and
+    **outside** site B's. A single `outside_window` boolean on the record is therefore meaningless — it is
+    a property of the (site, way) pair, not of the way.
 
     - **Pass 1 — site relevance.** Stream all 36 extracts, apply the §1.2 retain-predicate and window
-      dispatch. Emit region checkpoints, and accumulate **`S` = the set of every `osm_id` touching any site
-      window in any origin**. `S` is small: it is bounded by the road network inside 36 windows, not by
-      the corpus.
-    - **Pass 2 — closure.** Stream all 36 extracts again, retaining every way whose `osm_id ∈ S`
-      **regardless of window intersection**, tagged **`outside_window = true`**. These records exist only
-      to complete identity edges; they are excluded from coverage statistics and from Plan C's road supply,
-      and the flag is what keeps that distinction auditable.
+      dispatch. Emit region checkpoints, and accumulate the **closure table `S = {(site_id, osm_id)}`** —
+      every way touching a given site window in any origin, associated with that exact site. `S` is
+      **published as a first-class artifact bound into the manifest DAG** (§5.1), so pass 2's inputs are
+      versioned and reproducible rather than being incidental process state.
+    - **Pass 2 — closure.** Stream all 36 extracts again. For each `(site_id, osm_id) ∈ S`, retain that
+      way **for that site** regardless of window intersection. A counterpart is associated only with the
+      sites that actually claim it, never with all sites.
+
+    **Three independent flags, because v6's single boolean conflated three different facts** (round-6 #1):
+
+    | flag | meaning |
+    |---|---|
+    | `intersects_window` | the geometry actually meets this site's mask |
+    | `selected_by_predicate` | §1.2 retained it on its own tags |
+    | `closure_only` | present solely to complete an identity edge |
+
+    A tag-changed counterpart that still lies geometrically inside the window has
+    `intersects_window = true`, and v6 would have wrongly stamped it `outside_window = true`. Coverage
+    statistics and Plan C's road supply are defined on `intersects_window`, never on `closure_only`.
+
+    **Deterministic pass-1 duplicates are suppressed:** a `(site_id, osm_id)` already emitted by pass 1 is
+    not re-emitted by pass 2. Pass 2 contributes only records pass 1 could not see.
 
     Two passes is the honest cost of the promise. Retaining every highway way corpus-wide instead would
     avoid the second pass but multiply the output by roughly an order of magnitude, and disk is already
@@ -253,16 +271,28 @@ no `if it overruns` trigger that a killed process could never record.
     complete for every anchor** (round-5 #2). v5 told Plan B it was free to choose any radius, which a
     5 km window cannot honour: an anchor near the window edge has neighbours outside it.
 
-    - **Anchor domain (frozen): the unbuffered site box.** For any anchor inside it, every feature within
-      the guard distance is inside the window by construction.
-    - **`max_complete_radius_m` is emitted per site** — the guaranteed-complete query radius for anchors in
-      that domain, computed from the realised mask rather than assumed to be 5000.
-    - **Plans B and C must stay inside it or reopen Plan A.** That is a stated contract, not a hope. v5's
-      Risks section admitted Plan C "could in principle exceed" the guard while §2 claimed neither plan
-      could need a discarded road; the admission was right and the claim is withdrawn.
+    - **Anchor domain (frozen): geometry CLIPPED to the site box** (round-6 #2). v6 said "any anchor
+      inside the site box", which is undefined for a `LineString` — a way merely *intersecting* the box can
+      run far outside it, and its distant portion has neighbours beyond the mask. The anchor is therefore
+      the way's geometry **intersected with the site box**, so every point of every anchor is inside the
+      box by construction and the guarantee below is geometric rather than nominal.
+    - **`max_complete_radius_m = inf distance(site_box, complement(mask))`**, computed from the realised
+      mask — the largest radius for which a query centred anywhere in the box cannot reach outside the
+      retained data. Emitted per site.
+    - **The metric is stated, not assumed compatible.** It is computed in the **same per-site UTM
+      projection §6.4 freezes**, which is the projection Plan B measures distance in. If Plan B ever
+      measures in a different metric, the radius must be re-derived as a conservative lower bound rather
+      than reused — a completeness guarantee expressed in one metric is not a guarantee in another.
+    - **Closure-only endpoints are excluded from Plan B's spatial candidate domain** (round-6 #2). They are
+      not a sampled neighbourhood: they exist only where an identity edge demanded them, so treating them
+      as spatial candidates would silently bias candidate generation toward ways that happen to have
+      identity counterparts.
+    - **Plans B and C must stay inside `max_complete_radius_m` or reopen Plan A.** That is a stated
+      contract, not a hope. v5's Risks section admitted Plan C "could in principle exceed" the guard while
+      §2 claimed neither plan could need a discarded road; the admission was right and the claim is
+      withdrawn.
     - **No bespoke index format is frozen.** Plan A publishes GeoParquet; Plan B builds its own ephemeral
-      spatial index from it. A portable index schema would be one more Plan A artifact to version, and
-      round-5 #2's alternative avoids it entirely.
+      spatial index from it.
 
 **Two different margins, which v3 conflated** (round-3 #9):
 
@@ -289,7 +319,9 @@ but no criterion, which is not a gate.
 |---|---|---|---|
 | largest-file wall-clock | ≤ 45 min | **22.5 min** | PASS |
 | projected corpus wall-clock, **both passes** (§2.2) | ≤ 12 h | *≈ 4.5 h — EXTRAPOLATED, not measured* | **NOT ASSESSED** |
-| peak working set | ≤ 50 % of machine RAM (17.0 GB) | **6.58 GB (19.3 %)** | PASS |
+| peak commit charge (`PrivateUsage`) | ≤ 50 % of machine RAM (17.0 GB) | **8.22 GB (24.1 %)** — pass 1 only | PASS, pass 1 |
+| peak commit charge **with `S` resident** (pass 2) | ≤ 17.0 GB | *never measured* | **NOT ASSESSED** |
+| peak working set *(observability only)* | — | 6.58 GB | not a gate |
 | geometry availability | 100 % of retained ways | **100 %** (4,839,062 / 4,839,062) | PASS |
 | ways with a missing or invalid node location | 0 | **0** | PASS |
 | temporary index disk | n/a — no index file | 0 bytes | PASS |
@@ -311,8 +343,14 @@ between sparse and dense representations by node cardinality and node-ID density
 node count and dense cost with the largest node ID, and **neither is ordered by compressed PBF bytes**.
 v4's claim that "if `indonesia-220101` fits, every other file fits" is withdrawn. Instead:
 
-- the ceiling is **enforced per file at run time** — working set is sampled during every file, and any
-  file exceeding 50 % of machine RAM **fails the stage closed** rather than swapping;
+- the ceiling is **enforced on commit charge, not working set** (round-6 #6). Sampling `WorkingSetSize`
+  cannot detect the failure it was meant to prevent: working set counts *resident* pages, so when Windows
+  begins paging the process out the number **falls**. A swapping run would have looked healthier, not
+  worse. The ceiling is enforced on **`PrivateUsage`** (`PROCESS_MEMORY_COUNTERS_EX`), and preferably as a
+  **Job Object hard limit** (`JOB_OBJECT_LIMIT_PROCESS_MEMORY`) so the OS terminates the process at the
+  boundary rather than the process politely noticing afterwards. `forecast/sandbox_process.py` already
+  creates and assigns Job Objects in this repo, so the mechanism exists and is exercised;
+- working set is retained as an **observability metric only** — useful in the §10.2 journal, never a gate;
 - **node cardinality and maximum node ID are recorded per file** in the manifest, since those are the
   actual drivers of index size;
 - the single frozen backend stays, because the measurement below shows the margin is large — but it is
@@ -393,9 +431,10 @@ v4's claim that "if `indonesia-220101` fits, every other file fits" is withdrawn
     | stage | gated by |
     |---|---|
     | 1. Pass 1 parsing → region checkpoints | §3's production-path gate, measured on the largest file |
-    | 2. Pass 2 closure → `outside_window` records | pass 1 committed |
-    | 3. **Duplicate-group preflight**, reading committed checkpoints only | passes 1–2 committed |
-    | 4. Deduplication and origin-level publication | **preflight clean** |
+    | 2. **Pass 2 gate** — largest file re-measured with the real committed `S` resident | pass 1 committed; commit-charge ceiling re-verified (round-6 #5, #6) |
+    | 3. Pass 2 closure → `closure_only` records | the pass-2 gate passing |
+    | 4. **Duplicate-group preflight**, reading committed checkpoints only | passes 1–2 committed |
+    | 5. Deduplication and origin-level publication | **preflight clean** |
 
     Preflight at step 3 reads Parquet, never a PBF, so it genuinely is cheap — but only because it now
     runs after the parse instead of before it. It covers all three origins and every real region overlap:
@@ -447,27 +486,44 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
     manifest DAG expects before and after this publish. Classification compares **digest and file
     identity**, never mere existence:
 
-    | # | D | S | B | interpretation | idempotent action |
+    | # | D | S | B | interpretation | action |
     |---|---|---|---|---|---|
+    | 0 | `d_old` | absent | absent | clean; publish not begun | begin publish normally |
     | 1 | `d_new` | absent | absent | complete | none |
     | 2 | `d_new` | absent | `d_old` | replaced; cleanup pending | delete B |
     | 3 | `d_new` | `d_new` | `d_old` | replaced; both temporaries pending | delete S, then B |
-    | 4 | `d_old` | `d_new` | absent | not started | retry publish from S |
-    | 5 | `d_old` | `d_new` | `d_old` | backup taken, replace not done | retry publish **from S** |
-    | 6 | absent | `d_new` | any | destination lost mid-flight | **roll forward**: publish S |
-    | 7 | absent | absent | `d_old` | destination lost, no replacement | fail closed; operator restore from B |
-    | 8 | any other digest combination | | | unrecognised | **fail closed**, report all three |
+    | 4 | `d_old` | `d_new` | absent | not started | `ReplaceFileW(D, S, B)` |
+    | 5 | `d_old` | `d_new` | `d_old` | backup taken, replace not done | `ReplaceFileW(D, S, B)` |
+    | 6a | absent | `d_new` | `d_old` | error 1177: D unlinked, both survive under other names | recreate placeholder at D from B, then `ReplaceFileW(D, S, B)` |
+    | 6b | absent | `d_new` | absent | D unlinked, no backup | create empty placeholder at D, then `ReplaceFileW(D, S, B)` |
+    | 7 | absent | absent | `d_old` | destination lost, no replacement | **fail closed**; operator restores from B |
+    | 8 | any other digest/identity combination | | | unrecognised | **fail closed**, report all three |
 
     **Rules that make the table safe:**
 
-    - **Never restore from B when S holds `d_new`** (states 5, 6). The backup is the *old* content; rolling
+    - **State 0 is the ordinary pre-publish state** and v6 omitted it, so a classifier following v6 would
+      have fallen through to fail-closed on a perfectly clean tree (round-6 #3).
+    - **`d_old == d_new` is a no-op, decided before the table is consulted.** Otherwise rows 0/1 and 4/5
+      are indistinguishable by digest (round-6 #3).
+    - **Digests alone do not identify a row; file identity participates.** Each row additionally requires
+      D's file ID to be the published inode when present, and S's to be this operation's staging file —
+      a same-digest file from another operation must not satisfy a row.
+    - **Row 6 is split by backup digest** (round-6 #3). v6's single row 6 accepted *any* backup, including
+      an unknown one, contradicting row 8's fail-closed rule. `ReplaceFileW` also requires an existing
+      destination, so "publish S" was not an executable instruction when D is absent; 6a/6b name the exact
+      placeholder step first.
+    - **Never restore from B when S holds `d_new`** (rows 5, 6a). The backup is the *old* content; rolling
       back after the replacement may already be visible is the one direction that loses committed work.
-    - **Cleanup ordering:** B is deleted only after D is verified `d_new` by digest; S likewise. So a kill
-      during cleanup re-enters at state 2 or 3, both of which are idempotent.
-    - **A surviving B never participates in the next publish.** Each publish uses a fresh backup path
-      derived from the target digest, so a stale backup cannot be mistaken for this operation's (round-5 #4).
-    - **Classification and recovery run as one critical section under the §5.4 locks, in the same order.**
-      Two concurrent restarts therefore serialise instead of racing each other through the table.
+    - **Cleanup ordering:** B is deleted only after D verifies as `d_new`; S likewise. A kill during
+      cleanup re-enters at row 2 or 3, both idempotent.
+    - **A surviving B never participates in the next publish.** Each publish derives a fresh backup path
+      from the target digest, so a stale backup cannot be mistaken for this operation's.
+    - **Idempotence is a property of the recovery ENTRYPOINT, not of the actions** (round-6 #3). Running
+      `ReplaceFileW` twice is not idempotent. The entrypoint is `reclassify → act`, and it is that loop
+      which is re-entrant: the proof invokes the entrypoint twice from every row and requires the same
+      terminal state, rather than replaying a raw action.
+    - **Classification and recovery run as one critical section under the §5.4 locks, in the same order**,
+      so concurrent restarts serialise instead of racing through the table.
 
     **On the directory flush:** the POSIX recipe ends with an `fsync` on the containing directory. Windows
     has no directory-fsync equivalent and `ReplaceFileW` is the atomicity primitive instead, so the plan
@@ -508,7 +564,8 @@ Plan A emits three things and no thresholds:
 6.1 **Identity edges, unconditionally and at any distance — delivered by §2.2's closure pass, not
     assumed.** Ways sharing an `osm_id` across two origins are linked regardless of separation, because
     pass 2 retains counterparts outside the window specifically so the edge can exist. Each edge records
-    whether either endpoint was `outside_window`. Identity is direct evidence and needs no radius; a road
+    all three §2.2 flags **for both endpoints**, so a closure-only counterpart is never mistaken for a
+    road the site actually contains. Identity is direct evidence and needs no radius; a road
     that moved 8 km is exactly the case a radius — or a window — would have deleted.
 
 6.2 **The normalised geometry itself as GeoParquet**, from which Plan B builds its own ephemeral spatial
@@ -520,8 +577,15 @@ Plan A emits three things and no thresholds:
 
 **Frozen identity-edge schema.** One row per `(site_id, origin_pair, osm_id)`, origins canonically ordered:
 
-`site_id, origin_a, origin_b, osm_id, min_distance_m, hausdorff_m,
+`site_id, origin_a, origin_b, osm_id,
+ a_intersects_window, a_selected_by_predicate, a_closure_only,
+ b_intersects_window, b_selected_by_predicate, b_closure_only,
+ min_distance_m, hausdorff_m,
  iou_5, iou_10, iou_25, iou_50, cov_a_in_b_{5,10,25,50}, cov_b_in_a_{5,10,25,50}, degenerate_flag`
+
+**The six endpoint flags are per-endpoint, and v6 promised them in prose while omitting them from this
+schema** (round-6 #1). Without them a consumer cannot tell an edge between two genuinely in-window ways
+from one whose far endpoint exists only as closure — which is precisely the distinction Plan B needs.
 
 6.4 **Exact operator definitions** (round-4 #6 — v4 left these open):
 
@@ -627,9 +691,11 @@ node ID, and output hashes.
 - **The corpus projection rests on one file's way density** (§3.3) and now covers two passes. If some
   region is far denser per MB than Indonesia, 4.5 h is optimistic — the 12 h ceiling absorbs a 2.6× error,
   and the per-file ceiling still gates each file individually.
-- **`S` (the site-relevant ID set) is assumed small enough to hold in memory** for pass 2. It is bounded by
-  the road network inside 36 windows, not the corpus, but it is **unmeasured** — pass 1 must report its
-  cardinality and the plan reopens if it does not fit.
+- **`S` (the `(site_id, osm_id)` closure table) is assumed to fit in memory** for pass 2, and it is now
+  keyed by pair rather than by ID, so it is larger than v6 assumed. It is bounded by the road network
+  inside 36 windows, not the corpus, but it is **unmeasured**: pass 1 reports its cardinality, and the
+  pass-2 gate (§4.6) re-measures peak commit charge with it resident before pass 2 is authorised
+  corpus-wide.
 - **14 of 36 extracts remain unprofiled**, and the largest-by-bytes is *not* known to be the binding case
   for memory or runtime (round-4 #4). Per-file runtime enforcement is what covers this, not extrapolation.
 - **The duplicate-group preflight may find unequal node references or coordinates**, which blocks rather
@@ -669,15 +735,22 @@ From the repo root with `PYTHONPATH` set, using `C:\Users\josha\.venvs\satclf\Sc
    header-timestamp precedence with `feature_max <= header <= issue_date` and a missing-field failure;
    **identity edges emitted at arbitrary separation, proven against a way whose counterpart lies OUTSIDE
    the site window** — a synthetic in-window fixture would pass while production omitted the case (§2.2);
-   `outside_window` records excluded from coverage statistics and from Plan C's road supply;
-   `max_complete_radius_m` emitted per site and a query beyond it refused; degenerate zero-length geometry emitting null metrics
+   `closure_only` records excluded from coverage statistics, from Plan C's road supply and from Plan B's
+   spatial candidate domain; **a tag-changed counterpart still inside the window carrying
+   `intersects_window = true`** rather than being stamped closure-only; a `(site_id, osm_id)` emitted by
+   pass 1 not re-emitted by pass 2; a way inside site A and outside site B carrying different flags for
+   each; `max_complete_radius_m` computed from the realised mask, emitted per site, and a query beyond it
+   refused; anchors clipped to the site box, proven with a way extending well outside it; degenerate zero-length geometry emitting null metrics
    and a flag rather than dividing by zero; **no** classification vocabulary anywhere in the output;
-   per-file memory ceiling failing the stage closed when exceeded; DAG validation rejecting a parent whose
+   the memory ceiling enforced on **commit charge** and proven to fail closed under a
+   deliberate allocation, with working set proven unsuitable by showing it *fall* under paging pressure; DAG validation rejecting a parent whose
    child digest was altered; pointer replacement refused when revalidation fails; lock order asserted;
    **`LockFileEx` locks released by killing the owning process**; `publish_container` refusing a reparse
-   or non-NTFS ancestor; **the startup classifier driven through every row of §5.2's state table**, each action
-   verified idempotent by running it twice, roll-forward proven for states 5 and 6, fail-closed proven for
-   states 7 and 8, and a stale backup proven not to participate in a later publish;
+   or non-NTFS ancestor; **the startup classifier driven through every row of §5.2's state table including row 0 and the
+   `d_old == d_new` no-op**, with the **recovery ENTRYPOINT** invoked twice from each row and required to
+   reach the same terminal state (replaying a raw `ReplaceFileW` is not the test); roll-forward proven for
+   rows 5, 6a and 6b; fail-closed proven for rows 7 and 8; a same-digest file from another operation
+   proven not to satisfy a row; a stale backup proven not to participate in a later publish;
    manifest-as-commit at shard, region and stage level under a simulated kill; cache key rejecting an
    artifact built for different site windows; dirty-tree scoping ignoring an unrelated docs edit.
 2. **The §3 gate re-run through the production parser-to-committed-region path**, every row passing, its
@@ -687,7 +760,7 @@ From the repo root with `PYTHONPATH` set, using `C:\Users\josha\.venvs\satclf\Sc
    and publication** — not gating the parse, which it cannot precede.
 4. The published origin-level datasets with `source_regions[]`, and the shard/region/origin/stage manifests
    with their digest links verified end to end.
-5. The identity-edge table with its frozen operator parameters and `outside_window` flags, plus the
+5. The identity-edge table with its frozen operator parameters and all six endpoint flags, plus the
    GeoParquet geometry and per-site `max_complete_radius_m` that Plan B indexes for itself.
 6. Per-site processing-mask margins in metres, reported separately from current-polygon margins.
 
