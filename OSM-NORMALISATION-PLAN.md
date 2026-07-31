@@ -1,7 +1,7 @@
 ---
 review_provenance:
   schema_version: 2
-  status: in-progress
+  status: deadlocked
   rounds:
     - round: 1
       schema_version: 2
@@ -82,6 +82,16 @@ review_provenance:
       qualifying: true
       session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
       body_sha256: adb89de3c6749ca99f46c55d1d2f16cd58f6210e05c7eb8ee4ffa4d1551d75cf
+      verdict: REVISE
+    - round: 9
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+      body_sha256: 51b2b12e89b1ed3cd5198d96ad3c26a3fd0ddc1d379323aec2e092db0b79bb74
       verdict: REVISE
   loop_2_note: "rounds 1-6 exhausted both caps and resolved deadlocked at body a325021d; v7 applied all
     four open findings unreviewed; a second loop with fresh caps opens at round 7"

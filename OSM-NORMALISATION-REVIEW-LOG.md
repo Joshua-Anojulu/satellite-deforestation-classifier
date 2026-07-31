@@ -893,3 +893,72 @@ Fix: Register a guaranteed `JobObjectNotificationLimitInformation` threshold bel
 Fix: Change these respectively to “one stream per file per pass,” “Indonesia parser wall-clock,” “GeoParquet from which Plan B builds an index,” and “chosen processing guard.”
 
 VERDICT: REVISE
+## Round 9 — codex (loop 2, round 3 of 3 — FINAL)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed; thread_id echoed and matched)
+- reviewed body_sha256: 51b2b12e89b1ed3cd5198d96ad3c26a3fd0ddc1d379323aec2e092db0b79bb74
+- verdict: REVISE (2 critical, 4 high, 2 medium)
+
+### Where the findings live, across nine rounds
+
+| round | findings | criticals | of which in §5 commit protocol |
+|---|---|---|---|
+| 5 | 6 | 1 | 1 |
+| 6 | 6 | 1 | 1 |
+| 7 | 6 | 1 | 1 |
+| 8 | 10 | 6 | **5 of 6 criticals** |
+| 9 | 8 | 2 | **4 of 8, incl. both criticals** |
+
+**§5 has produced criticals in three consecutive rounds, each time from my own fix to it.** Round-7 #3
+said the state table was incomplete; fixing it produced five criticals in round 8; fixing those produced
+four more findings and both criticals in round 9. The data-model half moved the other way over the same
+span: round-7's critical (suppression key) is closed, and round 9's data-model findings are a missing
+presence schema (#5), an assertion false-negative (#7) and stale labels (#8).
+
+Before round 9 I recommended splitting §5 out of the plan and settling it in code with kill-tests. Josh
+chose to keep it in and fix all ten; that was done in v9 and this is the result. Recorded as outcome, not
+as argument.
+
+**Round-9 #1 is a chicken-and-egg I built myself:** the intent must be written *before* staging is created,
+yet must *contain staging's file ID*. Both cannot hold. #2 is a determinism failure: with
+`d_old == d_new`, rows 0 and 1c both match and prescribe opposite actions. #3 is a self-contradiction
+between row 3 (`S` then `B`) and the cleanup rule (`B` then `S`), with an uncovered state in between.
+
+**#7 is a real hole in a safety net I had leaned on.** §1.2's assertion compares two *booleans*, so a way
+carrying `mystery:highway` **and** ordinary `highway` satisfies both predicates and the unknown namespace
+goes undetected. I had told Codex and Josh that this assertion was what made partial census coverage safe.
+It is weaker than that: it catches an unknown namespace only on ways that have no ordinary `highway` tag.
+
+**#8 is the sixth consecutive round of stale labels.** This is a pattern in how I edit, not in the design:
+each round I correct a claim in one location and leave the same claim standing elsewhere.
+
+### Critique (verbatim)
+
+Material defects remain despite the closure and membership improvements:
+
+1. **Critical — intent creation is impossible as specified.** The intent must be written before staging creation yet must contain staging’s file ID; row 0 explicitly has `S` absent, and first publication also lacks a state for `intent=present, D/S/B=absent`. [§5.2](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:568>)  
+Fix: Create, write, flush, and identify staging under the locks before publishing the intent, then treat no-intent staging as an enumerable orphan; alternatively add a provisional-intent phase and all associated crash states.
+
+2. **Critical — `d_old == d_new` makes the table non-deterministic.** With intent present and `D=d_old=d_new`, `S/B` absent, both row 0 and row 1c match but prescribe opposite actions; the no-op exists only in the proof. [state table](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:573>)  
+Fix: Resolve verified equal-digest publication under the locks before creating intent, and specify an explicit equal-digest recovery rule.
+
+3. **High — cleanup order contradicts itself and creates an uncovered state.** Row 3 deletes `S` then `B`, while the rule deletes `B` then `S`; a kill after the latter’s first deletion yields `intent present, D=d_new, S=d_new, B absent`, which matches no recoverable row. [cleanup rule](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:608>)  
+Fix: Freeze `S → B → intent` everywhere and test a kill after each deletion.
+
+4. **High — absent-intent remnant detection is not implementable from the recorded data.** The exact staging and backup paths depend on a nonce stored only in the potentially missing intent, yet recovery promises to inspect “any derived path” without defining an enumerable naming rule.  
+Fix: Freeze target-prefixed, directory-enumerable transaction filenames and scan them under the locks; any matching remnant must fail closed or enter an explicit orphan-cleanup state.
+
+5. **High — the promised presence/UNKNOWN output still has no schema.** The frozen edge schema contains no presence fields, and a way present in only one origin has no edge on which to emit anything; the membership table records present members but cannot represent absent origins. [§6.1 schema](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:649>)  
+Fix: Publish a table keyed `(site_id, osm_id, origin)` with `presence_in_acquired_corpus` and a distinct `global_counterpart_status`; build edges only between present endpoints.
+
+6. **High — the guaranteed memory notification remains under-specified.** “Below 17 GB” does not freeze the actual authorization ceiling, and the proof’s generic over-limit allocation could exercise only the hard-limit allocation-failure path rather than the notification path. [§3](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:407>)  
+Fix: Freeze and record an exact soft threshold, then separately test gradual allocation crossing it below 17 GB and a single allocation rejected by the hard limit.
+
+7. **Medium — the unknown-tag assertion has a false-negative case.** Boolean predicate equality does not detect `mystery:highway` when the same way also has ordinary `highway`; both predicates remain true despite the unknown namespace. [§1.2](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:220>)  
+Fix: Independently assert that every observed `*:highway` key belongs to the disposition table, including a fixture co-tagged with ordinary `highway`.
+
+8. **Medium — stale overclaims remain.** The measurement table still calls Indonesia the “largest-file pipeline,” the risks still call the chosen guard “conservative,” and §4.6 says the duplicate preflight is step 3 although the table makes it step 4.  
+Fix: Relabel the measurements as Indonesia-only, remove “conservative,” and correct the stage reference.
+
+VERDICT: REVISE
