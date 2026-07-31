@@ -122,8 +122,8 @@ observations replace were wrong in both directions and are withdrawn.
 
 | quantity | v3 claimed | **measured** |
 |---|---|---|
-| largest-file pipeline, geometry sampled | unmeasured; "2.7 h corpus, way stream only" | **18.3 min** (`indonesia-220101`, 1433 MB) |
-| largest-file pipeline, **§1.5 full validation** | — | **22.5 min** (1348 s) |
+| `indonesia-220101` pipeline, geometry sampled | unmeasured; "2.7 h corpus, way stream only" | **18.3 min** (1433 MB) |
+| `indonesia-220101` pipeline, **§1.5 full validation** | — | **22.5 min** (1348 s) |
 | ways in that file | ~18 M inferred | **43,250,208** (30,174 ways/MB, v3 was 2.35× low) |
 | throughput, fully validating | 12,658 ways/s | **32,085 ways/s** incl. node decoding and index build |
 | geometry availability | unknown | **4,839,062 / 4,839,062 = 100 %** of retained ways |
@@ -185,52 +185,59 @@ not before. This exact pipeline is the one benchmarked above.
     correct, and its fix — materialise the difference, classify the keys, expand the list as necessary —
     is adopted literally.
 
-    A census enumerates every tag key ending in `:highway`, together with the exact **set difference** —
-    the ways a suffix predicate retains that the frozen predicate does not. That difference is the only
-    population whose retention actually changes; a way carrying `source:highway` *and* `highway` is
-    retained either way and is not evidence of anything. (My first attempt at this counted the latter and
-    would have overstated the problem.)
+    **The census is COMPLETE: all 36 extracts, 34,764,774 retained ways, 18 distinct `:highway` keys.**
+    The exact **set difference** — ways a suffix predicate retains that the frozen predicate does not —
+    is **2,740**. That difference is the only population whose retention actually changes; a way carrying
+    `source:highway` *and* `highway` is retained either way. (My first attempt at this accounting counted
+    the latter and would have overstated the problem.)
 
-    **Census coverage is partial and is stated as such**: it is running over all 36 extracts and the table
-    below reflects the extracts completed so far, with per-file counts in the review log. The table is what
-    freezes the predicate; the **run-time equality assertion below is what makes partial coverage safe**,
-    because any key not in it halts the stage rather than silently changing the population.
+    | key | corpus | in set difference | disposition |
+    |---|---|---|---|
+    | `highway` | — | — | **retain** (the road tag itself) |
+    | `abandoned:highway` | 18,383 | 0 | **retain** |
+    | `area:highway` | 2,444 | 2,403 | **retain** — road areas |
+    | `disused:highway` | 1,330 | 0 | **retain** |
+    | `construction:highway` | 1,249 | 0 | **retain** |
+    | `proposed:highway` | 1,069 | 0 | **retain** |
+    | `demolished:highway` | 345 | 0 | **retain** |
+    | `destroyed:highway` | 338 | **278** | **retain** |
+    | `was:highway` | 31 | 15 | **retain** |
+    | `former:highway` | 25 | **25** | **retain** |
+    | `razed:highway` | 20 | 0 | **retain** |
+    | `removed:highway` | 3 | **3** | **retain** |
+    | `disabled:highway` | 3 | **3** | **retain** |
+    | `collapsed:highway` | 3 | 0 | **retain** |
+    | `source:highway` | 3,986 | 0 | exclude — provenance metadata |
+    | `not:highway` | 308 | 13 | exclude — negative assertion |
+    | `indoor:highway` | 86 | 0 | exclude — indoor navigation, not a carriageway |
+    | `note:highway` | 9 | 0 | exclude — free-text note |
+    | `historic:highway` | 3 | 0 | **retain** — ambiguous, and excluding it is irreversible (round-5 #6) |
 
-    | key | disposition | why |
-    |---|---|---|
-    | `highway` | **retain** | the road tag itself |
-    | `disused:highway` | **retain** | frozen in v4; standard lifecycle prefix |
-    | `abandoned:highway` | **retain** | frozen in v4 |
-    | `proposed:highway` | **retain** | frozen in v4 |
-    | `construction:highway` | **retain** | frozen in v4 |
-    | `razed:highway` | **retain** | frozen in v4 |
-    | `demolished:highway` | **retain** | frozen in v4 |
-    | `was:highway` | **retain — ADDED** | standard lifecycle prefix; v4 omitted it |
-    | `area:highway` | **retain — ADDED** | established tagging for road *areas*; v4 omitted it |
-    | `not:highway` | **exclude** | negative assertion — states the feature is *not* that road |
-    | `source:highway` | **exclude** | metadata about where the `highway` tag came from |
-    | `historic:highway` | **retain — CHANGED** | ambiguous by documentation; excluding it is a scientific call (round-5 #6) |
+    **Freezing this table from a partial census would have silently dropped 309 ways.** v6–v9 froze it from
+    the first five extracts and were missing `destroyed:`, `former:`, `removed:` and `disabled:` — all four
+    standard lifecycle prefixes, all four appearing in the set difference. The plan asserted that partial
+    coverage was safe because the run-time assertion would catch anything new. That was wrong twice over:
+    the census found real keys the table lacked, and the assertion as specified could not have caught three
+    of them (below).
+
+    **The assertion is on KEY MEMBERSHIP, not on predicate equality** (round-9 #7). Comparing the frozen
+    predicate against a reference predicate is a comparison of two **booleans**, so a way carrying
+    `mystery:highway` **and** ordinary `highway` satisfies both and the unknown namespace passes
+    undetected. This is not hypothetical: `indoor:highway` (86), `note:highway` (9) and
+    `collapsed:highway` (3) occur **only** on ways that also carry `highway`, so they never enter the set
+    difference and a boolean-equality check would never see them. The parser therefore asserts directly
+    that **every observed `*:highway` key is present in the disposition table above**, independent of any
+    predicate, and **fails closed** on a key that is not — including on a way co-tagged with ordinary
+    `highway`.
 
     Keys are frozen **by this table**, not by a suffix rule: a suffix rule silently absorbs any future
-    `<anything>:highway` namespace, including the metadata ones above — which is why "just use the suffix"
-    is not the fix, and why the v4 discrepancy pointed in both directions at once.
+    `<anything>:highway` namespace, including the metadata ones above.
 
-    **Exclusion is limited to unambiguously non-road namespaces** (round-5 #6). v5 excluded
-    `historic:highway` on the reasoning that it denotes a historic designation. But the OSM lifecycle
-    documentation records its use as inconsistent, and it can mark a previously valid carriageway — so
-    excluding it is exactly the kind of scientific call Plan A's Goal forbids, and it is *irreversible*:
-    the record never reaches Plan B to be reconsidered. Worse, the §1.2 assertion cannot catch the mistake,
-    because an excluded key is subtracted from the reference predicate too. Only `not:` (a negative
-    assertion) and `source:` (provenance metadata about another tag) are unambiguous enough to drop.
-    Ambiguous namespaces are **retained with their raw tags** and left to Plan B.
-
-    **Membership is tested by direct key lookup** over the frozen retain-list, never by a scan over the
-    way's tags — that scan was v3's benchmark bug.
-
-    **Asserted, not assumed:** the parser recomputes the retain-predicate and a reference predicate
-    (`:highway` suffix minus the frozen exclude-list) over every file and **fails closed on any
-    inequality**. A new namespace appearing in the corpus is then a loud failure requiring a decision,
-    rather than a silent population change.
+    **Exclusion is limited to unambiguously non-road namespaces** (round-5 #6). `historic:highway` is
+    documented as inconsistently used and can mark a previously valid carriageway, so excluding it is
+    exactly the kind of scientific call Plan A's Goal forbids — and it is irreversible, since the record
+    never reaches Plan B. Only provenance metadata (`source:`, `note:`), a negative assertion (`not:`) and
+    a non-carriageway navigation namespace (`indoor:`) are dropped.
 
     `area:highway` ways interact with §1.4: they are stored as their ring traversal with `is_closed` set,
     and Plan A still emits no area semantics.
@@ -420,8 +427,10 @@ v4's claim that "if `indonesia-220101` fits, every other file fits" is withdrawn
   total. But v8 relied on the supervisor being *told* about the breach, and Microsoft documents ordinary
   completion-port messages such as `JOB_OBJECT_MSG_JOB_MEMORY_LIMIT` as **not guaranteed to be delivered**,
   so "the supervisor calls `TerminateJobObject` on every breach" was not a promise v8 could keep.
-  Instead a **`JobObjectNotificationLimitInformation` threshold is registered *below* the 17.0 GB hard
-  limit before the child starts** — that notification is guaranteed — and the supervisor terminates on it.
+  Instead a **`JobObjectNotificationLimitInformation` soft threshold of exactly 14.0 GB is registered before
+  the child starts** — that notification is guaranteed, unlike the completion-port message — and the
+  supervisor terminates on it. 14.0 GB is the frozen authorisation ceiling; 17.0 GB remains the hard limit
+  and is a backstop only. v9 said merely "below 17 GB", which froze nothing (round-9 #6).
   **Allocation failure and abnormal child exit are both treated as stage failure**, so the hard limit
   remains a backstop rather than the detection mechanism. `sandbox_process.py` already binds
   `TerminateJobObject`, so the call exists even though no memory limit does;
@@ -517,10 +526,10 @@ v4's claim that "if `indonesia-220101` fits, every other file fits" is withdrawn
     | 1. Pass 1 parsing → region checkpoints | §3's production-path gate, measured on the largest-by-bytes file |
     | 2. **Pass 2 gate** — re-measured with the real committed `S` resident, on **the file with pass 1's maximum observed commit charge**, not the largest by bytes (round-7 #6) | pass 1 committed; commit ceiling re-verified |
     | 3. Pass 2 closure → `closure_only` records | the pass-2 gate passing |
-    | 4. **Duplicate-group preflight**, reading committed checkpoints only | passes 1–2 committed |
+    | 4. **Duplicate-group preflight** (step 4), reading committed checkpoints only | passes 1–2 committed |
     | 5. Deduplication and origin-level publication | **preflight clean** |
 
-    Preflight at step 3 reads Parquet, never a PBF, so it genuinely is cheap — but only because it now
+    Preflight at step 4 reads Parquet, never a PBF, so it genuinely is cheap — but only because it now
     runs after the parse instead of before it. It covers all three origins and every real region overlap:
     version, timestamp, tag map, node references, and resolved coordinates. **A dirty preflight blocks
     publication**, which is the property v5 wanted; it does not block parsing, which it never could.
@@ -570,55 +579,67 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
     manifest DAG expects before and after this publish. Classification compares **digest and file
     identity**, never mere existence:
 
-    **The transaction intent, with a lifecycle** (round-8 #4, #7). v8 introduced an intent record and then
-    gave it no state: nothing deleted it, terminal row 1's action was "none", and a stale intent would have
-    poisoned the next publication. It also recorded only the destination's old file ID, so the "file
-    identity" criterion could not actually distinguish a foreign same-digest staging file.
+    **Transaction filenames are derived from the TARGET, not from a nonce** (round-9 #4). v9 put the
+    nonce only inside the intent, then promised recovery would inspect "any derived path" — unenumerable
+    if the intent is the thing that went missing. Frozen instead:
 
-    The intent is written and flushed **before any mutation** and records: target path, `d_old`, `d_new`,
-    the staging path **and staging file ID**, the fresh backup path, the destination's current file ID, and
-    an **operation nonce**. It is deleted **last**, only after `D` verifies as `d_new` with `S` and `B`
-    both absent. Every row below therefore also carries intent state.
+    - staging is `<target>.__stg`, backup is `<target>.__bak`, intent is `<target>.__intent`
+    - all three are **directory-enumerable by target prefix**, so a scan finds remnants with no prior
+      knowledge
+    - the operation nonce lives **inside** the intent and staging as content, used to match them, never to
+      locate them
+
+    **Staging is created and identified BEFORE the intent is published** (round-9 #1). v9 required the
+    intent to be written before any mutation *and* to contain staging's file ID — which cannot both hold,
+    and row 0 explicitly had `S` absent. Frozen order, entirely under the §5.4 locks:
+
+    1. create `<target>.__stg` with `CREATE_NEW`, write, **flush**, read back its file ID
+    2. write `<target>.__intent` containing target, `d_old`, `d_new`, staging's file ID, the nonce; **flush**
+    3. mutate `D`
+    4. clean up in the frozen order below
+
+    A crash between 1 and 2 leaves staging with **no intent** — an enumerable orphan, deleted on recovery,
+    because without an intent nothing has touched `D`.
+
+    **`d_old == d_new` is resolved before the intent is created** (round-9 #2). v9 left rows 0 and 1c both
+    matching that case with opposite actions, so the table was non-deterministic and the no-op existed only
+    in the proof. A verified equal-digest publication is now a **no-op decided under the locks**, before
+    any file is created; the table is never consulted for it.
 
     | # | intent | D | S | B | interpretation | action |
     |---|---|---|---|---|---|---|
-    | init | present | absent | `d_new` | absent | first publication | **`MoveFileExW(S → D)`** (round-8 #6) |
-    | 0 | present | `d_old` | absent | absent | intent written, staging not yet created | create S, then row 4 |
+    | orphan | absent | any valid | present | any | crash before intent | delete S (and B if present) |
+    | init | present | absent | `d_new` | absent | first publication | **`MoveFileExW(S → D)`** |
     | 1 | absent | `d_new` | absent | absent | complete | none |
-    | 1c | present | `d_new` | absent | absent | complete, intent not yet deleted | delete intent |
-    | 2 | present | `d_new` | absent | `d_old` | replaced; cleanup pending | delete B, then intent |
-    | 3 | present | `d_new` | `d_new` | `d_old` | replaced; temporaries pending | delete S, B, then intent |
+    | 1c | present | `d_new` | absent | absent | complete; intent pending | delete intent |
+    | 2 | present | `d_new` | `d_new` | `d_old` | replaced; both temporaries pending | delete S, B, intent |
+    | 2b | present | `d_new` | absent | `d_old` | replaced; B and intent pending | delete B, then intent |
     | 4 | present | `d_old` | `d_new` | absent | not started | `ReplaceFileW(D, S, B)` |
     | 5 | present | `d_old` | `d_new` | `d_old` | backup taken, replace not done | `ReplaceFileW(D, S, B)` |
-    | 6 | present | absent | `d_new` | absent **or** verified `d_old` | D unlinked; replacement verified | **`MoveFileExW(S → D)`**, then delete B if present, then intent |
+    | 6 | present | absent | `d_new` | absent **or** verified `d_old` | D unlinked; replacement verified | **`MoveFileExW(S → D)`**, then B, then intent |
     | 7 | present | absent | absent | `d_old` | destination lost, no replacement | **fail closed**; operator restores from B |
-    | 8 | any other combination, or any unverified identity | | | | unrecognised | **fail closed**, delete nothing, report all four |
+    | 8 | any other combination, or any unverified identity | | | | unrecognised | **fail closed**, delete nothing |
 
-    **Rules that make the table safe:**
+    **Cleanup order is `S → B → intent`, everywhere** (round-9 #3). v9's row 3 said `S` then `B` while the
+    prose rule said `B` then `S`; a kill between them landed in a state no row covered. Row 2 now deletes
+    in that one order and row 2b is the state after `S` is gone, so every kill point during cleanup lands
+    on a covered, idempotent row.
 
-    - **`init` goes through `MoveFileExW`, not `ReplaceFileW`** (round-8 #6). v8's `init` said "create S,
-      then row 4's rename" — but row 4's action is `ReplaceFileW`, which **requires an existing
-      destination**, and row 6 is the rename. First publication was an impossible transition.
-    - **Absent intent alone does NOT establish a clean tree** (round-8 #5). v8 said it did, in the same
-      section that concedes an NTFS namespace change can be lost or reordered on power loss — a direct
-      self-contradiction. An absent intent is treated as clean **only after** the last committed DAG and
-      pointer validate and no transaction remnants (`S`/`B` at any derived path) are found. Otherwise:
-      fail closed.
-    - **Staging identity and the nonce are verified before `D` is mutated** (round-8 #7). A same-digest
-      file from another operation does not satisfy any row; it routes to row 8.
-    - **`B` is permitted only absent or verified `d_old`.** v8's row 6 accepted `B = any` **and then
-      deleted it**, which could destroy an unrelated backup. Any other identity routes to row 8, and
+    **Rules:**
+
+    - **Absent intent does not by itself establish a clean tree.** An NTFS namespace change can be lost or
+      reordered on power loss, so recovery additionally enumerates `<target>.__stg` / `.__bak` and
+      validates the last committed DAG and pointer; a remnant with no intent is the `orphan` row, and
+      anything else fails closed.
+    - **Staging identity and nonce are verified before `D` is mutated.** A same-digest file from another
+      operation routes to row 8.
+    - **`B` is permitted only absent or verified `d_old`**; any other identity routes to row 8, and
       **row 8 deletes nothing**.
-    - **Never restore from B when S holds `d_new`.** Rolling back after the replacement may already be
-      visible is the one direction that loses committed work.
-    - **The ENTIRE transaction runs under the §5.4 locks in fixed order** (round-8 #8) — intent-absence
-      check, intent creation, staging, publication, cleanup and intent deletion, not merely classification
-      and recovery as v8 said. Intent and staging are created with **`CREATE_NEW`**, so two simultaneous
-      first publishers cannot both proceed.
-    - **Cleanup ordering:** B deleted only after D verifies `d_new`; then S; then intent. A kill during
-      cleanup re-enters at row 1c, 2 or 3, all idempotent.
-    - **Idempotence belongs to the recovery ENTRYPOINT** (`reclassify → act`), not to the actions:
-      `ReplaceFileW` run twice is not idempotent. The proof invokes the entrypoint twice from every row.
+    - **Never restore from B when S holds `d_new`.**
+    - **The ENTIRE transaction runs under the §5.4 locks in fixed order**, with `CREATE_NEW` for staging
+      and intent, so two simultaneous first publishers cannot both proceed.
+    - **Idempotence belongs to the recovery ENTRYPOINT** (`reclassify → act`); the proof invokes it twice
+      from every row.
 
     **On the directory flush:** the POSIX recipe ends with an `fsync` on the containing directory. Windows
     has no directory-fsync equivalent and `ReplaceFileW` is the atomicity primitive instead, so the plan
@@ -675,7 +696,20 @@ Plan A emits three things and no thresholds:
     Plan B can generate spatial candidates at whatever radius and tolerance its science requires **without
     re-parsing any PBF** — which is Plan A's actual contract.
 
-6.3 **Descriptive measurements on identity edges**, carrying no cutoff and implying no classification.
+6.3 **A presence table, because §6.1's UNKNOWN needs somewhere to live** (round-9 #5). v9 promised
+    per-origin presence and `UNKNOWN` absence but put neither in any schema, and a way present in only one
+    origin has no edge to carry them. Frozen as its own manifest-bound table keyed
+    `(site_id, osm_id, origin)`:
+
+    - **`presence_in_acquired_corpus`** — whether that `osm_id` appears in that origin anywhere in the 36
+      extracts
+    - **`global_counterpart_status`** — deliberately distinct, and **always `UNKNOWN`** in Plan A: absence
+      from the acquired corpus is not absence from OSM (§6.1)
+
+    **Edges are built only between present endpoints.** A missing counterpart is represented by the
+    presence table, never by a half-populated edge row.
+
+6.4 **Descriptive measurements on identity edges**, carrying no cutoff and implying no classification.
 
 **Frozen identity-edge schema.** One row per `(site_id, origin_pair, osm_id)`, origins canonically ordered:
 
@@ -689,7 +723,7 @@ Plan A emits three things and no thresholds:
 schema** (round-6 #1). Without them a consumer cannot tell an edge between two genuinely in-window ways
 from one whose far endpoint exists only as closure — which is precisely the distinction Plan B needs.
 
-6.4 **Exact operator definitions** (round-4 #6 — v4 left these open):
+6.5 **Exact operator definitions** (round-4 #6 — v4 left these open):
 
     - **CRS**: one UTM zone per **site window**, from the window centroid. Symmetric by construction, so
       A→B and B→A agree. Never per-way.
@@ -706,7 +740,7 @@ from one whose far endpoint exists only as closure — which is precisely the di
       never a silently dropped row.
     - **Closed ways** participate as their ring traversal; lengths are perimeters; no area semantics.
 
-6.5 **No components, no aggregates, no classification vocabulary.** Connected components, aggregate
+6.6 **No components, no aggregates, no classification vocabulary.** Connected components, aggregate
     coverage and any `resolved` / `unresolved` judgement all require a candidate graph, which Plan A no
     longer builds. They belong to Plan B, with §6.2's index and geometry as their input. v4's aggregate
     formula was also under-keyed — components span three origins while `A` and `B` named no origin pair —
@@ -786,7 +820,7 @@ node ID, and output hashes.
   bounding Plan B's science with a radius, then a wider radius, then a saturation test. The cutoff was never
   the problem; Plan A owning it was. Identity edges plus GeoParquet, from which Plan B builds its own
   index, give Plan B the freedom instead.
-- **A 5000 m extraction guard — a CHOSEN processing guard**, not conservative by construction: §2.3 already
+- **A 5000 m extraction guard — a CHOSEN processing guard**: §2.3 already
   concedes it was picked rather than derived, and `max_processing_radius_m` measures Plan A's own boundary,
   not source completeness. The *processing-mask* margin is the check, kept strictly separate from the
   current-polygon margin, which proves nothing.
@@ -807,8 +841,8 @@ node ID, and output hashes.
   than reconciles. Measured at zero across 32,369 cross-region duplicates at origin 2020 — but at
   node-reference level only, on land-border pairs only, at one origin. The coordinate check that §4.3 now
   requires has **never been run**, and it is the check most likely to fire.
-- **The 5000 m guard is chosen, not derived** — conservative, but Plan C could in principle exceed it, and
-  the emitted processing-mask margins are the check.
+- **The 5000 m guard is chosen, not derived.** Plan C could in principle exceed it, and
+  `max_processing_radius_m` plus the emitted processing-mask margins are the check.
 - **pyosmium 4.3.1 is newly added** to the environment and exercised only by the measurements above.
 - **The production-path gate (§3) has not been run**, because the production path does not exist yet.
   Every runtime number here is a parser floor, now doubled by §2.2's second pass. If serialisation, masking
