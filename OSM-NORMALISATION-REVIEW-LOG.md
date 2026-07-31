@@ -1141,3 +1141,83 @@ hard error rather than a partial read.
 The narrow durability wording itself is defensible: it promises atomic visibility and flushed contents, not power-loss durability of namespace changes. Consumer revalidation correctly converts reordering into a hard error rather than a partial read. The unresolved classifier and orphan states prevent the recovery protocol from supporting that claim yet.
 
 VERDICT: REVISE
+## Round 12 — codex (loop 3, round 3 of 3 — FINAL, scoped to §5)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+- reviewed body_sha256: 0ae7d13f9d96d483f1b4cc367b19102c79f2f5372fe3712f48a81ec5a24169bf
+- verdict: REVISE (5 critical, 3 high)
+
+**The redesign was directionally right and the reviewer said so**: *"The immutable artifact layer is the
+right foundation"*, and *"the single-snapshot, handle-bound consumer traversal is sound."* What remained
+unsound was everything I left **mutable**: the pointer, and garbage collection.
+
+**Three findings were me asserting mechanism behaviour I had not verified** — the same failure mode as the
+Job Object claim in round 8 and the `lines`-layer claim in round 1:
+
+1. **The pointer outcome table was factually wrong.** With no backup, error 1176 can remove the old
+   destination while leaving the replacement at its temporary name, and 1177 does **not** mean the new
+   digest is visible at the pointer path. I wrote "previous DAG intact" and "1177 exposed" as facts.
+2. **First publication cannot use `ReplaceFileW`** because it requires an existing destination. **This is
+   the third time in this review I have made that exact error** — round-8 #6, round-9's `init`, and now
+   again after explicitly removing the placeholder.
+3. **Rename-to-existing is not idempotent.** A non-replacing NTFS rename *fails* when the target exists;
+   the replacing variant violates immutability. "Identical by construction, therefore idempotent" described
+   an outcome, not a mechanism.
+
+The other five were real gaps rather than false claims: the sweep could delete a concurrent publisher's
+DAG (#3), the pointer is not the whole root set so a sweep would delete §4.6's resumable checkpoints (#4),
+the publication lock serialises swaps but permits a slow build to overwrite a newer pointer by finishing
+last (#5), the complete-DAG claim contradicted the admitted power-loss model *again* (#7), and the plan
+still assigned work to `publish_container` (#8) — the eighth consecutive round with a stale reference.
+
+### v13 — remove the last mutable file
+
+The pointer becomes **generation-numbered and append-only**: a publication creates `pointer.<N+1>` with
+`CREATE_NEW`; current is the highest generation whose DAG validates. **`ReplaceFileW` is now used nowhere
+in Plan A.** 1176/1177 cannot arise, first publication is simply generation 1, and `CREATE_NEW` on *N+1*
+**is** the compare-and-swap that rejects stale publication.
+
+Artifact writes get a real mechanism: unique `CREATE_NEW` temp → flush → non-replacing rename → on
+name-exists, byte-verify the winner and **fail closed on mismatch** rather than assuming identity.
+
+A **store lease** (shared by publishers from first write through generation creation, exclusive for the
+whole sweep) closes the GC race; the **root set** becomes current + 3 retained generations + build pins +
+reader leases, so §4.6's checkpoints survive.
+
+Crash safety is now scoped honestly: on **process termination** the highest generation always names a
+complete DAG; on **power loss** a generation may survive while an artifact it references does not, that
+generation fails validation, and the reader falls back to the highest valid one. **Data is never silently
+incomplete, but a publication can be lost** — which is what the retained generations are for.
+
+### Critique (verbatim)
+
+§5 is substantially simpler, but the pointer and garbage collector remain materially unsound.
+
+1. **Critical: the pointer outcome table contradicts `ReplaceFileW`.** With no backup, error 1176 can remove the old destination while leaving the replacement at its temporary name; 1177 also does not mean the new digest is visible at the pointer path. Therefore “previous DAG intact” and “1177 exposed” are false. [§5.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:598>), [Microsoft’s documented outcomes](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew)  
+   **Fix:** Specify a small pointer-only `D/S` recovery protocol that rolls verified staging forward after 1176/1177, or use a transactional pointer store; do not classify these outcomes from the return code alone.
+
+2. **Critical: first publication cannot use the stated pointer operation.** `ReplaceFileW` requires an existing destination, but v12 says first publication follows the ordinary path while eliminating the placeholder.  
+   **Fix:** Freeze a distinct first-publication path using non-replacing `MoveFileExW(S,D)` under the publication lock.
+
+3. **Critical: mark-and-sweep can delete the DAG being published.** A sweep can snapshot pointer A, publisher B can write its still-unreferenced DAG, and the sweep can delete B before or after B’s pre-swap validation; it can also delete B after the pointer changes if the sweep continues from its stale snapshot.  
+   **Fix:** Add a global store lease held shared by publishers from first artifact write through pointer swap and held exclusively by the entire sweep.
+
+4. **Critical: the current pointer is not the complete root set.** Committed region checkpoints required by §4.6 and restart logic are not yet reachable from the stage pointer, while the progress journal is explicitly non-authoritative. A pointer-only sweep will delete valid resumable work. Active reader snapshots and the previous pointer generation also need protection.  
+   **Fix:** Define authoritative build/checkpoint pins and reader leases, and mark from all pins plus current and retained previous stage roots before sweeping.
+
+5. **Critical: pointer locking still permits stale publication.** Two different cache keys can build concurrently; the publication lock merely serializes their swaps, so an older long-running build can overwrite a newer pointer by finishing last. Content addressing removes blob-write contention, not logical publication ordering.  
+   **Fix:** Under the publication lock, compare the pointer with the publisher’s expected predecessor or monotonic generation and reject stale publication.
+
+6. **High: rename-to-existing is not intrinsically idempotent.** A non-replacing NTFS rename fails when the destination exists, while `MOVEFILE_REPLACE_EXISTING` overwrites it and violates immutability. “Identical by construction” also fails to handle corruption or a genuine digest collision. [MoveFileExW semantics](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)  
+   **Fix:** Use unique `CREATE_NEW` temporaries, a non-replacing rename, then byte-verify an existing winner before deleting the losing temporary; any mismatch fails closed.
+
+7. **High: the crash-safety claim contradicts the admitted power-loss model.** §5.2 says every outcome leaves a complete DAG, while §5.3 correctly admits that the pointer rename can persist while a child’s namespace entry disappears. Consumer revalidation preserves integrity, but the pointer can still name an incomplete DAG and reads can become unavailable.  
+   **Fix:** Scope the complete-DAG claim and proof to process termination; state separately that power loss may produce a pointer that fails validation.
+
+8. **High: the plan still references the abandoned helper.** The existing `publish_container` requires a pre-existing placeholder, a non-null backup, and the old state table, yet the plan and proof continue assigning pointer publication and locality checks to it. [Existing helper](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/forecast/_atomic_publish.py:217>), [stale proof reference](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:898>)  
+   **Fix:** Specify new `publish_content_object` and `publish_pointer` primitives and remove `publish_container` from Plan A’s execution and proof contracts.
+
+The single-snapshot, handle-bound consumer traversal is sound. The immutable artifact layer is also the right foundation. The remaining mutable pointer still needs a truthful failure protocol, and garbage collection needs explicit liveness and ordering contracts.
+
+VERDICT: REVISE

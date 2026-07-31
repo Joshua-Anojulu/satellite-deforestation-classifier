@@ -1,7 +1,7 @@
 ---
 review_provenance:
   schema_version: 2
-  status: in-progress
+  status: deadlocked
   rounds:
     - round: 1
       schema_version: 2
@@ -114,6 +114,17 @@ review_provenance:
       scope: "section 5 only"
       session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
       body_sha256: e0c8c4d205cb60b6555f31a39f6b9c8a14ba828998927cb0f1ecba843a8f948b
+      verdict: REVISE
+    - round: 12
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      scope: "section 5 only"
+      session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+      body_sha256: 0ae7d13f9d96d483f1b4cc367b19102c79f2f5372fe3712f48a81ec5a24169bf
       verdict: REVISE
   loop_2_note: "rounds 1-6 exhausted both caps and resolved deadlocked at body a325021d; v7 applied all
     four open findings unreviewed; a second loop with fresh caps opens at round 7"
@@ -595,40 +606,81 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
     and a collision is not a conflict. Nothing is ever overwritten, so there is no `d_old`, no backup, and
     no in-place replacement anywhere in the DAG.
 
-    **Exactly one mutable object exists: the publication pointer**, whose entire content is the digest of
-    the current stage manifest. It is replaced by write-temp → flush → `ReplaceFileW`. This is the one
-    place the earlier state table applied, and it collapses to a genuinely simple case:
+    **Writing an artifact, exactly** (round-12 #6). "Identical by construction, therefore idempotent"
+    described an outcome, not a mechanism: a non-replacing NTFS rename **fails** when the destination
+    exists, and `MOVEFILE_REPLACE_EXISTING` would violate immutability. Frozen:
 
-    | outcome | pointer content | valid? |
-    |---|---|---|
-    | replace succeeded | new stage digest | yes — new DAG |
-    | replace did not occur | previous stage digest | yes — previous DAG |
-    | replace reported 1177 (exposed) | new digest already visible | yes — roll forward |
-    | any other error | previous digest | yes — fail closed, previous DAG intact |
+    1. create a **unique** temporary with `CREATE_NEW` in the same directory, write, checked `FlushFileBuffers`
+    2. **non-replacing** rename to `<store>/<sha256>`
+    3. if the rename fails because the name exists, **byte-verify the existing winner** against what was
+       written; equal → delete the losing temporary; **unequal → fail closed** (corruption, or a genuine
+       digest collision — neither may be assumed away)
 
-    **Every outcome leaves a pointer naming a complete, already-written DAG**, because the DAG is written
-    in full before the pointer is touched. There is no state in which recovery must decide between two
-    partially-applied files.
+    **There is no file that is ever replaced. The pointer is generation-numbered and append-only**
+    (round-12 #1, #2, #5). v12 kept one mutable pointer replaced via `ReplaceFileW`, and its outcome table
+    was wrong on the facts: with no backup, 1176 can remove the old destination while leaving the
+    replacement at its temporary name, and 1177 does not mean the new digest is visible at the pointer
+    path. Rather than write a truthful failure protocol for a replacement, the replacement is removed:
 
-    **A crash leaves only unreferenced content-addressed files.** They are not corruption and are never
-    deleted during recovery — deleting them is what made round-11 #4 dangerous. They are removed by an
-    **offline mark-and-sweep** from the pointer, which is not crash-critical and can be run at leisure:
-    an interrupted sweep simply leaves more garbage.
+    - a publication writes **`pointer.<generation>`** — a new file, `CREATE_NEW`, immutable like every
+      other artifact — whose content is the stage-manifest digest
+    - **current** = the highest generation whose DAG validates
+    - **`ReplaceFileW` is not used anywhere in Plan A.** 1176/1177 cannot arise, and neither can the
+      no-backup ambiguity
+    - **first publication is generation 1** and needs no pre-existing destination or placeholder — the
+      round-12 #2 contradiction disappears rather than being special-cased
+    - **stale publication is rejected by construction** (round-12 #5): a publisher that observed generation
+      *N* creates *N+1* with `CREATE_NEW`. If a newer build already took *N+1*, creation **fails**, and the
+      publisher must re-validate and retry rather than silently overwriting a newer pointer by finishing
+      last. Content addressing removed blob contention; this is what supplies logical ordering.
+
+    **The store lease, because a sweep and a publisher can otherwise race** (round-12 #3). A mark-and-sweep
+    could snapshot generation *N*, a publisher could then write its still-unreferenced DAG, and the sweep
+    could delete it before or after the publisher's validation. Frozen: a **store lease held SHARED by
+    every publisher** from its first artifact write through its pointer-generation creation, and held
+    **EXCLUSIVELY by the entire sweep**. A sweep never overlaps a publication.
+
+    **The root set is not just the current pointer** (round-12 #4). Sweeping from it alone would delete
+    valid resumable work, because §4.6's committed region checkpoints are needed by restart logic and are
+    not reachable from the stage manifest. Marking starts from **all** of:
+
+    - the current generation, **and the retained previous generations** (frozen: keep the last 3)
+    - **build pins** — committed region and pass checkpoints, written as first-class pinned artifacts
+    - **reader leases** — a consumer's snapshot generation, held for the life of its traversal
 
     **What this dissolves, explicitly:**
 
-    | round-11 finding | why it no longer applies |
+    | finding | why it no longer applies |
     |---|---|
-    | #1 missing clean-entry states | no state machine; publication is unconditional |
-    | #2 `init` vs row 6 overlap | no rows; first publication is the ordinary path |
-    | #3 hashed slot unidentifiable | no transaction slots; artifacts are self-identifying by digest |
-    | #4 orphan deletion vs power loss | nothing is deleted on recovery, ever |
-    | #5 file-ID authority and reuse | identity is content digest; file IDs are diagnostic only |
-    | #6 canonical-path algorithm | no path-derived transaction namespace to canonicalise |
+    | r11 #1 missing clean-entry states | no state machine; publication is unconditional |
+    | r11 #2 `init` vs row 6 overlap | no rows; first publication is generation 1 |
+    | r11 #3 hashed slot unidentifiable | no transaction slots; artifacts self-identify by digest |
+    | r11 #4 orphan deletion vs power loss | nothing is deleted on recovery, ever |
+    | r11 #5 file-ID authority and reuse | identity is content digest; file IDs diagnostic only |
+    | r11 #6 canonical-path algorithm | no path-derived transaction namespace |
+    | r12 #1 `ReplaceFileW` outcome table wrong | `ReplaceFileW` is not used at all |
+    | r12 #2 first publication impossible | generation 1 needs no existing destination |
+    | r12 #5 stale publication | `CREATE_NEW` on generation *N+1* is the compare-and-swap |
 
-    Round-11 #6's reparse/volume requirement survives in reduced form: the **store and pointer must sit on
-    the same local NTFS volume**, validated over the full ancestor chain, and `publish_container` must call
-    that check rather than leaving it to tests (round-4 #8).
+    **Crash safety, scoped truthfully** (round-12 #7). v12 claimed every outcome leaves a complete DAG
+    while §5.3 simultaneously admitted a pointer's namespace entry can persist while a child's disappears —
+    the same self-contradiction I had just finished removing elsewhere. Stated properly:
+
+    - **On process termination** (kill, crash, power-independent failure): the highest generation always
+      names a fully-written DAG, because the DAG is written before the generation file is created.
+    - **On power loss**, NTFS may persist namespace changes out of order, so a generation file can survive
+      while an artifact it transitively references does not. That generation then **fails validation**, and
+      §5.3's consumer gate turns it into a hard error; the reader falls back to the highest generation that
+      *does* validate. **Data is never silently incomplete, but a publication can be lost.** That is the
+      honest limit, and the retained previous generations are what make the fallback possible.
+
+    **New primitives; `publish_container` is out of Plan A's contract** (round-12 #8). The existing helper
+    requires a pre-existing placeholder, a non-null backup and the abandoned state table, so continuing to
+    assign pointer publication to it was stale by two designs. Plan A specifies two functions instead:
+    **`publish_content_object`** (the three-step immutable write above) and
+    **`publish_pointer_generation`** (`CREATE_NEW` on `pointer.<N+1>`). Round-11 #6's locality requirement
+    survives inside both: **store and pointer on the same local NTFS volume**, validated over the full
+    ancestor chain, checked by the primitives themselves rather than by tests (round-4 #8).
 
     The cost is disk: superseded artifacts persist until swept, on a machine that is already constrained.
     That is a real trade and it is accepted deliberately — garbage is recoverable, a corrupted publication
@@ -849,10 +901,11 @@ node ID, and output hashes.
   Every runtime number here is a parser floor, now doubled by §2.2's second pass. If serialisation, masking
   and publication cost more than parsing, the 12 h two-pass ceiling is what will fire — and the restart
   boundary (§10.1) is undecided until that same run reports its maximum committed-region duration.
-- **`forecast/_atomic_publish.py` is now mostly unnecessary** (§5.2). Its `ReplaceFileW` state table
-  applied to in-place replacement, which the immutable design removes everywhere except the single pointer
-  swap. What must still be fixed there: the checked `FlushFileBuffers` that is absent from the repo
-  entirely, and `assert_local_non_reparse`, which exists but is called only from tests.
+- **`forecast/_atomic_publish.py` is out of Plan A's contract** (§5.2). Its entire `ReplaceFileW` state
+  table addressed in-place replacement, which no longer occurs anywhere in Plan A. Plan A implements
+  `publish_content_object` and `publish_pointer_generation` instead. The one thing worth salvaging is
+  `assert_local_non_reparse`, which exists but is called only from tests; the checked `FlushFileBuffers`
+  is absent from the repo entirely and must be written.
 - **Garbage accumulates until swept**, on a machine already short of disk. Deliberate: unreferenced
   artifacts are recoverable, a corrupted publication is not. The sweep is offline and not crash-critical.
 
@@ -896,19 +949,21 @@ From the repo root with `PYTHONPATH` set, using `C:\Users\josha\.venvs\satclf\Sc
    allocation failure and abnormal child exit both failing the stage, and working set proven unsuitable by
    showing it *fall* under paging pressure; DAG validation rejecting a parent whose
    child digest was altered; pointer replacement refused when revalidation fails; lock order asserted;
-   **`LockFileEx` locks released by killing the owning process**; `publish_container` refusing a reparse
-   or non-NTFS ancestor; **content-addressed publication proven crash-safe by construction**: a kill injected
-   before and after every step of write-temp → flush → rename → pointer swap, with the tree left, in every
-   case, naming either the previous or the new complete DAG and never a partial one; **writing an artifact
-   whose content-addressed name already exists proven idempotent** (identical bytes, no conflict); a
-   simulated interrupted run proven to leave only **unreferenced** artifacts, and recovery proven to delete
-   **nothing**; the offline mark-and-sweep proven to remove exactly the unreferenced set from a pointer
-   snapshot, and an interrupted sweep proven harmless; the pointer swap exercised through each
-   `ReplaceFileW` outcome including 1177 roll-forward; two concurrent publishers proven to produce
-   identical artifacts with only the pointer serialised; **every pointer dereference proven to revalidate
-   the full DAG from a single snapshot, returning handles opened during that traversal, and to error rather
-   than return a partial read after a simulated reordered-namespace crash**; store and pointer proven to be
-   on the same local NTFS volume with `publish_container` itself refusing a reparse or non-NTFS ancestor;
+   **`LockFileEx` locks released by killing the owning process**, including the store lease; **content-addressed publication proven crash-safe on process termination**: a kill
+   injected before and after every step of unique-temp → flush → non-replacing rename → `pointer.<N+1>`
+   creation, with the highest validating generation naming a complete DAG in every case; **a rename losing
+   to an existing name proven to byte-verify the winner, delete the loser, and FAIL CLOSED on a mismatch**
+   rather than assuming identity; **`pointer.<N+1>` creation proven to fail via `CREATE_NEW` when a newer
+   build already took that generation**, so a slow publisher cannot overwrite a newer pointer by finishing
+   last; **the store lease proven to exclude a sweep for the whole span from first artifact write to
+   generation creation**, and a sweep proven never to delete an artifact of a concurrent publication;
+   marking proven to start from current + the 3 retained generations + build pins + reader leases, with a
+   **region checkpoint required by §4.6 proven NOT collected**; an interrupted sweep proven harmless;
+   **a simulated reordered-namespace power loss proven to produce a generation that fails validation and a
+   reader that falls back to the highest valid generation** — never a silent partial read; every pointer
+   dereference proven to use one snapshot and return handles opened during that traversal;
+   `publish_content_object` and `publish_pointer_generation` proven to refuse a reparse or non-NTFS
+   ancestor themselves; **no call to `ReplaceFileW` anywhere in Plan A's code path**;
    manifest-as-commit at shard, region and stage level under a simulated kill; cache key rejecting an
    artifact built for different site windows; dirty-tree scoping ignoring an unrelated docs edit.
 2. **The §3 gate re-run through the production parser-to-committed-region path**, every row passing, its
