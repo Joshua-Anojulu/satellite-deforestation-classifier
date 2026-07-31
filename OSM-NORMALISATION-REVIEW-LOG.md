@@ -757,3 +757,139 @@ remaining risk, not a reason to keep spending.
 Reviewer re-checked before opening: PATH `codex` is **0.146.0**, still outside `verified_versions`
 (`>=0.130 <0.146`) and still shipping the broken sandbox-helper layout on this box. Pinned to the
 verified, repaired **0.145.0** release binary again, same session, same model.
+
+## Round 7 — codex (loop 2, round 1 of 3)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed; thread_id echoed and matched)
+- reviewed body_sha256: 2ee7ac8fb410df497ede04be658db8ed1f6c6a6cd3507c2cdaaafc2aec6d2894
+- verdict: REVISE (1 critical, 3 high, 2 medium)
+
+**The critical was a self-defeating bug in v7's own fix, and it would have failed silently.** v7 suppressed
+pass-2 emissions keyed on `(site_id, osm_id)`. But every pair in `S` is in `S` *because pass 1 emitted it
+in at least one origin* - so the rule suppresses the other-origin counterpart that pass 2 exists entirely
+to recover. Pass 2 would have emitted **nothing**, the identity edges would simply have been absent, and
+nothing anywhere would have raised an error. Fixed by keying suppression on
+`(site_id, origin, source_region, osm_id)`.
+
+**Two claims of mine were checked against the code and one was wrong.** v7 asserted that a Job Object
+memory limit would terminate the process and that `forecast/sandbox_process.py` already exercised the
+mechanism. Neither holds: `JOB_OBJECT_LIMIT_PROCESS_MEMORY` makes an over-limit *allocation fail*, and the
+helper sets `LimitFlags = 0x2000 | 0x400` (kill-on-close, die-on-unhandled-exception) with **no memory
+limit** - `ProcessMemoryLimit` and `JobMemoryLimit` are never assigned. Job Objects are exercised there for
+process containment, which is a different purpose. `TerminateJobObject` *is* bound, so the fix has a call
+to use.
+
+**Stale measurement language survived a fourth consecutive round** (#6): "worst-case file" after
+establishing that bytes do not order memory, a 2.6x margin computed from working set after working set was
+demoted from the gate, and 6.58 GB described as a "ceiling". Recomputed from commit charge the pass-1
+margin is 2.07x, and the pass-2 gate file should be chosen by maximum observed commit, not compressed size.
+
+### Critique (verbatim)
+
+Material defects remain.
+
+1. **Critical — duplicate suppression still defeats closure.** Every `(site_id, osm_id)` in `S` exists because pass 1 emitted that pair in at least one origin. Suppressing pass 2 whenever that same two-column pair was emitted therefore suppresses the other-origin counterpart that pass 2 exists to recover. [closure](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:239>) [suppression](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:265>)
+
+   **Fix:** Track pass-1 emissions by `(site_id, origin, source_region, osm_id)` and suppress only that exact record while still emitting every missing origin/region counterpart selected through `S`.
+
+2. **High — the flags still produce the wrong Plan C road supply.** A tag-changed counterpart can have `intersects_window=true` but `selected_by_predicate=false`; defining road supply solely on `intersects_window` includes that non-road closure record. It also remains `closure_only=true`, contrary to the proof’s “rather than being stamped closure-only” wording. [flags](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:253>) [supply](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:261>) [proof](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:740>)
+
+   **Fix:** Define road supply and road coverage as `intersects_window AND selected_by_predicate`, define `closure_only = NOT(intersects_window AND selected_by_predicate)` for retained endpoints, and require the tag-changed fixture to carry both `intersects_window=true` and `closure_only=true`.
+
+3. **High — the NTFS classifier still lacks a valid first-publication and identity protocol.** A brand-new manifest starts with `D`, `S`, and `B` all absent, which no row covers. The expected file IDs used after a crash are never durably recorded; row 6b creates a new placeholder whose identity cannot satisfy row 4 after another kill; the unconditional equal-digest no-op can succeed even when `D` is absent; and row 6a restores from `B` immediately before a rule saying never to restore from `B`. [table](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:487>) [rules](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:504>)
+
+   **Fix:** Add an all-absent initialization row, condition the equal-digest no-op on a verified destination, either persist expected identities in a flushed transaction intent or remove that unverifiable criterion, and roll verified staging forward by atomic rename rather than exposing an old/empty placeholder.
+
+4. **High — the Job Object limit does not provide the promised termination behavior.** `JOB_OBJECT_LIMIT_PROCESS_MEMORY` causes an over-limit commit attempt to fail; it does not itself guarantee process termination. The reused job helper currently sets only kill-on-close and die-on-unhandled-exception, not any memory limit. [sandbox_process.py](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/forecast/sandbox_process.py:81>) [Microsoft job-limit documentation](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_limit_information)
+
+   **Fix:** Freeze a supervised child-process design using a process/job commit limit plus explicit memory-limit notification or allocation-failure handling that calls `TerminateJobObject`, and ensure both `S` and the node index are inside the limited job total.
+
+5. **Medium — clipped anchors can cease to be `LineString`s.** Intersecting a winding way with a box can yield a `MultiLineString`, point-only touch, geometry collection, or empty geometry; the plan freezes neither component handling nor projection-versus-clipping order, so two conforming Plan B implementations can generate different candidates. [anchor contract](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:276>)
+
+   **Fix:** Project first into the frozen site UTM, intersect there, retain all positive-length lineal components as the anchor, and explicitly exclude or flag empty and point-only intersections.
+
+6. **Medium — stale measurement claims remain.** The plan still calls Indonesia the “worst-case file” after stating byte size does not order memory, reports a 2.6× margin from working set after demoting working set from the gate, and calls 6.58 GB a “ceiling.” The commit-based pass-1 margin is approximately 2.07×, and the pass-2 pilot should use the file with maximum observed pass-1 commit, not largest bytes. [index claim](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:311>) [memory interpretation](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:366>) [projection](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:372>)
+
+   **Fix:** Rename Indonesia the largest-by-bytes tested file, calculate margin from 8.22 GB commit charge, and select the pass-2 gate file from pass 1’s measured maximum commit rather than compressed size.
+
+VERDICT: REVISE
+## Round 8 — codex (loop 2, round 2 of 3)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed; thread_id echoed and matched)
+- reviewed body_sha256: adb89de3c6749ca99f46c55d1d2f16cd58f6210e05c7eb8ee4ffa4d1551d75cf
+- verdict: REVISE (6 critical, 3 high, 1 medium)
+
+### THE TREND REVERSED, and the cause is localised
+
+| round | findings | criticals |
+|---|---|---|
+| 1 | 16 | 5 |
+| 2 | 16 | 4 |
+| 3 | 10 | 2 |
+| 4 | 9 | 1 |
+| 5 | 6 | 1 |
+| 6 | 6 | 1 |
+| 7 | 6 | 1 |
+| **8** | **10** | **6** |
+
+**Five of the six criticals (#4, #5, #6, #7, #8) are defects in the transaction-intent record that v8
+introduced one round earlier to fix round-7 #3.** One fix to the publication protocol produced five
+criticals. This is no longer "the reviewer finds progressively smaller problems"; it is a subsystem
+generating new failure modes faster than prose can close them.
+
+Meanwhile the reviewer opened with the first positive statement in eight rounds: *"The corrected
+suppression key and derived `closure_only` truth table are sound within the acquired corpus."* The
+**data-model half is converging. The publication-protocol half is diverging.**
+
+Three of my own errors in v8 worth naming:
+
+1. **#6** — the `init` row says "create S, then row 4's rename". **Row 4 has no rename**; its action is
+   `ReplaceFileW`, which requires an existing destination. Row 6 is the rename. I referenced the wrong row
+   in my own table, making first publication an impossible transition.
+2. **#5** — I stated plainly that the NTFS namespace change can be lost or reordered on power loss, and
+   then, in the same section, used the *absence* of the intent's directory entry as proof of a clean tree.
+   Directly self-contradictory.
+3. **#4** — I added the intent record and never gave it a lifecycle. Nothing deletes it, and terminal row 1
+   says "none", so a stale intent poisons the next publication.
+
+And **#10 is the fifth consecutive round of stale language**: "one raw way stream per file" after moving to
+two passes, "largest-file wall-clock", a "spatial index" Plan A no longer emits, and a "conservative by
+construction" guard that §2.3 already conceded was chosen.
+
+### Critique (verbatim)
+
+Material findings remain. The corrected suppression key and derived `closure_only` truth table are sound within the acquired corpus, but the following still break the contract:
+
+1. **Critical — “any distance” merely moved the boundary.** Pass 2 scans only the 36 acquired extracts, so a counterpart moved outside their union remains silently absent; §6.1’s unqualified promise is false. [§2.2](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:260>)  
+Fix: Scope the guarantee to “any distance within the acquired corpus,” emit per-origin presence/coverage, treat absence as UNKNOWN, or acquire globally covering snapshots.
+
+2. **Critical — `max_complete_radius_m` does not establish source completeness.** It measures distance to Plan A’s processing-mask boundary, while historical extract coverage explicitly remains UNKNOWN; it proves only that Plan A added no further truncation. [§2.3](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:314>)  
+Fix: Rename it `max_processing_radius_m` and make completeness conditional on separately proven historical source coverage.
+
+3. **High — per-site facts have no defined post-dedup representation.** Flags are keyed by site, but deduplication is keyed only by `(origin, osm_type, osm_id)`, and the promised origin output names only `source_regions[]`; identity edges cannot carry Plan C membership for single-origin ways. [§4.1](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:419>)  
+Fix: Publish a manifest-bound `(site_id, origin, osm_type, osm_id)` membership/flag table, or freeze an exact consumer-side rederivation contract.
+
+4. **Critical — the intent record has no lifecycle state.** It is absent from the table, no action deletes it, and terminal row 1 says “none,” leaving a stale intent to poison the next publication. [§5.2](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:534>)  
+Fix: Add intent presence/version to every state and delete it last, only after verified `D=d_new`, `S/B` absent, with kill tests around deletion.
+
+5. **Critical — “no intent means pre-publish” contradicts the stated NTFS durability limit.** A power loss may lose or reorder the intent’s directory entry independently of `D/S/B`, so absence cannot establish a clean tree and the classifier does not make that survivable. [durability claim](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:579>)  
+Fix: Treat absent intent as clean only after validating the last committed DAG/pointer and finding no transaction remnants; otherwise fail closed and narrow the survivability claim.
+
+6. **Critical — first publication invokes an impossible transition.** `init` has `D` absent but says to create `S` and use row 4, whose action is `ReplaceFileW(D,S,B)` and requires an existing destination. [state table](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:541>)  
+Fix: Route flushed first-publication staging through row 6’s `MoveFileExW(S,D)` transition.
+
+7. **Critical — the claimed identity checks are not implementable.** Intent records only the old destination file ID, not staging’s ID, while row 6 accepts `B=any` and then deletes it; a foreign same-digest staging file can satisfy a row and an unrelated backup can be destroyed.  
+Fix: Record staging identity and an operation nonce before mutating `D`; permit `B` only absent or verified-old, with every other identity routed to row 8 and never deleted.
+
+8. **High — concurrent first publication is not actually serialized by specification.** Only classification/recovery is explicitly inside the lock critical section; intent absence checking, exclusive creation, staging, publication, cleanup, and intent deletion are not. [lock rule](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:576>)  
+Fix: Put the entire transaction under the fixed locks, create intent/staging with `CREATE_NEW`, and test two simultaneous first publishers.
+
+9. **High — the Job Object termination signal is not guaranteed.** Microsoft documents ordinary completion-port messages such as `JOB_OBJECT_MSG_JOB_MEMORY_LIMIT` as non-guaranteed; therefore the supervisor cannot promise to call `TerminateJobObject` on every hard-limit breach. [Microsoft Job Objects documentation](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)  
+Fix: Register a guaranteed `JobObjectNotificationLimitInformation` threshold below the 17 GB hard limit before starting the child, terminate on that notification, and treat allocation failure or abnormal exit as stage failure.
+
+10. **Medium — stale overclaims remain.** The plan still says “one raw way stream per file” despite two passes, labels Indonesia’s result “largest-file wall-clock,” says Plan A supplies a spatial index after deleting that output, and calls the chosen 5 km guard “conservative by construction.”  
+Fix: Change these respectively to “one stream per file per pass,” “Indonesia parser wall-clock,” “GeoParquet from which Plan B builds an index,” and “chosen processing guard.”
+
+VERDICT: REVISE

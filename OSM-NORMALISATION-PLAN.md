@@ -63,6 +63,26 @@ review_provenance:
       session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
       body_sha256: a325021d05e30d94f038ecb94f9a5c77c1046ce36dc8f62da420868d14c8a165
       verdict: REVISE
+    - round: 7
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+      body_sha256: 2ee7ac8fb410df497ede04be658db8ed1f6c6a6cd3507c2cdaaafc2aec6d2894
+      verdict: REVISE
+    - round: 8
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+      body_sha256: adb89de3c6749ca99f46c55d1d2f16cd58f6210e05c7eb8ee4ffa4d1551d75cf
+      verdict: REVISE
   loop_2_note: "rounds 1-6 exhausted both caps and resolved deadlocked at body a325021d; v7 applied all
     four open findings unreviewed; a second loop with fresh caps opens at round 7"
   historical_cross_model_review: true
