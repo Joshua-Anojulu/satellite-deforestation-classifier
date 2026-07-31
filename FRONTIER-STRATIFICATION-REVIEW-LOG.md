@@ -501,3 +501,79 @@ VERDICT: REVISE
 | 6 | Sidecar carries source-grid identity/hash, core window, per-edge halo widths, seam evidence and empty-support status, so §1.5's edge contract is demonstrable rather than merely required |
 
 **These six fixes are unreviewed.** `MAX_ROUNDS` is exhausted; two attempts remain.
+
+## Round 6 — codex (FINAL — both caps exhausted)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb801-5928-7271-add9-781dff680d8a (resumed; thread_id echoed and matched)
+- reviewed body_sha256: 8957a5db4c39175335b7b32d47c84e529f4d0e50b5fe4ff42ac9508ba6c37fe5
+- verdict: REVISE (2 critical, 2 high, 2 medium)
+
+**CAP EXTENSION, recorded.** `MAX_ROUNDS` was 5 and was raised to **6** by Josh's authorisation, to review
+the six round-5 fixes rather than ship them unreviewed. Earlier statements in this log that `MAX_ROUNDS`
+was exhausted at round 5 are superseded by that extension. After round 6: **rounds 6 of 6, attempts 8 of 8
+— both caps genuinely exhausted.**
+
+Full loop: **16 → 10 → 10 → 9 → 6 → 6** findings; criticals **4 → 3 → 2 → 2 → 2 → 2**.
+
+**The science is done.** Codex: *"The scientific estimand and claim language are now sound… no material
+scientific overclaim remains."* Not one round-6 finding concerns the statistics, the estimand or the claim.
+All six are RNG contract, artifact lifecycle, and scope bookkeeping.
+
+**#6 is the same self-forbidding pattern I had just fixed one round earlier.** Round-5 #2 caught the plan
+freezing the Spec W artifacts while requiring an RNG change; I carved out the RNG artifacts and did not
+notice that "no change to sampling" plus the Out-of-scope sampling prohibition equally forbade the new
+conditional outer-site bootstrap the plan itself introduces. Fixing a pattern in one location and leaving
+it in another is the defect this review has found most often in how I revise.
+
+**#5 was mine too** — I replaced "evaluable site" in the gate and left it standing in the Proof line I wrote
+in the same edit. Tenth instance this session.
+
+### Critique (verbatim)
+
+The scientific estimand and claim language are now sound, but the RNG contract remains materially under-specified.
+
+1. **Critical — integer assignment is execution-order dependent.** “Sequential in first-request order” means two conforming implementations that request estimands in different orders assign different integers and therefore different bootstrap streams ([plan](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FRONTIER-STRATIFICATION-PLAN.md:269>)).  
+   Fix: Collect every requested key before code-7 draws, sort by one canonical serialized representation, and assign integers `0…N−1` in that order; prohibit on-demand first-request assignment.
+
+2. **Critical — the key serialization is not injective or fully specified.** “Unit indices concatenated” does not distinguish an integer array from digit/string concatenation, the group-index base is unstated, and the JSON’s path, top-level schema, version, uniqueness validations, and hash binding are missing.  
+   Fix: Freeze a literal path and canonical JSON schema using zero-based group indices and arrays of `{site_id, step28_unit_index}`, require tuple↔integer bijection, and bind the table hash into the evaluation output or RNG map.
+
+3. **High — the outcome-derived table’s lifecycle can reopen a noninterference channel.** The merge places it in Phase-C step 28, before inference, although its key contains outcome-conditioned `J`; unlike the stratum artifact, prediction invariance under this table’s presence or mutation is not required ([J definition](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FRONTIER-STRATIFICATION-PLAN.md:239>), [merge row](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FRONTIER-STRATIFICATION-PLAN.md:488>)).  
+   Fix: Let step 28 reserve code 7 and its schema only, then construct the key table after inference and `J` determination but before bootstrap draws, with pre-join predictions invariant to its absence or mutation.
+
+4. **High — “represented groups” still lacks a set definition.** It affects `J`, the RNG region key, and gate condition 4, but the plan never resolves whether it means every group containing any `J` site or only groups meeting the three-event-supported-site threshold; those interpretations can change both the point estimate and seed ([estimand](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FRONTIER-STRATIFICATION-PLAN.md:228>), [gate](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FRONTIER-STRATIFICATION-PLAN.md:442>)).  
+   Fix: Compute `J*` over the full 36-site frame, define `G_J = sorted(unique(group(j): j∈J*))`, state whether the primary retains all of `J*`, and express the gate formally as `|{g∈G_J: supported_sites(g)≥3}|≥2`.
+
+5. **Medium — the operative gate is corrected, but Proof reintroduces the rejected term.** Line 567 again says “<3 evaluable sites,” whose governing meaning is components anywhere in the origin, even though the later test uses the correct frontier-specific definition.  
+   Fix: Replace every residual “evaluable site” reference in the stratified gate and proof with `FRONTIER-event-supported site`.
+
+6. **Medium — the scope still forbids its own evaluation-resampling amendment.** “No change to … sampling” and Out of scope’s blanket sampling prohibition conflict with the new conditional outer-site bootstrap and code-7 stream ([scope claim](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FRONTIER-STRATIFICATION-PLAN.md:96>), [bootstrap](<C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/FRONTIER-STRATIFICATION-PLAN.md:250>)).  
+   Fix: Limit the prohibition to Phase-C4 training sampling and the existing within-site tile-draw geometry, explicitly carving in the new stratified evaluation resampling.
+
+The three named mutations of existing frozen material are narrow enough and do not license unrelated edits. The missing piece is to classify the new key table and its builder explicitly as new report-side artifacts. The single `FRONTIER-event-supported` definition otherwise closes the substantive gate defect, the two-group floor is defensible, and no material scientific overclaim remains.
+
+Before adoption, the provenance must also be reconciled: the current file still says `status: deadlocked`, and the review log still says `MAX_ROUNDS` is exhausted despite the user-authorized extension.
+
+VERDICT: REVISE
+### Claude's response (round 6) — all 6 accepted, applied in v7, UNREVIEWED
+
+| # | Fix in v7 |
+|---|---|
+| 1 | Integer assignment made **order-independent**: all requested keys collected, sorted by canonical serialisation, assigned `0…N−1`. On-demand first-request assignment **prohibited** — it made the bootstrap stream depend on execution order |
+| 2 | Serialisation frozen as a **JSON array of `{site_id, step28_unit_index}`** (not digit concatenation, which is not injective), zero-based group indices, literal path, `schema_version`, asserted **bijection**, and the table **sha256 bound into the evaluation output and RNG map** |
+| 3 | Lifecycle corrected: step 28 **reserves code 7 and the schema only**; the table is built **after inference and after `J`**, since its key is outcome-conditioned, with pre-join predictions byte-identical whether it is absent, present or mutated |
+| 4 | `represented groups` formally defined: `J*` over the **full 36-site frame**, `G_J = sorted(unique(group(j) : j ∈ J*))`, the primary **retains all of `J*`** (coverage is a gate, not a filter), and condition 4 stated as `\|{g ∈ G_J : supported_sites(g) ≥ 3}\| ≥ 2` |
+| 5 | Residual "evaluable sites" removed from Proof |
+| 6 | Scope carved: Phase-C4 **training** sampling and within-site tile geometry stay frozen; the **evaluation-side stratified resampling** of §3.2 and its code-7 stream are explicitly carved in |
+
+**These six fixes are unreviewed and no attempts remain.**
+
+### Resolution — DEADLOCKED, not approved
+
+Six rounds, no `APPROVED`. Claude has **no counter-position on any outstanding finding** — every round was
+accepted in full and nothing was rejected. This is a budget exhaustion, not a disagreement.
+
+What a reader should take from the artifact: the scientific design is reviewer-endorsed as sound and free of
+overclaim; the remaining risk is concentrated in the **RNG determinism contract and artifact lifecycle**,
+whose v7 fixes have not been adversarially checked.

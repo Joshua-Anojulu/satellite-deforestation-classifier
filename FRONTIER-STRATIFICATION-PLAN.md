@@ -53,13 +53,27 @@ review_provenance:
       session: 019fb801-5928-7271-add9-781dff680d8a
       body_sha256: 99478d926af02944d4b56cbab32d4160a0e91760f434126b9e564ac468ad8b6b
       verdict: REVISE
+    - round: 6
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      session: 019fb801-5928-7271-add9-781dff680d8a
+      body_sha256: 8957a5db4c39175335b7b32d47c84e529f4d0e50b5fe4ff42ac9508ba6c37fe5
+      verdict: REVISE
+  cap_note: >-
+    MAX_ROUNDS was raised 5 -> 6 by owner authorisation, to review the six round-5 fixes rather
+    than adopt them unreviewed. Both caps are now exhausted: rounds 6 of 6, attempts 8 of 8.
+    Round-6 fixes (v7) are applied and UNREVIEWED.
   historical_cross_model_review: true
   final_body_cross_model_approved: false
   degraded_rounds: []
 ---
 
 # Plan: frontier-vs-infill evaluation stratification for Specification W
-_Locked via grill — by Claude + Josh · revised after Codex rounds 1–5_
+_Locked via grill — by Claude + Josh · revised after Codex rounds 1–6_
 
 > **Amends** `ANALYSIS-DRIVER-PLAN.md` (`approved-final`, body `030d78fa`). Supersedes
 > `FRONTIER-STRATIFICATION-PROPOSAL.md` (2026-07-31, not adopted).
@@ -93,7 +107,12 @@ and climate, and no arm here separates them — and it does **not** compare 30 m
 vintage and resolution ablations would identify those claims and are named as a follow-on, not smuggled in
 here.
 
-**No new model, no new arm, no change to training, tuning, calibration, nesting, sampling or the θ schema.**
+**No new model, no new arm, no change to training, tuning, calibration, nesting, or the θ schema.**
+**Sampling:** Phase-C4 *training* sampling and the existing within-site tile-draw geometry are unchanged;
+the **evaluation-side stratified resampling** of §3.2 and its code-7 stream are **new and are explicitly
+carved in** (round-6 #6). v6 said "no change to sampling" while introducing a conditional outer-site
+bootstrap — the same self-forbidding pattern round-5 #2 caught in the RNG carve-outs, which I fixed there
+without noticing it applied here too.
 
 ## What round 1 refuted, and what replaced it
 
@@ -229,10 +248,22 @@ pattern retains, is **measured, not asserted** (§3.4).
     **`J_{θ,T,scale,region,stratum}`** over the full natural-prevalence evaluation population for every
     combination §3.3 reports. The primary is exactly `J_{30, 2021, 30m, represented, FRONTIER}`.
 
-    v4 labelled the region dimension "all", which would let six evaluable sites drawn entirely from one of
-    the four groups carry a primary presented as global (round-4 #4). The represented-group list travels
-    **with** the number, and §4.7 adds a coverage condition so a single-group result can never wear an
-    unqualified label.
+    v4 labelled the region dimension "all", which would let six sites drawn entirely from one of the four
+    groups carry a primary presented as global (round-4 #4). The represented-group list travels **with** the
+    number, and §4.7 adds a coverage condition so a single-group result can never wear an unqualified label.
+
+    **`represented groups` is now a defined set, because three things depend on it** — `J`, the RNG region
+    key, and gate condition 4 — and v6 left it ambiguous between "groups containing any `J` site" and
+    "groups meeting the three-site threshold", which give different estimates *and* different seeds
+    (round-6 #4). Frozen:
+
+    - **`J*`** is computed over the **full 36-site frame**: every site whose `FRONTIER` stratum is two-class
+      in the original sample.
+    - **`G_J = sorted(unique(group(j) : j ∈ J*))`** — every group containing **any** `J*` site.
+    - **The primary retains ALL of `J*`.** Coverage is a **gate**, not a filter: dropping sites in
+      non-qualifying groups would silently change the estimand.
+    - **Gate condition 4 is formally `|{ g ∈ G_J : supported_sites(g) ≥ 3 }| ≥ 2`**, where
+      `supported_sites(g)` counts **FRONTIER-event-supported** sites in `g`.
 
     With that index fixed:
 
@@ -270,8 +301,11 @@ pattern retains, is **measured, not asserted** (§3.4).
       |---|---|
       | field encodings | `θ`, `T` as integers; `scale ∈ {30, 90}`; `stratum ∈ {0,1,2}` per §4.3; `region` as the **sorted** tuple of represented group indices in `FRAME_GROUP_ORDER` order |
       | site-set encoding | site IDs sorted **lexicographically**, then their step-28 unit indices concatenated in that order |
-      | integer assignment | sequential in first-request order, recorded in **`specification_w_stratified_keys.json`** |
-      | collision rule | a repeated field tuple **must** return its existing integer; any mismatch **fails closed** |
+      | integer assignment | **all** requested keys are collected first, sorted by their canonical serialisation, and assigned `0 … N−1` in that order. **On-demand first-request assignment is prohibited** (round-6 #1) — it makes the stream depend on execution order, so two conforming implementations would draw differently |
+      | serialisation | a **JSON array** of `{site_id, step28_unit_index}` objects — **not** digit or string concatenation, which is not injective (round-6 #2); group indices are **zero-based** into `FRAME_GROUP_ORDER` |
+      | table | literal path **`forecast/artifacts/specification_w_stratified_keys.json`**, with `schema_version`, the estimand fields, and the key array |
+      | validation | the tuple↔integer map is a **bijection**, asserted; duplicates fail closed |
+      | binding | the table's **sha256 is recorded in the evaluation output and in the RNG map**, so a draw can be traced to the exact table that produced it |
 
       That integer is the spawn-key coordinate, used with the map's existing `entropy: 42` and `PCG64`.
     - The interval is the §10 percentile interval over defined replicates; the **undefined fraction is
@@ -485,7 +519,7 @@ pattern retains, is **measured, not asserted** (§3.4).
     | **Metric terminology** | `AP-lift` reserved to `AP/prevalence`; `ΔAP` introduced |
 | **Phase D / step 29** | the post-inference **join contract** for the report artifact (round-2 #6) — no feature-table change, stated so the boundary is explicit |
 | **step 41 (estimator)** | `J`, `Δ̂`, site-instance resampling and undefined propagation (§3.2) |
-| **step 28 (RNG)** | the stratified key table and its collision rule (round-5 #2) |
+| **step 28 (RNG)** | **reserves code `7` and the key-table SCHEMA only** — it does not build the table. The key contains outcome-conditioned `J`, so constructing it in Phase C would place an outcome-derived artifact before inference (round-6 #3). The table is **built after inference and after `J` is determined, but before any bootstrap draw**, and **pre-join predictions must be byte-identical whether it is absent, present or mutated** — the same invariance already required of the stratum artifact |
 | **`specification_w_rng_map.json`** | analysis code `7` added |
 | **`forecast/specification_w.py:339`** | the generator that **regenerates** `analysis_codes` 0–6 as a dict literal — editing the JSON alone would be **erased on the next regeneration** (round-5 #2) |
 
@@ -528,7 +562,9 @@ pattern retains, is **measured, not asserted** (§3.4).
 
 ## Out of scope
 
-- Any change to the model, arms, training, tuning, calibration, nesting, sampling, or the θ schema.
+- Any change to the model, arms, training, tuning, calibration, nesting, or the θ schema; and to
+  **Phase-C4 training sampling and the within-site tile-draw geometry** — but **not** the evaluation-side
+  stratified resampling of §3.2, which this plan introduces (round-6 #6).
 - **Road-vintage and resolution ablations** — the follow-on that would identify the differentiators.
 - **The 12-site v11 primary path**, `risk/models.py`, `risk/hansen.py`, `risk/labels.py`, and the
   firewall's intent.
@@ -564,19 +600,22 @@ From the repo root with `PYTHONPATH` set, using `C:\Users\josha\.venvs\satclf\Sc
    constant scores; budget recall proven **invariant to raster order** and **RNG-free**, via the exact analytic
    expectation over the boundary tie group; the hard gate proven to suppress the primary on **each of its five conditions
    independently** — fewer than 100 positives **within `J`**, fewer than 6 two-class sites, event support
-   below 6 sites x 5 components / 30 total, fewer than 2 represented groups or a group with < 3 evaluable
-   sites, and undefined-replicate failure;
+   below 6 sites x 5 components / 30 total, fewer than 2 represented groups or a group with < 3
+   **FRONTIER-event-supported** sites, and undefined-replicate failure;
    `< 25` sites proven **retained** in resampling and flagged only in display; **a zero-row stratum draw
    proven to mark the whole replicate undefined** rather than being treated as one-class; the join proven
    **many-to-one on the full stamped key**, with prediction row count **unchanged** and a matched `255`
    proven to raise; the **feature-table schema and hashes proven byte-identical whether or not the report
    artifact exists**; RNG **analysis code 7** proven allocated **by the generator at
-   `forecast/specification_w.py`**, not only in the JSON, and proven to survive a regeneration; the
-   stratified key table proven to return an identical integer for a repeated field tuple and to **fail
-   closed** on a mismatch;
-   the **event-support gate** proven to fail on 6 sites carrying one component each; the
-   **group-coverage** condition proven to fail when all of `J` sits in one group, **and proven to fail on a
-   second group whose sites are `FORECAST-PLAN.md` "evaluable" but not FRONTIER-event-supported**; the **block anchor** proven to be `floor(grid_row/3)` on the **site GFC window array**, computed
+   `forecast/specification_w.py`**, not only in the JSON, and proven to survive a regeneration; the stratified key table proven a **bijection**, proven to assign identical
+   integers under two different request ORDERS (round-6 #1), proven injective against a
+   digit-concatenation counterexample, proven to bind its own sha256 into the evaluation output, and proven
+   to be built **after `J` is determined** with pre-join predictions byte-identical whether it is absent,
+   present or mutated;
+   the **event-support gate** proven to fail on 6 sites carrying one component each; `G_J` proven to equal the sorted unique groups of `J*` over the **full 36-site frame**,
+   with the primary proven to retain **all** of `J*`; the **group-coverage** condition proven to evaluate
+   `|{g : supported_sites(g) ≥ 3}| ≥ 2` and to fail both when all of `J` sits in one group and when a second
+   group's sites are `FORECAST-PLAN.md` "evaluable" but **not** FRONTIER-event-supported; the **block anchor** proven to be `floor(grid_row/3)` on the **site GFC window array**, computed
    **before** core tiling, with trailing exclusion proven at `3·block_row + 2 ≥ n_rows`;
    the join proven to reject a **missing** prediction row and an **arm-specific population difference**,
    with pre-join predictions proven byte-identical under report-artifact mutation; the artifact proven to live at its literal frozen path, with the sidecar proven to
