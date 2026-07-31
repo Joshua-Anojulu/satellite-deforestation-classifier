@@ -53,13 +53,23 @@ review_provenance:
       session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
       body_sha256: 9082a610776787f6d4129c607120d954acb6681368d1dbcfe359ba4c4a3ca296
       verdict: REVISE
+    - round: 6
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
+      body_sha256: a325021d05e30d94f038ecb94f9a5c77c1046ce36dc8f62da420868d14c8a165
+      verdict: REVISE
   historical_cross_model_review: true
   final_body_cross_model_approved: false
   degraded_rounds: []
 ---
 
 # Plan A: OSM normalisation infrastructure for Specification W
-_Locked via grill — by Claude + Josh · revised after Codex rounds 1–4, a preflight, and three measurements_
+_Locked via grill — by Claude + Josh · revised after Codex rounds 1–5, a preflight, and three measurements_
 
 > **Position.** Plan A of three, superseding part of `STATIC-FEATURES-PLAN.md` (`reviewed-unapproved`).
 > **Plan B** (vintage audit) and **Plan C** (feature extraction) consume this output and are unwritten.
@@ -72,8 +82,11 @@ no vintage position, no classification thresholds.
 
 ## What is measured, and what a previous version of this plan got wrong
 
-Every runtime number below is now measured on the worst-case file. The estimates they replace were wrong
-in both directions and are withdrawn.
+**Three categories, kept separate** (round-6 #5): *file observations* measured directly on
+`indonesia-220101`; *corpus extrapolations* computed from them; and *unmeasured* quantities. v6's claim
+that "every runtime number is measured on the worst-case file" was false — the corpus figures are
+extrapolations, pass 2 has never run, and the production path does not exist. The estimates the
+observations replace were wrong in both directions and are withdrawn.
 
 | quantity | v3 claimed | **measured** |
 |---|---|---|
@@ -86,7 +99,7 @@ in both directions and are withdrawn.
 | peak working set | unmeasured | **6.58 GB = 19.3 %** of the machine's 34.1 GB |
 | peak commit | unmeasured | **8.22 GB** |
 | corpus size actually parsed | "9.42 GB" | **8.64 GB** — 9.42 GB is the whole static archive, not its OSM subset |
-| corpus projection | 2.7 h | **≈ 260.7 M ways, ≈ 2.26 h** |
+| corpus projection, **one pass** | 2.7 h | **≈ 260.7 M ways, ≈ 2.26 h** (§2.2 needs two) |
 
 **Two runtimes, and the slower one is binding.** The 18.3-minute figure checked only each retained way's
 first node location. §1.5 requires *every* node of every retained way to be checked, which is a per-node
@@ -164,12 +177,20 @@ not before. This exact pipeline is the one benchmarked above.
     | `area:highway` | **retain — ADDED** | established tagging for road *areas*; v4 omitted it |
     | `not:highway` | **exclude** | negative assertion — states the feature is *not* that road |
     | `source:highway` | **exclude** | metadata about where the `highway` tag came from |
-    | `historic:highway` | **exclude** | historic designation, not a present or former carriageway |
+    | `historic:highway` | **retain — CHANGED** | ambiguous by documentation; excluding it is a scientific call (round-5 #6) |
 
     Keys are frozen **by this table**, not by a suffix rule: a suffix rule silently absorbs any future
     `<anything>:highway` namespace, including the metadata ones above — which is why "just use the suffix"
-    is not the fix, and why the v4 discrepancy pointed in both directions at once. Two of the twelve keys
-    were genuinely missing from v4 (`was:`, `area:`), and three would have been wrongly swept in.
+    is not the fix, and why the v4 discrepancy pointed in both directions at once.
+
+    **Exclusion is limited to unambiguously non-road namespaces** (round-5 #6). v5 excluded
+    `historic:highway` on the reasoning that it denotes a historic designation. But the OSM lifecycle
+    documentation records its use as inconsistent, and it can mark a previously valid carriageway — so
+    excluding it is exactly the kind of scientific call Plan A's Goal forbids, and it is *irreversible*:
+    the record never reaches Plan B to be reconsidered. Worse, the §1.2 assertion cannot catch the mistake,
+    because an excluded key is subtracted from the reference predicate too. Only `not:` (a negative
+    assertion) and `source:` (provenance metadata about another tag) are unambiguous enough to drop.
+    Ambiguous namespaces are **retained with their raw tags** and left to Plan B.
 
     **Membership is tested by direct key lookup** over the frozen retain-list, never by a scan over the
     way's tags — that scan was v3's benchmark bug.
@@ -197,26 +218,58 @@ not before. This exact pipeline is the one benchmarked above.
     list, fails the stage closed** with its `osm_id` reported. The measured count on the worst-case file is
     recorded in §3 — this is a checked invariant, not an assumption.
 
-### 2. Site dispatch by exact mask, during the single pass
+### 2. Site dispatch, and identity closure — TWO passes, not one
 
 Round-2 #2: the nine Indonesian site boxes total 0.495 deg² inside a **99.83 deg² envelope — 202×
-oversized**, and clustering only reaches 110×, so no rectangle works. Instead each way is tested against
-the **exact set of site window polygons** as it streams, and emitted to every window it touches. One pass,
-no envelope, no `if it overruns` trigger that a killed process could never record.
+oversized**, and clustering only reaches 110×, so no rectangle works. Each way is tested against the
+**exact set of site window polygons** as it streams, and emitted to every window it touches. No envelope,
+no `if it overruns` trigger that a killed process could never record.
 
-**Extraction guard (frozen):** a site window is its site box buffered by **5000 m**, geodesically. That
-conservatively exceeds the largest plausible downstream support (Plan C's road radii reach 1500 m) plus the
-spatial-candidate radius Plan B may choose (§6), so neither Plan B nor Plan C can need a road Plan A
-discarded (round-2 #4).
+2.1 **Extraction guard (frozen):** a site window is its site box buffered by **5000 m**, geodesically.
+
+2.2 **Window dispatch alone cannot deliver §6.1's identity edges, and v5 claimed it could**
+    (round-5 #1). This was a flat contradiction inside v5: §2 discards every way outside the window, while
+    §6.1 promised identity edges "at any distance". A way that moved 8 km between origins is dropped by the
+    first pass and can never appear in the join. Worse, v5's proof line ("identity edges emitted at
+    arbitrary separation") would have **passed on synthetic fixtures while production silently omitted
+    exactly the cases the edge exists to catch** — a green test over a hole.
+
+    **Identity closure, as two explicit passes:**
+
+    - **Pass 1 — site relevance.** Stream all 36 extracts, apply the §1.2 retain-predicate and window
+      dispatch. Emit region checkpoints, and accumulate **`S` = the set of every `osm_id` touching any site
+      window in any origin**. `S` is small: it is bounded by the road network inside 36 windows, not by
+      the corpus.
+    - **Pass 2 — closure.** Stream all 36 extracts again, retaining every way whose `osm_id ∈ S`
+      **regardless of window intersection**, tagged **`outside_window = true`**. These records exist only
+      to complete identity edges; they are excluded from coverage statistics and from Plan C's road supply,
+      and the flag is what keeps that distinction auditable.
+
+    Two passes is the honest cost of the promise. Retaining every highway way corpus-wide instead would
+    avoid the second pass but multiply the output by roughly an order of magnitude, and disk is already
+    constrained on this machine.
+
+2.3 **The completeness domain is frozen and emitted, because an index over a finite window is not
+    complete for every anchor** (round-5 #2). v5 told Plan B it was free to choose any radius, which a
+    5 km window cannot honour: an anchor near the window edge has neighbours outside it.
+
+    - **Anchor domain (frozen): the unbuffered site box.** For any anchor inside it, every feature within
+      the guard distance is inside the window by construction.
+    - **`max_complete_radius_m` is emitted per site** — the guaranteed-complete query radius for anchors in
+      that domain, computed from the realised mask rather than assumed to be 5000.
+    - **Plans B and C must stay inside it or reopen Plan A.** That is a stated contract, not a hope. v5's
+      Risks section admitted Plan C "could in principle exceed" the guard while §2 claimed neither plan
+      could need a discarded road; the admission was right and the claim is withdrawn.
+    - **No bespoke index format is frozen.** Plan A publishes GeoParquet; Plan B builds its own ephemeral
+      spatial index from it. A portable index schema would be one more Plan A artifact to version, and
+      round-5 #2's alternative avoids it entirely.
 
 **Two different margins, which v3 conflated** (round-3 #9):
 
 - **Processing-mask margin** — realised metres between each site box and the boundary of the mask Plan A
-  actually applied. Computed from our own geometry, verifiable, emitted per site. This is what lets Plan C
-  check that Plan A kept enough.
+  actually applied. Computed from our own geometry, verifiable, emitted per site.
 - **Current-polygon margin** — metres between the site window and the *current-vintage* Geofabrik `.poly`.
-  Auxiliary only. It **cannot** prove what the 2020–2022 extract boundary was, so it proves nothing about
-  historical coverage.
+  Auxiliary only. It **cannot** prove what the 2020–2022 extract boundary was.
 
 `roads_source_available` stays **UNKNOWN** regardless of either margin (§9). A large current-polygon margin
 is not evidence and is never reported as if it were.
@@ -235,7 +288,7 @@ but no criterion, which is not a gate.
 | condition | ceiling | measured on `indonesia-220101`, fully validating | |
 |---|---|---|---|
 | largest-file wall-clock | ≤ 45 min | **22.5 min** | PASS |
-| projected corpus wall-clock | ≤ 6 h | **≈ 2.26 h** | PASS |
+| projected corpus wall-clock, **both passes** (§2.2) | ≤ 12 h | *≈ 4.5 h — EXTRAPOLATED, not measured* | **NOT ASSESSED** |
 | peak working set | ≤ 50 % of machine RAM (17.0 GB) | **6.58 GB (19.3 %)** | PASS |
 | geometry availability | 100 % of retained ways | **100 %** (4,839,062 / 4,839,062) | PASS |
 | ways with a missing or invalid node location | 0 | **0** | PASS |
@@ -331,19 +384,23 @@ v4's claim that "if `indonesia-220101` fits, every other file fits" is withdrawn
     which this measurement could not have detected. v4 concluded the rule "will not halt this corpus" from
     it; that was an overclaim and is withdrawn.
 
-4.6 **The full preflight is an authorisation gate, not later proof** (round-4 #9). The complete
-    duplicate-group preflight — all three origins, every real region overlap, version + timestamp + tag
-    map + node references + resolved coordinates — **must pass before the corpus run is authorised**,
-    alongside §3's production-path gate. Preflight needs no location index for the reference check and
-    only resolved coordinates for the geometry check, so it is cheap relative to the stage it guards.
+4.6 **Preflight runs from committed region checkpoints — it cannot precede them** (round-5 #3). v5 called
+    the coordinate preflight cheap because coordinates are "already retained per §1.3". They are retained
+    only *after* the node index and parser have produced region records, so running it before the corpus
+    run would require its own full node-and-way pass — the opposite of cheap. The gate ordering was
+    simply wrong, and the fix is to reorder rather than to re-cost it:
 
-4.4 **Assert unique dedup keys**, not zero coincident length — distinct IDs may legitimately trace
-    coincident roads. Distinct-ID coincidence is reported separately, never merged.
+    | stage | gated by |
+    |---|---|
+    | 1. Pass 1 parsing → region checkpoints | §3's production-path gate, measured on the largest file |
+    | 2. Pass 2 closure → `outside_window` records | pass 1 committed |
+    | 3. **Duplicate-group preflight**, reading committed checkpoints only | passes 1–2 committed |
+    | 4. Deduplication and origin-level publication | **preflight clean** |
 
-4.5 **Every duplicate group is preflighted** over all real overlaps **before** cache construction
-    (round-2 #7): version, timestamp, tag map, and ordered node-reference equality. A group that would fail
-    §4.2 or §4.3 must fail during preflight, so an unhandled case cannot halt the run after hours of
-    parsing.
+    Preflight at step 3 reads Parquet, never a PBF, so it genuinely is cheap — but only because it now
+    runs after the parse instead of before it. It covers all three origins and every real region overlap:
+    version, timestamp, tag map, node references, and resolved coordinates. **A dirty preflight blocks
+    publication**, which is the property v5 wanted; it does not block parsing, which it never could.
 
 ### 5. Published layout and commit protocol
 
@@ -353,7 +410,7 @@ manifest hierarchy but bound none of its edges, so the "hierarchy" carried no in
 ```
 part files ──► shard manifest ──► region manifest ──► origin dataset manifest ──┐
                                                                                 ├─► stage manifest ◄── pointer
-identity edges + spatial index + coverage margins + preflight report ───────────┘
+identity edges + GeoParquet geometry + coverage margins + preflight report ─────┘
 ```
 
 5.1 **Every manifest names the digest of every child**, plus the schema digest and the cache key (§8) it
@@ -382,12 +439,35 @@ identity edges + spatial index + coverage margins + preflight report ───�
       loss mid-`ReplaceFileW` produces no error code at all, so nothing classifies the on-disk state at
       restart.
 
-    **Startup classifier (new, and executable).** Before any read or publish, the three paths
-    (destination, staging, backup) are inspected by **digest and file identity** against the manifest DAG,
-    and the outcome is decided deterministically: complete → proceed; a recognised intermediate
-    arrangement → **roll forward** to the replacement, never back; anything unrecognised → **fail closed**
-    and report. This is the piece v4 was missing entirely — it handled errors that are returned, not
-    termination that returns nothing.
+    **Startup classifier — the complete state table** (round-5 #4). v5 said "a recognised intermediate
+    arrangement → roll forward", which names a requirement and specifies nothing. That is the same failure
+    as v3's "unique consistent global sequence": a phrase standing where a decision procedure belongs.
+
+    Let **D** = destination, **S** = staging, **B** = backup, and let `d_old` / `d_new` be the digests the
+    manifest DAG expects before and after this publish. Classification compares **digest and file
+    identity**, never mere existence:
+
+    | # | D | S | B | interpretation | idempotent action |
+    |---|---|---|---|---|---|
+    | 1 | `d_new` | absent | absent | complete | none |
+    | 2 | `d_new` | absent | `d_old` | replaced; cleanup pending | delete B |
+    | 3 | `d_new` | `d_new` | `d_old` | replaced; both temporaries pending | delete S, then B |
+    | 4 | `d_old` | `d_new` | absent | not started | retry publish from S |
+    | 5 | `d_old` | `d_new` | `d_old` | backup taken, replace not done | retry publish **from S** |
+    | 6 | absent | `d_new` | any | destination lost mid-flight | **roll forward**: publish S |
+    | 7 | absent | absent | `d_old` | destination lost, no replacement | fail closed; operator restore from B |
+    | 8 | any other digest combination | | | unrecognised | **fail closed**, report all three |
+
+    **Rules that make the table safe:**
+
+    - **Never restore from B when S holds `d_new`** (states 5, 6). The backup is the *old* content; rolling
+      back after the replacement may already be visible is the one direction that loses committed work.
+    - **Cleanup ordering:** B is deleted only after D is verified `d_new` by digest; S likewise. So a kill
+      during cleanup re-enters at state 2 or 3, both of which are idempotent.
+    - **A surviving B never participates in the next publish.** Each publish uses a fresh backup path
+      derived from the target digest, so a stale backup cannot be mistaken for this operation's (round-5 #4).
+    - **Classification and recovery run as one critical section under the §5.4 locks, in the same order.**
+      Two concurrent restarts therefore serialise instead of racing each other through the table.
 
     **On the directory flush:** the POSIX recipe ends with an `fsync` on the containing directory. Windows
     has no directory-fsync equivalent and `ReplaceFileW` is the atomicity primitive instead, so the plan
@@ -425,11 +505,14 @@ removing it.
 
 Plan A emits three things and no thresholds:
 
-6.1 **Identity edges, unconditionally and at any distance.** Ways sharing an `osm_id` across two origins
-    are linked regardless of separation. Identity is direct evidence and needs no radius; a road that
-    moved 3 km is exactly the case a radius would have deleted.
+6.1 **Identity edges, unconditionally and at any distance — delivered by §2.2's closure pass, not
+    assumed.** Ways sharing an `osm_id` across two origins are linked regardless of separation, because
+    pass 2 retains counterparts outside the window specifically so the edge can exist. Each edge records
+    whether either endpoint was `outside_window`. Identity is direct evidence and needs no radius; a road
+    that moved 8 km is exactly the case a radius — or a window — would have deleted.
 
-6.2 **The normalised geometry itself, with a queryable spatial index** (per site window, per origin), so
+6.2 **The normalised geometry itself as GeoParquet**, from which Plan B builds its own ephemeral spatial
+    index (§2.3), bounded by the per-site `max_complete_radius_m`, so
     Plan B can generate spatial candidates at whatever radius and tolerance its science requires **without
     re-parsing any PBF** — which is Plan A's actual contract.
 
@@ -494,10 +577,19 @@ than certified from a current polygon — irrespective of any margin computed in
 
 10.1 **The whole input file is the smallest restart boundary** (round-3 #8). pyosmium exposes no durable
      input cursor, so a kill mid-file forces a full re-parse of that file; committed part files spare the
-     rewriting but not the parsing. **Worst-case rework is therefore 22.5 minutes — measured, not
-     estimated** — and the plan states this rather than implying shard manifests make the parser resumable.
-     A resumable intermediate would be the alternative; at 22.5 minutes against a 2.26 h corpus it does not
-     earn its own commit protocol.
+     rewriting but not the parsing.
+
+     **The 22.5-minute figure is NOT the worst-case rework, and v5 used it as though it were**
+     (round-5 #5). §3 had already established that it is a parser floor and that compressed size orders
+     neither runtime nor memory — then this paragraph called it measured worst-case production rework and
+     used it to dismiss resumable intermediates. Both claims are withdrawn: the figure was fixed in one
+     place and left standing in two others.
+
+     **The restart decision is deferred to the production-path gate.** Worst-case rework is the
+     **maximum measured committed-region duration** from §3's production run, and it is unknown until that
+     run happens. If it turns out unacceptable, a separately committed resumable intermediate with a
+     validated cursor is the alternative, and this section is reopened. Plan A does not get to decide the
+     question with a number that measures something else.
 
 10.2 **A progress journal, explicitly non-authoritative** (round-3 #10). Emitted periodically during the
      run: current file, node and way counts, rate, working set, free disk, and last committed manifest.
@@ -532,11 +624,14 @@ node ID, and output hashes.
 
 ## Risks / open questions
 
-- **The corpus projection rests on one file's way density** (§3.3). If some region is far denser per MB
-  than Indonesia, 2.26 h is optimistic — though the 6 h ceiling absorbs a 2.6× error, and the per-file
-  wall-clock ceiling still gates each file individually.
-- **14 of 36 extracts remain unprofiled** — though the largest is now fully measured, which is the binding
-  case for both the memory ceiling and the restart boundary.
+- **The corpus projection rests on one file's way density** (§3.3) and now covers two passes. If some
+  region is far denser per MB than Indonesia, 4.5 h is optimistic — the 12 h ceiling absorbs a 2.6× error,
+  and the per-file ceiling still gates each file individually.
+- **`S` (the site-relevant ID set) is assumed small enough to hold in memory** for pass 2. It is bounded by
+  the road network inside 36 windows, not the corpus, but it is **unmeasured** — pass 1 must report its
+  cardinality and the plan reopens if it does not fit.
+- **14 of 36 extracts remain unprofiled**, and the largest-by-bytes is *not* known to be the binding case
+  for memory or runtime (round-4 #4). Per-file runtime enforcement is what covers this, not extrapolation.
 - **The duplicate-group preflight may find unequal node references or coordinates**, which blocks rather
   than reconciles. Measured at zero across 32,369 cross-region duplicates at origin 2020 — but at
   node-reference level only, on land-border pairs only, at one origin. The coordinate check that §4.3 now
@@ -544,9 +639,10 @@ node ID, and output hashes.
 - **The 5000 m guard is chosen, not derived** — conservative, but Plan C could in principle exceed it, and
   the emitted processing-mask margins are the check.
 - **pyosmium 4.3.1 is newly added** to the environment and exercised only by the measurements above.
-- **The production-path gate (§3) has not been run**, because the production path does not exist yet. Every
-  runtime number here is a parser floor. If serialisation, masking and publication cost more than parsing,
-  the 6 h corpus ceiling is the thing that will fire.
+- **The production-path gate (§3) has not been run**, because the production path does not exist yet.
+  Every runtime number here is a parser floor, now doubled by §2.2's second pass. If serialisation, masking
+  and publication cost more than parsing, the 12 h two-pass ceiling is what will fire — and the restart
+  boundary (§10.1) is undecided until that same run reports its maximum committed-region duration.
 - **`forecast/_atomic_publish.py` needs three fixes before use** (§5.2) — flush, the uncalled locality
   check, and an executable startup classifier. Until then the commit protocol is designed but not backed.
 
@@ -563,31 +659,36 @@ node ID, and output hashes.
 From the repo root with `PYTHONPATH` set, using `C:\Users\josha\.venvs\satclf\Scripts\python.exe`:
 
 1. `-m pytest forecast/tests -q` fully green, including: the retain-predicate matching its reference
-   predicate on fixtures containing `was:highway` and `area:highway` (retained) and `not:highway`,
-   `source:highway`, `historic:highway` (excluded), and **failing closed on an unknown `*:highway`
-   namespace**; closed and `area:highway` ways stored as `LineString` with `is_closed` set; a way with one
+   predicate on fixtures containing `was:highway`, `area:highway` and `historic:highway` (**all retained**)
+   and `not:highway`, `source:highway` (the only exclusions), and **failing closed on an unknown
+   `*:highway` namespace**; closed and `area:highway` ways stored as `LineString` with `is_closed` set; a way with one
    invalid node location failing the stage closed; exact-mask dispatch emitting a way to every window it
    touches and none it does not; **node-reference inequality failing preflight**, and **equal node
    references with unequal resolved coordinates ALSO failing preflight**; group rejection on tag or
    timestamp disagreement; unique-dedup-key assertion passing where distinct IDs trace coincident roads;
    header-timestamp precedence with `feature_max <= header <= issue_date` and a missing-field failure;
-   identity edges emitted at arbitrary separation; degenerate zero-length geometry emitting null metrics
+   **identity edges emitted at arbitrary separation, proven against a way whose counterpart lies OUTSIDE
+   the site window** — a synthetic in-window fixture would pass while production omitted the case (§2.2);
+   `outside_window` records excluded from coverage statistics and from Plan C's road supply;
+   `max_complete_radius_m` emitted per site and a query beyond it refused; degenerate zero-length geometry emitting null metrics
    and a flag rather than dividing by zero; **no** classification vocabulary anywhere in the output;
    per-file memory ceiling failing the stage closed when exceeded; DAG validation rejecting a parent whose
    child digest was altered; pointer replacement refused when revalidation fails; lock order asserted;
    **`LockFileEx` locks released by killing the owning process**; `publish_container` refusing a reparse
-   or non-NTFS ancestor; **the startup classifier rolling forward from each recognised intermediate
-   arrangement and failing closed on an unrecognised one**, exercised by killing a publish mid-flight;
+   or non-NTFS ancestor; **the startup classifier driven through every row of §5.2's state table**, each action
+   verified idempotent by running it twice, roll-forward proven for states 5 and 6, fail-closed proven for
+   states 7 and 8, and a stale backup proven not to participate in a later publish;
    manifest-as-commit at shard, region and stage level under a simulated kill; cache key rejecting an
    artifact built for different site windows; dirty-tree scoping ignoring an unrelated docs edit.
 2. **The §3 gate re-run through the production parser-to-committed-region path**, every row passing, its
    immutable measurement artifact recorded. The parser-only numbers already in §3 do not satisfy this.
 3. **The full three-origin duplicate-group preflight** over every real region overlap, including the
-   resolved-coordinate check — an authorisation gate, run before the corpus run, not proof gathered after.
+   resolved-coordinate check, run from committed region checkpoints per §4.6 and **gating deduplication
+   and publication** — not gating the parse, which it cannot precede.
 4. The published origin-level datasets with `source_regions[]`, and the shard/region/origin/stage manifests
    with their digest links verified end to end.
-5. The identity-edge table with its frozen operator parameters, and the per-site spatial index Plan B
-   consumes.
+5. The identity-edge table with its frozen operator parameters and `outside_window` flags, plus the
+   GeoParquet geometry and per-site `max_complete_radius_m` that Plan B indexes for itself.
 6. Per-site processing-mask margins in metres, reported separately from current-polygon margins.
 
 Josh runs the proof. Reviewer and builder claims are advisory.

@@ -667,3 +667,68 @@ Material defects remain.
    **Fix:** Retain ambiguous `historic:highway` records with their raw tags and limit exclusion to unambiguous negative or metadata namespaces such as `not:` and `source:`.
 
 VERDICT: REVISE
+## Round 6 — codex (FINAL — MAX_ATTEMPTS exhausted)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75 (resumed; thread_id echoed and matched)
+- reviewed body_sha256: a325021d05e30d94f038ecb94f9a5c77c1046ce36dc8f62da420868d14c8a165
+- verdict: REVISE (1 critical, 3 high, 2 medium)
+- MAX_ROUNDS was raised 5 -> 6 by Josh's explicit decision, to spend the last available attempt.
+
+Full loop: **16 -> 16 -> 10 -> 9 -> 6 -> 6** findings; criticals **5 -> 4 -> 2 -> 1 -> 1 -> 1**.
+Attempts: 8 of 8 (one non-round at the start). Both caps now exhausted.
+
+**The count plateaued, and the composition changed.** At least three of round 6's findings are direct
+consequences of round 5's fixes rather than pre-existing defects: identity closure (round-5 #1) created
+the under-keyed `S` and the anchor-domain gap; retaining `historic:highway` (round-5 #6) created the
+proof/table contradiction. The plan is no longer converging on a fixed set of problems - each fix opens
+comparable new surface at a finer grain.
+
+### Critique (verbatim)
+
+Material defects remain.
+
+1. **Critical — identity closure is still under-keyed.** `S` is only `set[osm_id]`, but lineage and `outside_window` are site-specific. A way may be inside site A and outside site B; pass 2 also marks every retained counterpart `outside_window=true`, including in-window pass-1 duplicates and tag-changed counterparts that remain geometrically inside. The frozen edge schema does not contain the promised endpoint flags. [§2.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:224>) [§6.1](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:495>) [schema](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:508>)
+
+   **Fix:** Commit a DAG-bound `(site_id, osm_id)` closure table, associate every pass-2 counterpart with those exact sites, store separate `intersects_window`, `selected_by_predicate`, and `closure_only` endpoint flags, and suppress deterministic pass-1 duplicates.
+
+2. **High — `max_complete_radius_m` is not yet a geometric completeness contract.** “Anchor inside the site box” is undefined for a `LineString`: a way merely intersecting the box can extend far outside it, where nearby candidates may lie beyond the mask. The distance metric used to compute the margin is also unspecified relative to Plan B’s projected distance, and closure-only geometries are not explicitly excluded from the spatial index. [§2.3](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:239>) [§6.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:501>)
+
+   **Fix:** Define anchors as geometry clipped to the site box, define `max_complete_radius_m = inf distance(site_box, complement(mask))` in the same or a conservatively bounded metric, and require Plan B’s spatial index to exclude closure-only endpoints.
+
+3. **High — the NTFS table is still neither complete nor fully executable.** It omits the ordinary clean state `D=d_old, S=absent, B=absent`; row 6 accepts an unknown backup despite row 8’s fail-closed rule; `publish S` does not name the operation used when `D` is absent; and `d_old == d_new` makes the digest-only rows ambiguous despite the prose mentioning file identity. Retrying publication twice is not itself idempotent—only a reclassify-then-act recovery entrypoint can be. `ReplaceFileW` normally replaces an existing destination, while error 1177 leaves staging and the old file under separate names. [§5.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:429>) [Microsoft `ReplaceFileW` documentation](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew)
+
+   **Fix:** Add the clean pre-staging state and equal-digest no-op, express expected file-identity relationships in every row, split row 6 by backup digest, specify its exact atomic rename/placeholder procedure, and test the complete recovery entrypoint twice rather than replaying raw actions.
+
+4. **High — the acceptance proof reverses the predicate decision.** The disposition table now retains `historic:highway`, but the required test still specifies it as excluded; an implementer following the proof would reintroduce the exact irreversible loss round 5 fixed. [table](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:167>) [proof](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:648>)
+
+   **Fix:** Change the proof to require `historic:highway` retained and limit excluded fixtures to `not:highway` and `source:highway`.
+
+5. **Medium — runtime evidence is still overstated.** The opening says every runtime is measured on the worst case, while 2.26/4.5 hours are extrapolations, pass 2 has never run with the real `S`, and the production path does not exist. The table nevertheless marks the two-pass projection `PASS`, and the stage ordering production-gates only pass 1. [measurements](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:75>) [gate](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:275>) [ordering](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:380>)
+
+   **Fix:** Label file observations, corpus extrapolations, and unmeasured quantities separately; remove the projected `PASS`; then production-gate both passes using the committed real closure set before authorizing pass 2 corpus-wide.
+
+6. **Medium — sampling working set cannot guarantee “fail rather than swap.”** Working set counts resident pages and can fall as Windows pages memory out; `PrivateUsage` is the process commit charge. Pass 2 also adds the unmeasured persistent closure set to the node index, which the 6.58 GB measurement did not include. [memory gate](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:296>) [Microsoft memory counters](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex)
+
+   **Fix:** Enforce the ceiling on `PrivateUsage`/commit—preferably with a Job Object hard limit—while retaining working set only as an observability metric, and measure the real pass-2 peak with `S` loaded.
+
+VERDICT: REVISE
+### Post-loop corrections (UNREVIEWED — applied after round 6, seen by no reviewer)
+
+The review loop is closed; both caps are exhausted. Three corrections were nonetheless applied, because
+each is an outright internal contradiction rather than a design question, and one of them would actively
+mislead an implementer:
+
+1. **round-6 #4** — the proof required `historic:highway` to be EXCLUDED while the disposition table (fixed
+   in v6 per round-5 #6) RETAINS it. An implementer following the proof would have reintroduced exactly the
+   irreversible loss round 5 identified. The proof now requires it retained, with `not:` and `source:` as
+   the only exclusions. My own v6 edit changed the table and missed the proof.
+2. **round-6 #5** — the entry-gate table marked the two-pass corpus projection `PASS`. A projection cannot
+   pass a gate. Now labelled `EXTRAPOLATED / NOT ASSESSED`.
+3. **round-6 #5** — the opening claimed "every runtime number is measured on the worst-case file". It is
+   not: corpus figures are extrapolations, pass 2 has never run, and the production path does not exist.
+   Replaced with three explicitly separated categories.
+
+**These three are not reviewed.** The remaining four findings (#1 under-keyed closure, #2 anchor-domain
+geometry, #3 the NTFS state table, #6 commit-charge vs working-set enforcement) are design work and are
+left open for the sign-off decision rather than silently patched.
