@@ -246,7 +246,7 @@ class SiteWindow:
         clipped = self.to_utm(geometry).intersection(self.box_utm)
         components = tuple(
             part
-            for part in _lineal_parts(clipped)
+            for part in lineal_parts(clipped)
             if part.length > 0.0
         )
         return AnchorClip(
@@ -274,8 +274,15 @@ class SiteWindow:
         }
 
 
-def _lineal_parts(geometry) -> Iterator[LineString]:
-    """Walk any intersection result and yield only its lineal pieces."""
+def lineal_parts(geometry) -> Iterator[LineString]:
+    """Walk any intersection result and yield only its lineal pieces.
+
+    Clipping is not closed over `LineString`: intersecting one with a polygon
+    yields a `LineString`, a `MultiLineString`, a point-only touch, a mixed
+    `GeometryCollection` or empty -- all five confirmed against the installed
+    Shapely.  §6's coverage metrics intersect against a buffer and hit the same
+    set of outcomes, so both callers walk results through this one definition.
+    """
 
     if geometry.is_empty:
         return
@@ -283,7 +290,7 @@ def _lineal_parts(geometry) -> Iterator[LineString]:
         yield geometry
         return
     for part in getattr(geometry, "geoms", ()):
-        yield from _lineal_parts(part)
+        yield from lineal_parts(part)
 
 
 _TRANSFORMERS: dict[int, Transformer] = {}
