@@ -1221,3 +1221,141 @@ incomplete, but a publication can be lost** — which is what the retained gener
 The single-snapshot, handle-bound consumer traversal is sound. The immutable artifact layer is also the right foundation. The remaining mutable pointer still needs a truthful failure protocol, and garbage collection needs explicit liveness and ordering contracts.
 
 VERDICT: REVISE
+---
+
+# LOOP 4 — v13's architecture, never reviewed
+
+Loops 1–3 exhausted their budgets and resolved **deadlocked**. Loop 3 round 3 (round 12 overall) endorsed
+the immutable content-addressed artifact layer as "the right foundation" and the snapshot traversal as
+sound, then found the two things v12 left **mutable** — the pointer and garbage collection — materially
+unsound, with three findings being mechanism claims I had asserted without checking.
+
+v13 responded by removing the last mutable file rather than patching it. **That architecture has never been
+reviewed.** This loop is not a fourth attempt at the same design; it is a first look at a different one:
+
+- **`ReplaceFileW` is used nowhere in Plan A.** The pointer is **generation-numbered and append-only** —
+  `pointer.<N+1>` created with `CREATE_NEW`, current = highest generation whose DAG validates. 1176/1177
+  cannot arise, first publication is simply generation 1, and `CREATE_NEW` on *N+1* **is** the
+  compare-and-swap that rejects a slow publisher overwriting a newer pointer.
+- Artifact writes have a real mechanism: unique `CREATE_NEW` temp → flush → **non-replacing** rename → on
+  name-exists, **byte-verify the winner and fail closed on mismatch** rather than assuming identity.
+- A **store lease** (shared by publishers from first write through generation creation, exclusive for the
+  whole sweep) closes the GC race; the **root set** is current + 3 retained generations + build pins +
+  reader leases, so §4.6's region checkpoints are not collected.
+- Crash safety is **scoped**: on process termination the highest generation always names a complete DAG; on
+  power loss a generation may survive while an artifact it references does not, that generation fails
+  validation, and the reader falls back. Data is never silently incomplete, but a publication can be lost.
+
+Resolved caps for loop 4: `MAX_ROUNDS` 3, `MAX_ATTEMPTS` 4. Reviewer pinned to **0.145.0** — 0.146.0 is
+both outside `verified_versions` and, per box-level testing, has an **escapable** read-only sandbox
+(`apply_patch` succeeds where the shell write is blocked).
+
+## Round 13 — codex (loop 4, round 1 of 3 — scoped to §5)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fbab1-c39c-7a30-af35-71d4db97d6cd (new session — different architecture)
+- reviewed body_sha256: d09ff5d48d0d5db55faae4ef2cefd841baf8e19415309de237e992d3db0b444e
+- verdict: REVISE (5 critical, 5 high, 4 medium)
+
+### §5 findings by round — the trend REVERSED and is now increasing
+
+| round | §5 findings | §5 criticals |
+|---|---|---|
+| 7 | 1 | 1 |
+| 8 | 5 | 5 |
+| 9 | 4 | 2 |
+| 10 | 7 | 2 |
+| 11 | 7 | 4 |
+| 12 | 8 | 5 |
+| **13** | **14** | **5** |
+
+**The redesign meant to dissolve the problem produced almost twice the findings of the design it
+replaced.** Six consecutive rounds of criticals in one section, every batch arising from the previous
+round's fix.
+
+**Three of v13's central claims are false, and all three were checkable:**
+
+1. **`CREATE_NEW` is NOT a compare-and-swap.** It arbitrates *filename* existence only. Two publishers
+   observing generation `N` both proceed; A takes `N+1`, B revalidates and republishes **its stale DAG as
+   `N+2`**. The stale-publication race I claimed to have removed is intact.
+2. **`CREATE_NEW` publishes the directory entry before the contents.** A kill mid-write leaves a
+   permanently invalid `pointer.N+1`; current stays `N`, so every later publisher following "observe `N`,
+   create `N+1`" gets `ERROR_FILE_EXISTS` **forever**. The scheme **deadlocks**.
+3. **"v13 removes the last mutable file" is false.** Build pins must be created and removed, so they are
+   mutable state — with no crash-safe creation, stale detection, unpin ordering or sweep synchronisation.
+
+Codex again confirms the layer underneath is fine: *"The immutable hash-linked DAG remains a good
+foundation."* The failure is localised to **generation publication and GC liveness**.
+
+### Critique (verbatim)
+
+Section 5 is not sound enough to implement. The immutable hash-linked DAG remains a good foundation, but generation publication and GC liveness are still underspecified.
+
+Direct answers:
+
+- A fully handle-bound, full-DAG validator cannot accept an incompletely written DAG. However, the highest generation file can be partial or invalid, contradicting the process-termination claim.
+- The shared/exclusive store lease protects artifacts from a concurrent publisher/sweep interleaving only if held through the pointer’s completed write, flush, close, and failure handling.
+- `CREATE_NEW` provides filename exclusivity, not stale-build rejection.
+- The non-replacing artifact rename is sound in principle, but the exact API, cleanup failure, and immutability enforcement remain missing.
+- “Highest validating generation” is not operationally bounded or linearized as written.
+- Three retained generations provide no demonstrated recovery guarantee.
+
+Findings:
+
+1. **Critical: `pointer.<N+1>` becomes visible before it is complete.** `CREATE_NEW` creates the final directory entry immediately; a kill after creation or a partial write leaves a permanently invalid generation that later publishers cannot reuse under the stated `N+1` algorithm. [§5.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:625>) Microsoft documents that `CREATE_NEW` creates the file and only arbitrates prior existence; it does not commit the later contents atomically. [CreateFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea)
+
+   **Fix:** Write and flush a unique pointer temporary, close it, then perform a non-replacing rename to the final generation name under the publication lock.
+
+2. **Critical: `CREATE_NEW` does not reject stale content.** If publishers A and B observe N, A creates N+1, and B “re-validates and retries,” B can publish its old DAG as N+2; a publisher waking after several generations has the same problem. [stale-publication rule](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:632>)
+
+   **Fix:** Record the expected predecessor and, under the publication lock, abort the build if current no longer equals it; never renumber and retry the same stale DAG.
+
+3. **Critical: generation allocation deadlocks on invalid generations.** After a crash leaves invalid `pointer.N+1`, current remains N, so every publisher following “observe N, create N+1” receives `ERROR_FILE_EXISTS` forever.
+
+   **Fix:** Allocate from the greatest generation filename ever created while separately validating the expected current predecessor, and never reuse a generation number.
+
+4. **Critical: reader leases have an installation race with sweeping.** A reader can select a generation and be descheduled before its lease becomes a root; after a newer publication, an exclusive sweep can collect the selected generation before the lease appears. [root set](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:643>)
+
+   **Fix:** Have readers acquire the shared store lease before snapshot selection and retain it until all returned handles close, eliminating the separate reader-root handshake.
+
+5. **Critical: build pins reintroduce mutable state without a protocol.** Pins must be created and eventually removed, so v13 has not actually removed the last mutable file; crash-safe creation, stale-pin detection, unpin ordering, and sweep synchronization are all absent.
+
+   **Fix:** Define pins as atomically published root records, create and remove them only while holding the shared store lease, and unpin only after the replacement generation validates.
+
+6. **High: three retained generations are an invented availability bound.** NTFS namespace reordering has no “at most three publications” limit, and several generations may share artifacts whose namespace entries were created in the same vulnerable interval.
+
+   **Fix:** Treat retention as an explicit storage/SLA policy and preserve at least one post-reboot-validated anchor generation rather than claiming that three guarantees fallback.
+
+7. **High: “highest validating generation” lacks a finite, linearized algorithm.** Concurrent publication can change the directory during enumeration, malformed generations can force repeated full-DAG walks, and neither candidate count nor manifest size/depth is bounded.
+
+   **Fix:** Under the shared store lease and a brief publication lock, snapshot and open actual generation files, then validate that finite descending set with strict parsing, resource limits, and digest-result memoization.
+
+8. **High: fallback can silently return semantically stale or incompatible data.** Cryptographic DAG validity does not establish that an older generation has the schema, cache key, logical dataset, or freshness required by the consumer, while §5.2 says fallback and §5.3 says validation failure is a hard error. [consumer gate](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:689>)
+
+   **Fix:** Validate the consumer’s expected dataset/schema/cache identity and return a structured degraded-fallback result containing the selected and rejected generations rather than silently succeeding.
+
+9. **High: immutability is conventional rather than enforced.** A writable canonical file, hard link, or reparse/path race can change bytes after validation; the supposedly reusable helper checks only the final directory and a path substring, not all ancestors, filesystem type, link count, or handle identity. [existing helper](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/forecast/_atomic_publish.py:154>) [reuse claim](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:904>)
+
+   **Fix:** Use a protected store ACL, handle-relative operations from a verified NTFS root, reject reparse points and unexpected hard links, and open validated artifacts without write sharing.
+
+10. **High: GC treatment of old pointer files is undefined.** Keeping pointer files after collecting their DAGs creates deliberately invalid fallback candidates; deleting them permits reuse or ABA unless generation allocation has an independent never-reused high-water rule.
+
+   **Fix:** Freeze a pointer-retirement policy that preserves a never-reused numeric high-water mark and prevents collected generations from entering ordinary fallback validation.
+
+11. **Medium: the losing-rename cleanup branch has no outcome for deletion failure.** The canonical winner is already safe after byte equality, while Windows may delay deletion until handles close, so treating failure as either clean success or corruption would both be wrong. [Windows deletion semantics](https://learn.microsoft.com/en-us/windows/win32/fileio/closing-and-deleting-files)
+
+   **Fix:** Close all temporary handles, report success-with-orphan when equal-winner cleanup fails, and reap only the isolated temporary namespace under the exclusive store lease.
+
+12. **Medium: the exact non-replacing rename contract is still unnamed.** The plan must specify the API, handle state, accepted target-exists error, and behavior for every other error; `FILE_RENAME_INFO.ReplaceIfExists = FALSE` explicitly fails when the target exists. [FILE_RENAME_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info)
+
+   **Fix:** Freeze one handle-based rename primitive with `ReplaceIfExists = FALSE`, checked source flush/close, explicit target-exists verification, and fail-closed handling for every other error.
+
+13. **Medium: old-pointer terminology remains in normative text and proof.** Section 5.3 still says the pointer is “replaced” and its “rename” survives, while the proof still tests “pointer replacement refused,” contradicting the new direct-creation primitive. [§5.3](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:689>) [proof](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:951>)
+
+   **Fix:** Rewrite the normative text and proof around generation-record publication, invalid-generation holes, predecessor rejection, and fallback selection.
+
+14. **Medium: publication and GC observability is absent.** The progress journal does not capture invalid generations, fallback depth, stale-predecessor rejection, pin/lease age, orphan temporaries, validation cost, or sweep decisions.
+
+   **Fix:** Emit structured records for generation selection/rejection, fallback, publication conflicts, active roots, orphan cleanup, and per-sweep marked/deleted bytes.
+
+VERDICT: REVISE

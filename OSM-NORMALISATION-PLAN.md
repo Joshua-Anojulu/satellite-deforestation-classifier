@@ -126,6 +126,17 @@ review_provenance:
       session: 019fb141-c01f-7c23-a6ba-537d2d2bfb75
       body_sha256: 0ae7d13f9d96d483f1b4cc367b19102c79f2f5372fe3712f48a81ec5a24169bf
       verdict: REVISE
+    - round: 13
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      scope: "section 5 only"
+      session: 019fbab1-c39c-7a30-af35-71d4db97d6cd
+      body_sha256: d09ff5d48d0d5db55faae4ef2cefd841baf8e19415309de237e992d3db0b444e
+      verdict: REVISE
   loop_2_note: "rounds 1-6 exhausted both caps and resolved deadlocked at body a325021d; v7 applied all
     four open findings unreviewed; a second loop with fresh caps opens at round 7"
   historical_cross_model_review: true
