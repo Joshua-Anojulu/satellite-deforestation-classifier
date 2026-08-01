@@ -17,6 +17,20 @@ rasterio
 openeo           # Sentinel-2 L2A retrieval from the Copernicus Data Space Ecosystem
 pillow
 
+# Plan A: OSM normalisation (forecast/osm_*.py)
+osmium           # pyosmium: raw way-node sequences, which pyogrio cannot supply
+shapely          # site window masks, dispatch, anchor clipping
+pyproj           # geodesic buffer and the frozen per-site UTM
+geopandas        # GeoParquet publication (Plan A section 6.2)
+pyarrow          # the Arrow consumer geopandas.to_parquet requires
+
 # Tested versions (Python 3.14, Windows 11, RTX 4060 / CUDA 12.6):
 #   torch 2.12.1+cu126  torchvision 0.27.1+cu126  rasterio 1.5.0  openeo 0.50.0
 #   scikit-learn / scipy / numpy / pandas current as of 2026-07.
+#   Plan A, measured 2026-08-01: osmium 4.3.1  shapely 2.1.2  pyproj 3.7.2
+#   geopandas 1.1.4  pyarrow 25.0.0  pandas 2.3.3  numpy 2.4.4
+#
+# Section 8.1 requires resolved library versions in the artifact cache key, and
+# that is load-bearing rather than precautionary: every Parquet file embeds
+# created_by = "parquet-cpp-arrow version 25.0.0", so a pyarrow upgrade changes
+# the artifact hash of byte-identical data.
