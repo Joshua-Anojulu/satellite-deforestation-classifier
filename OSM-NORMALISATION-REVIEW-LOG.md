@@ -1452,3 +1452,22 @@ Findings:
 No additional catastrophe outside section 5 surfaced in the targeted cross-reference scan.
 
 VERDICT: REVISE
+### Loop 4 closed by owner decision — build, do not chase a clean verdict
+
+Round 3 of loop 4 was NOT spent. Josh: *"lets not push for zero issues and just continue."*
+
+Final state: **14 rounds across 4 loops**, status `deadlocked`, never approved. §5 findings by round:
+1, 5, 4, 7, 7, 8, 14, 12 — criticals in every round, and rounds 13 and 14 sourced their criticals from the
+previous round's own fixes.
+
+**What is settled and safe to build on** (all reviewer-endorsed or measured):
+parser and frozen selection predicate; identity closure; the entry gate (22.5 min worst file, 8.22 GB peak
+commit, 100 % geometry, 0 invalid locations); Geofabrik cross-border completeness (32,369 pairs, zero
+mismatches); the `:highway` disposition table (full 36-extract census); the immutable content-addressed
+artifact layer and the single-snapshot handle-bound consumer traversal.
+
+**What is NOT settled: §5 publication and GC liveness.** The accumulated findings from rounds 10–14 are
+carried into implementation as a **kill-test list** rather than another revision — closed-handle rename,
+predecessor ABA under fallback, deadlock on an invalid generation, reader-lease installation race,
+delete-failure branch, `ReplaceIfExists = FALSE` semantics, publisher/sweep interleaving, unprotocoled
+high-water state.
