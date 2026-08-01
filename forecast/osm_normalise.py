@@ -118,6 +118,18 @@ def retains(tags: Mapping[str, str]) -> bool:
     return False
 
 
+def _tag_keys(tags: Mapping[str, str]) -> Iterable[str]:
+    """Key strings from either a plain mapping or an osmium ``TagList``.
+
+    Iterating a ``TagList`` yields ``Tag`` objects, not keys -- a difference that
+    only shows up against the real parser, which is why the stream tests build
+    actual ``.osm.pbf`` fixtures instead of passing dicts.
+    """
+
+    for item in tags:
+        yield getattr(item, "k", item)
+
+
 def observed_highway_keys(tags: Mapping[str, str]) -> tuple[str, ...]:
     """Every key on this way that ends in `:highway`, plus `highway` itself.
 
@@ -125,7 +137,7 @@ def observed_highway_keys(tags: Mapping[str, str]) -> tuple[str, ...]:
     path and not in :func:`retains`.
     """
 
-    found = [key for key in tags if key.endswith(_HIGHWAY_SUFFIX)]
+    found = [key for key in _tag_keys(tags) if key.endswith(_HIGHWAY_SUFFIX)]
     if HIGHWAY in tags:
         found.append(HIGHWAY)
     return tuple(sorted(found))
