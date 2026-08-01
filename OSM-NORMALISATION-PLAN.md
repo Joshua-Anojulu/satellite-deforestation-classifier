@@ -137,6 +137,17 @@ review_provenance:
       session: 019fbab1-c39c-7a30-af35-71d4db97d6cd
       body_sha256: d09ff5d48d0d5db55faae4ef2cefd841baf8e19415309de237e992d3db0b444e
       verdict: REVISE
+    - round: 14
+      schema_version: 2
+      reviewer: codex
+      model: gpt-5.6-sol
+      cli: codex-cli/0.145.0
+      grounding: repo
+      qualifying: true
+      scope: "section 5 only"
+      session: 019fbab1-c39c-7a30-af35-71d4db97d6cd
+      body_sha256: 05eafa52fdbe104226a1f7923501dbb7c72b090752c7791ab914105ad59c3ca8
+      verdict: REVISE
   loop_2_note: "rounds 1-6 exhausted both caps and resolved deadlocked at body a325021d; v7 applied all
     four open findings unreviewed; a second loop with fresh caps opens at round 7"
   historical_cross_model_review: true
@@ -617,47 +628,84 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
     and a collision is not a conflict. Nothing is ever overwritten, so there is no `d_old`, no backup, and
     no in-place replacement anywhere in the DAG.
 
-    **Writing an artifact, exactly** (round-12 #6). "Identical by construction, therefore idempotent"
-    described an outcome, not a mechanism: a non-replacing NTFS rename **fails** when the destination
-    exists, and `MOVEFILE_REPLACE_EXISTING` would violate immutability. Frozen:
+    **Writing an artifact — one frozen primitive** (round-12 #6, round-13 #11, #12). Prose said
+    "non-replacing rename" without naming the API or its failure branches. Frozen:
 
-    1. create a **unique** temporary with `CREATE_NEW` in the same directory, write, checked `FlushFileBuffers`
-    2. **non-replacing** rename to `<store>/<sha256>`
-    3. if the rename fails because the name exists, **byte-verify the existing winner** against what was
-       written; equal → delete the losing temporary; **unequal → fail closed** (corruption, or a genuine
-       digest collision — neither may be assumed away)
+    1. create a **unique** temporary with `CREATE_NEW` in the same directory, write, **checked
+       `FlushFileBuffers`**, **close**
+    2. rename by **`SetFileInformationByHandle(FileRenameInfo)` with `ReplaceIfExists = FALSE`**, which
+       fails explicitly when the target exists
+    3. **target-exists** → byte-verify the existing winner: equal → the canonical file is already correct
+       and the temporary is deleted; **unequal → FAIL CLOSED** (corruption or a genuine digest collision,
+       neither assumed away)
+    4. **any other error → fail closed**, artifact not published
+    5. **delete-failure of a losing temporary is NOT corruption and NOT clean success** (round-13 #11).
+       Windows may defer deletion until handles close, so: close all temporary handles, then report
+       **`SUCCESS_WITH_ORPHAN`**; orphaned temporaries live in an isolated namespace reaped only under the
+       **exclusive** store lease.
 
-    **There is no file that is ever replaced. The pointer is generation-numbered and append-only**
-    (round-12 #1, #2, #5). v12 kept one mutable pointer replaced via `ReplaceFileW`, and its outcome table
-    was wrong on the facts: with no backup, 1176 can remove the old destination while leaving the
-    replacement at its temporary name, and 1177 does not mean the new digest is visible at the pointer
-    path. Rather than write a truthful failure protocol for a replacement, the replacement is removed:
+    **Immutability is ENFORCED, not conventional** (round-13 #9). A writable canonical file, a hard link or
+    a reparse race can change bytes after validation, and the existing helper checks only the final
+    directory plus a path substring. Required: a **protected store ACL** denying write to the analysis
+    account; **handle-relative operations from a verified NTFS root**; **reparse points rejected over the
+    full ancestor chain**; **unexpected hard links rejected** by link count; and validated artifacts opened
+    **without write sharing**.
 
-    - a publication writes **`pointer.<generation>`** — a new file, `CREATE_NEW`, immutable like every
-      other artifact — whose content is the stage-manifest digest
-    - **current** = the highest generation whose DAG validates
-    - **`ReplaceFileW` is not used anywhere in Plan A.** 1176/1177 cannot arise, and neither can the
-      no-backup ambiguity
-    - **first publication is generation 1** and needs no pre-existing destination or placeholder — the
-      round-12 #2 contradiction disappears rather than being special-cased
-    - **stale publication is rejected by construction** (round-12 #5): a publisher that observed generation
-      *N* creates *N+1* with `CREATE_NEW`. If a newer build already took *N+1*, creation **fails**, and the
-      publisher must re-validate and retry rather than silently overwriting a newer pointer by finishing
-      last. Content addressing removed blob contention; this is what supplies logical ordering.
+    **Generation publication — allocation, content and predecessor are three separate problems**
+    (round-13 #1, #2, #3). v13 conflated them into `CREATE_NEW` on `pointer.<N+1>`, which fails all three:
 
-    **The store lease, because a sweep and a publisher can otherwise race** (round-12 #3). A mark-and-sweep
-    could snapshot generation *N*, a publisher could then write its still-unreferenced DAG, and the sweep
-    could delete it before or after the publisher's validation. Frozen: a **store lease held SHARED by
-    every publisher** from its first artifact write through its pointer-generation creation, and held
-    **EXCLUSIVELY by the entire sweep**. A sweep never overlaps a publication.
+    - **Content is not atomic with creation** (#1). `CREATE_NEW` publishes the directory entry immediately,
+      so a kill mid-write leaves a permanently invalid generation. **Fixed:** write the generation record to
+      a unique temporary, flush, **close**, then non-replacing-rename it onto its final name — the same
+      primitive as an artifact.
+    - **Allocation must never stall on an invalid generation** (#3). v13's "observe `N`, create `N+1`"
+      deadlocks forever once an invalid `N+1` exists. **Fixed:** allocate from the **greatest generation
+      name ever created** — a monotonic **high-water mark**, never reused, independent of which generations
+      are valid. An invalid generation is a **hole**, not a barrier.
+    - **`CREATE_NEW` is NOT a compare-and-swap** (#2). It arbitrates filename existence only, so a
+      publisher that observed `N`, lost the race, and "revalidated and retried" would republish its **stale
+      DAG** as `N+2`. **Fixed:** every build records its **expected predecessor**; under the publication
+      lock, if current no longer equals that predecessor the **build is ABORTED**. A stale DAG is never
+      renumbered and retried.
 
-    **The root set is not just the current pointer** (round-12 #4). Sweeping from it alone would delete
-    valid resumable work, because §4.6's committed region checkpoints are needed by restart logic and are
-    not reachable from the stage manifest. Marking starts from **all** of:
+    **Reader protocol — the lease precedes selection** (round-13 #4). v13 let a reader select a generation
+    and then install a lease, so a sweep could collect the selection in between. **Fixed:** a reader takes
+    the **shared store lease before snapshot selection** and holds it until **every returned handle is
+    closed**. That subsumes the separate reader-root handshake, which no longer exists.
 
-    - the current generation, **and the retained previous generations** (frozen: keep the last 3)
-    - **build pins** — committed region and pass checkpoints, written as first-class pinned artifacts
-    - **reader leases** — a consumer's snapshot generation, held for the life of its traversal
+    **Build pins are the mutable state v13 claimed not to have** (round-13 #5). Pins are created and
+    removed, so "no mutable files" was false. Frozen: a pin is an **atomically published root record**
+    (same write primitive), **created and removed only while holding the shared store lease**, and
+    **unpinned only after the replacement generation validates**.
+
+    **Selecting the current generation — bounded and linearized** (round-13 #7). "Highest generation whose
+    DAG validates" is not an algorithm: the directory can change during enumeration, and malformed
+    generations can force repeated full-DAG walks. Frozen: under the **shared store lease** plus a brief
+    **publication lock**, snapshot the generation set and **open the actual files**; validate that
+    **finite, descending** set with **strict parsing**, **explicit resource limits** on manifest size and
+    DAG depth, and **memoized digest results**. Termination is by construction — the candidate set is fixed
+    before validation begins.
+
+    **Fallback is identity-checked and never silent** (round-13 #8). Cryptographic DAG validity does not
+    make an older generation *usable*: it may carry a different schema, cache key or logical dataset. A
+    consumer supplies its **expected dataset, schema and cache identity**; a generation failing those is
+    rejected even if its digests verify. The result is a **structured `DEGRADED_FALLBACK`** naming the
+    selected generation and every rejected one with its reason — never a quiet success.
+
+    **Retention is a policy, not a guarantee** (round-13 #6). v13's "3 retained generations" was invented:
+    NTFS reordering has no three-publication bound, and several generations can share artifacts whose
+    namespace entries were created in the same vulnerable interval. Frozen: retention is an explicit
+    **storage/SLA policy**, and the invariant is that **at least one post-reboot-validated anchor
+    generation** is preserved — which is a property that can actually be checked.
+
+    **Pointer retirement** (round-13 #10). Retiring a generation whose DAG has been collected must not
+    leave it as a fallback candidate, and deleting the file must not permit numeric reuse. Frozen:
+    collected generations are marked **retired** and **excluded from fallback validation**, and the
+    **never-reused high-water mark is persisted independently** of which generation files still exist.
+
+    **Observability** (round-13 #14). The §10.2 journal emits structured records for: generation selection
+    and rejection with reasons, fallback depth, stale-predecessor aborts, active roots (pins and leases)
+    with ages, orphan temporaries, validation cost, and per-sweep marked/deleted bytes.
 
     **What this dissolves, explicitly:**
 
@@ -671,7 +719,7 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
     | r11 #6 canonical-path algorithm | no path-derived transaction namespace |
     | r12 #1 `ReplaceFileW` outcome table wrong | `ReplaceFileW` is not used at all |
     | r12 #2 first publication impossible | generation 1 needs no existing destination |
-    | r12 #5 stale publication | `CREATE_NEW` on generation *N+1* is the compare-and-swap |
+    | r12 #5 stale publication | **NOT dissolved by `CREATE_NEW`** — round-13 #2 refuted that; solved by the expected-predecessor abort above |
 
     **Crash safety, scoped truthfully** (round-12 #7). v12 claimed every outcome leaves a complete DAG
     while §5.3 simultaneously admitted a pointer's namespace entry can persist while a child's disappears —
@@ -695,18 +743,22 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
 
     The cost is disk: superseded artifacts persist until swept, on a machine that is already constrained.
     That is a real trade and it is accepted deliberately — garbage is recoverable, a corrupted publication
-    is not.5.3 **Validation order, on write AND on read** (round-10 #6). Bottom-up on write (children verified
-    before a parent is published), and top-down revalidation of the entire DAG immediately before the
-    consumer pointer is replaced.
+    is not.
+
+5.3 **Validation order, on write AND on read** (round-10 #6, round-13 #13). Bottom-up on write (children
+    verified before a parent is published), and top-down revalidation of the entire DAG immediately before
+    a **generation record is published**. v13 still described this as the pointer being "replaced" and its
+    "rename" surviving, which is the abandoned in-place vocabulary — generations are **created, never
+    replaced**.
 
     **But write-side validation alone cannot protect a consumer across a reboot.** Because NTFS namespace
-    changes may reorder under power loss, the pointer's rename can survive while a child manifest's
-    directory entry does not — so a pointer validated at write time can dereference, after a crash, to a
-    DAG that is no longer complete. v10 validated only before pointer replacement and called that
-    sufficient; it is not.
+    changes may reorder under power loss, a generation record's namespace entry can survive while a child
+    manifest's does not — so a generation validated at publication time can, after a crash, reference a DAG
+    that is no longer complete.
 
-    **Every pointer dereference therefore revalidates the complete hash-linked DAG before returning any
-    artifact.** A consumer that cannot validate the DAG gets an error, never a partial read.
+    **Every generation dereference therefore revalidates the complete hash-linked DAG before returning any
+    artifact**, under §5.2's bounded selection. A consumer that cannot validate gets a structured
+    `DEGRADED_FALLBACK` or a hard error, never a partial read.
 
     **Snapshot semantics, because validating paths and reopening them later is a TOCTOU gap**
     (round-11 #7). One read = **one pointer snapshot**: the pointer is read once, and every artifact is
@@ -919,6 +971,11 @@ node ID, and output hashes.
   is absent from the repo entirely and must be written.
 - **Garbage accumulates until swept**, on a machine already short of disk. Deliberate: unreferenced
   artifacts are recoverable, a corrupted publication is not. The sweep is offline and not crash-critical.
+- **Plan A does NOT have "no mutable state"** (round-13 #5). Build pins and the high-water mark are both
+  mutable; v13 claimed otherwise and was wrong. What is true is narrower: **no artifact is ever
+  overwritten**, and the mutable parts have explicit protocols rather than being unmanaged.
+- **Retention guarantees an anchor, not a depth** (round-13 #6). "Three generations" was invented and is
+  withdrawn; the checkable invariant is that at least one post-reboot-validated anchor generation survives.
 
 ## Out of scope
 
@@ -959,7 +1016,21 @@ From the repo root with `PYTHONPATH` set, using `C:\Users\josha\.venvs\satclf\Sc
    over-limit allocation, and proven NOT to rely on a non-guaranteed completion-port message — with
    allocation failure and abnormal child exit both failing the stage, and working set proven unsuitable by
    showing it *fall* under paging pressure; DAG validation rejecting a parent whose
-   child digest was altered; pointer replacement refused when revalidation fails; lock order asserted;
+   child digest was altered; **generation publication refused when revalidation fails**; **an invalid generation proven to be a
+   HOLE, not a barrier** — a later publisher allocates above the high-water mark rather than retrying
+   `N+1` forever (round-13 #3); **a publisher whose expected predecessor no longer matches proven to
+   ABORT rather than republish its stale DAG at a higher generation** (round-13 #2); a generation
+   record proven to become visible **only after** its contents are flushed and closed (round-13 #1);
+   a reader proven to hold the shared store lease **before** snapshot selection and until its handles
+   close, with a sweep proven unable to collect the selected generation in between (round-13 #4);
+   build pins proven crash-safe, created and removed only under the shared lease, and unpinned only
+   after the replacement generation validates (round-13 #5); a fallback generation with a mismatched
+   schema or cache identity proven **rejected** and reported as `DEGRADED_FALLBACK` rather than
+   silently returned (round-13 #8); a retired generation proven excluded from fallback while the
+   high-water mark proven never reused (round-13 #10); an undeletable losing temporary proven to
+   report `SUCCESS_WITH_ORPHAN` rather than corruption or clean success (round-13 #11); the store ACL,
+   ancestor reparse check, hard-link check and no-write-sharing open proven enforced (round-13 #9);
+   lock order asserted;
    **`LockFileEx` locks released by killing the owning process**, including the store lease; **content-addressed publication proven crash-safe on process termination**: a kill
    injected before and after every step of unique-temp → flush → non-replacing rename → `pointer.<N+1>`
    creation, with the highest validating generation naming a complete DAG in every case; **a rename losing

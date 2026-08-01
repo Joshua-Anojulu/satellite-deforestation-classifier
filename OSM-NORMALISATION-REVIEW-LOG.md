@@ -1359,3 +1359,96 @@ Findings:
    **Fix:** Emit structured records for generation selection/rejection, fallback, publication conflicts, active roots, orphan cleanup, and per-sweep marked/deleted bytes.
 
 VERDICT: REVISE
+## Round 14 — codex (loop 4, round 2 of 3 — scoped to §5)
+
+- model: gpt-5.6-sol (reasoning xhigh) · CLI codex-cli/0.145.0 (pinned) · grounding: repo · qualifying: yes
+- session: 019fbab1-c39c-7a30-af35-71d4db97d6cd (resumed)
+- reviewed body_sha256: 05eafa52fdbe104226a1f7923501dbb7c72b090752c7791ab914105ad59c3ca8
+- verdict: REVISE (4 critical, 6 high, 2 medium)
+
+§5 findings by round: **1, 5, 4, 7, 7, 8, 14, 12**.
+
+### All four criticals were introduced BY v14, in the round after I named this exact failure mode
+
+1. **The rename primitive calls `SetFileInformationByHandle` on a CLOSED handle.** v14 specifies
+   "flush, **close**, then rename by `SetFileInformationByHandle(FileRenameInfo)`" — that API **requires an
+   open handle identifying the source**. The call as written is impossible. This is in the fix I wrote for
+   round-13 #12, which was itself a finding about not naming the rename API.
+2. **ABA on the expected-predecessor token.** P records `N`; Q publishes `N+1`; power loss invalidates
+   `N+1` so current **falls back to `N`**; P wakes, sees its expected `N` again, and publishes its stale
+   DAG. The hole is created by v14's own fallback mechanism interacting with v14's own predecessor check.
+3. **The high-water mark has no persistence protocol** — format, update primitive, ordering against
+   publication and retirement, power-loss outcomes all unspecified. I introduced new mutable state one
+   round after being told that build pins were exactly that, and the Risks section claims "the mutable
+   parts have explicit protocols".
+4. **I deleted the normative publisher store-lease rule** while rewriting §5.2. The proof still asserts it.
+   Without it the original publisher/sweep deletion race returns — a regression, not an omission.
+
+Also #11: the plan still defines `publish_pointer_generation` as direct `CREATE_NEW`, calls publication a
+pointer swap, and tests stale rejection through the **refuted** `CREATE_NEW` mechanism — v13 vocabulary
+surviving in normative text and proof.
+
+### Critique (verbatim)
+
+Round 2 remains REVISE. The reader snapshot mechanism is now basically sound, but publication still is not fully linearized or implementable.
+
+Direct answers:
+
+- High-water plus predecessor comparison does not yet linearize publication because fallback allows predecessor ABA.
+- A reader cannot observe a half-created generation if the final rename occurs while holding the publication lock and temporary names are excluded from enumeration.
+- `SUCCESS_WITH_ORPHAN` can safely mean “canonical object committed, cleanup debt remains,” but the caller contract does not currently say that.
+- The anchor invariant has no establishment or rotation procedure.
+
+Findings:
+
+1. **Critical: the rename primitive uses a closed handle.** The plan flushes and closes the temporary, then calls `SetFileInformationByHandle`, but that API requires an open handle identifying the source file. [artifact primitive](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:620>) [Microsoft API contract](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileinformationbyhandle)
+
+   **Fix:** Open the temporary initially with write and `DELETE` access, flush it, rename through that same live handle, then close after the rename.
+
+2. **Critical: expected-predecessor comparison has an ABA race after fallback.** Publisher P records N; Q publishes N+1; power loss invalidates N+1 so current falls back to N; P wakes, sees its expected N again, and publishes the stale DAG above the high-water mark. [predecessor rule](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:654>)
+
+   **Fix:** Record and compare a state token containing both current generation identity and observed high-water/publication epoch, aborting if either changed.
+
+3. **Critical: the independently persisted high-water mark has no persistence protocol.** Its file format, update primitive, ordering against generation publication and retirement, and power-loss outcomes are unspecified despite the Risks section claiming the mutable parts now have explicit protocols. [high-water claim](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:650>)
+
+   **Fix:** Use permanent append-only allocation tickets published under the publication lock, or retain all tiny generation records forever and derive high-water from their maximum name.
+
+4. **Critical: the normative publisher store-lease rule has disappeared.** Section 5 no longer requires a publisher to hold the shared store lease from its first object write through completed generation publication, although the proof still claims this property; without it, the original publisher/sweep deletion race returns. [proof-only assertion](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:1029>)
+
+   **Fix:** Restore the shared publisher lease requirement explicitly and hold it through success, predecessor abort, or abandonment of the publication attempt.
+
+5. **High: the anchor invariant has no establishment procedure.** Nothing defines when startup validation occurs, how the anchor is recorded, what happens on a fresh store or when none validates, or when an old anchor may be retired. [anchor assertion](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:684>)
+
+   **Fix:** Before any sweep, acquire the exclusive store lease, validate pre-boot generations, atomically pin one anchor, prohibit sweeping if none exists, and rotate only after a successor survives a later reboot and validation.
+
+6. **High: the complete lock order and publication critical section remain unspecified.** Section 5.4 still lists only cache-key then publication lock, omitting the store lease and failing to state that current selection, token comparison, allocation, and final rename occur under one uninterrupted lock hold. [lock contract](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:757>)
+
+   **Fix:** Freeze `cache-key lock → store lease → publication lock`, with compare, allocation-ticket publication, and generation rename inside one publication-lock critical section.
+
+7. **High: “finite” is not “bounded.”** Snapshotting and opening every generation file can exhaust handles or spend unbounded time when the append-only namespace is large; limits cover manifest size and DAG depth but not generation count, total nodes, bytes, or hash work. [selection algorithm](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:670>)
+
+   **Fix:** Cap candidate count and aggregate validation work, avoid opening all candidates simultaneously, and return a typed hard error when any budget is exceeded.
+
+8. **High: pin and retirement lifecycle remains incomplete.** Atomic pin creation and ordered unpinning do not solve abandoned-build pins, stale detection, predecessor-abort cleanup, or the crash ordering between retirement marking and DAG deletion.
+
+   **Fix:** Define explicit active, resumed, abandoned, and published pin outcomes, and publish an append-only retirement record before collection while holding the exclusive store lease.
+
+9. **High: the ACL design lacks a writer principal.** The plan denies store writes to the analysis account, but Plan A is a job Josh launches and identifies no distinct privileged publisher account; the same principal cannot both be denied writes and create canonical objects. [ACL requirement](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:636>)
+
+   **Fix:** Specify a separate publication worker identity and exact inherited ACLs, or withdraw the claim that ACLs enforce immutability.
+
+10. **Medium: `SUCCESS_WITH_ORPHAN` lacks caller semantics.** Byte equality proves the canonical winner is usable independently of temporary cleanup, but “not clean success” leaves parent-manifest publication behavior ambiguous.
+
+   **Fix:** Define it as successful canonical publication with the same process-crash durability as ordinary success, require callers to continue, and propagate orphan cleanup as separate structured debt.
+
+11. **High: normative contracts and proof still describe v13.** The plan still defines `publish_pointer_generation` as direct `CREATE_NEW`, calls publication a pointer swap, claims first publication is generation 1, and tests stale rejection through the refuted `CREATE_NEW` mechanism plus “3 retained generations + reader leases.” [stale primitive](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:726>) [stale proof](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:1023>)
+
+   **Fix:** Regenerate every section-5 proof case and primitive contract from v14, removing direct final-name creation, fixed-depth retention, reader leases, and pointer-swap terminology.
+
+12. **Medium: the observability claim is not present in §10.2.** Section 5 says the journal now records generation and GC events, but the actual journal still lists only file progress, counts, rate, memory, disk, and last manifest. [actual §10.2](</C:/Users/josha/OneDrive/Documents/Satellite Image Classifier/OSM-NORMALISATION-PLAN.md:897>)
+
+   **Fix:** Add the promised structured publication, fallback, root-age, orphan, validation-cost, and sweep records to the normative §10.2 contract.
+
+No additional catastrophe outside section 5 surfaced in the targeted cross-reference scan.
+
+VERDICT: REVISE
