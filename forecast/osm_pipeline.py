@@ -634,6 +634,173 @@ def load_closure(payload: bytes) -> ClosureTable:
     return ClosureTable(ClosureKey(site_id, osm_id) for site_id, osm_id in document["pairs"])
 
 
+def windows_digest(windows: Sequence[SiteWindow]) -> str:
+    """Identity of the site-window set a checkpoint was produced under.
+
+    A checkpoint is only reusable for the *same* windows: §8.1 requires that a
+    cached artifact built for different site windows must not validate, and a
+    resumed run reusing a checkpoint from different windows would do exactly
+    that, silently.
+    """
+
+    hasher = hashlib.sha256()
+    for window in sorted(windows, key=lambda w: w.site_id):
+        hasher.update(window.site_id.encode("utf-8"))
+        hasher.update(str(window.epsg).encode("utf-8"))
+        hasher.update(window.mask.wkb)
+    return hasher.hexdigest()
+
+
+def checkpoint_name(digest: str, region: str, origin: str) -> str:
+    """§4.6's committed region checkpoint, one per (region, origin)."""
+
+    return f"pass1.{digest[:16]}.{region}-{origin}.json"
+
+
+def _checkpoint_payload(outcome: FileOutcome) -> bytes:
+    counters = outcome.counters
+    return (
+        json.dumps(
+            {
+                "name": outcome.name,
+                "origin": outcome.origin,
+                "region": outcome.region,
+                "region_manifest": outcome.region_manifest,
+                "input_digest": outcome.input_digest,
+                "parts": [
+                    {"digest": p.digest, "ways": p.ways, "site_ids": list(p.site_ids)}
+                    for p in outcome.parts
+                ],
+                "counters": {
+                    "name": counters.name,
+                    "node_cardinality": counters.node_cardinality,
+                    "max_node_id": counters.max_node_id,
+                    "retained_ways": counters.retained_ways,
+                    "ways_with_complete_geometry": counters.ways_with_complete_geometry,
+                    "invalid_node_locations": counters.invalid_node_locations,
+                    "wall_clock_s": counters.wall_clock_s,
+                    "peak_commit_bytes": counters.peak_commit_bytes,
+                    "peak_working_set_bytes": counters.peak_working_set_bytes,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _outcome_from_checkpoint(document: Mapping[str, object], path: Path) -> FileOutcome:
+    c = document["counters"]
+    return FileOutcome(
+        name=str(document["name"]),
+        path=str(path),
+        origin=str(document["origin"]),
+        region=str(document["region"]),
+        counters=FileCounters(
+            name=c["name"],
+            node_cardinality=c["node_cardinality"],
+            max_node_id=c["max_node_id"],
+            retained_ways=c["retained_ways"],
+            ways_with_complete_geometry=c["ways_with_complete_geometry"],
+            invalid_node_locations=c["invalid_node_locations"],
+            wall_clock_s=c["wall_clock_s"],
+            peak_commit_bytes=c["peak_commit_bytes"],
+            peak_working_set_bytes=c["peak_working_set_bytes"],
+        ),
+        region_manifest=str(document["region_manifest"]),
+        parts=tuple(
+            PartFile(p["digest"], p["ways"], tuple(p["site_ids"]))
+            for p in document["parts"]
+        ),
+        input_digest=str(document["input_digest"]),
+    )
+
+
+def restore_closure_from_parts(
+    store: ContentStore,
+    outcome: FileOutcome,
+    closure: ClosureTable,
+    emitted: set[RecordKey],
+) -> None:
+    """Rebuild this file's contribution to `S` from its COMMITTED parts.
+
+    A resumed run must not skip a file's closure contribution just because it
+    skipped its parse -- `S` would be silently short, and pass 2 would fail to
+    recover exactly the counterparts it exists for, with nothing raised.  The
+    parts already hold `(site_id, osm_id)` for every dispatched row, so this
+    reads them instead of re-parsing hundreds of megabytes of PBF.
+    """
+
+    origin_int = int(outcome.origin)
+    for part in outcome.parts:
+        document = json.loads(store.read_validated(part.digest))
+        for row in document["rows"]:
+            closure.add(row["site_id"], row["osm_id"])
+            emitted.add(
+                RecordKey(row["site_id"], origin_int, outcome.region, row["osm_id"])
+            )
+
+
+def pass_two_checkpoint_name(closure_digest: str, region: str, origin: str) -> str:
+    """Keyed on the closure digest, because pass 2's output depends on ALL of S.
+
+    A checkpoint written under a partial or different `S` is not reusable: the
+    counterparts it recovered are exactly the ones that `S` happened to claim.
+    """
+
+    return f"pass2.{closure_digest[:16]}.{region}-{origin}.json"
+
+
+def _pass_two_checkpoint_payload(outcome: ClosureOutcome) -> bytes:
+    return (
+        json.dumps(
+            {
+                "name": outcome.name,
+                "origin": outcome.origin,
+                "region": outcome.region,
+                "ways_considered": outcome.ways_considered,
+                "ways_claimed": outcome.ways_claimed,
+                "records": outcome.records,
+                "closure_only_records": outcome.closure_only_records,
+                "wall_clock_s": outcome.wall_clock_s,
+                "peak_commit_bytes": outcome.peak_commit_bytes,
+                "peak_working_set_bytes": outcome.peak_working_set_bytes,
+                "manifest": outcome.manifest,
+                "parts": [
+                    {"digest": p.digest, "ways": p.ways, "site_ids": list(p.site_ids)}
+                    for p in outcome.parts
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _closure_outcome_from_checkpoint(document: Mapping[str, object]) -> ClosureOutcome:
+    return ClosureOutcome(
+        name=str(document["name"]),
+        origin=str(document["origin"]),
+        region=str(document["region"]),
+        ways_considered=document["ways_considered"],
+        ways_claimed=document["ways_claimed"],
+        records=document["records"],
+        closure_only_records=document["closure_only_records"],
+        wall_clock_s=document["wall_clock_s"],
+        peak_commit_bytes=document["peak_commit_bytes"],
+        peak_working_set_bytes=document["peak_working_set_bytes"],
+        manifest=str(document["manifest"]),
+        parts=tuple(
+            PartFile(p["digest"], p["ways"], tuple(p["site_ids"]))
+            for p in document["parts"]
+        ),
+    )
+
+
 def build_evidence(
     outcomes: Sequence[FileOutcome],
     *,
@@ -680,6 +847,7 @@ def run(
     command: Sequence[str],
     progress: bool = False,
     two_pass: bool = False,
+    resume: bool = True,
 ) -> dict[str, object]:
     """Run the production path over `paths` and publish one generation.
 
@@ -697,18 +865,50 @@ def run(
     emitted: set[RecordKey] = set()
     closures: list[ClosureOutcome] = []
     closure_digest: str | None = None
+    resumed: list[str] = []
+
+    # §4.6's committed region checkpoints, in their own namespace so they are
+    # never mistaken for content objects by a sweep.
+    checkpoints = ContentStore(Path(store_root) / "checkpoints", verify_ancestry=False)
+    fingerprint = windows_digest(windows)
 
     lease = generations.shared_lease()
     try:
         for path in paths:
-            if progress:
-                print(f"[{len(outcomes) + 1}/{len(paths)}] {Path(path).name}", flush=True)
-            outcomes.append(
-                run_pass_one_file(
-                    path, windows, store, progress=progress,
-                    closure=closure, emitted=emitted,
+            path = Path(path)
+            origin, region = origin_and_region(path)
+            marker = checkpoints.root / checkpoint_name(fingerprint, region, origin)
+
+            if resume and marker.exists():
+                # §10.1: the whole input file is the restart boundary, so a file
+                # whose region is already committed is skipped entirely -- but
+                # its closure contribution is rebuilt from the committed parts,
+                # never assumed away.
+                outcome = _outcome_from_checkpoint(
+                    json.loads(marker.read_bytes()), path
                 )
+                restore_closure_from_parts(store, outcome, closure, emitted)
+                outcomes.append(outcome)
+                resumed.append(outcome.name)
+                if progress:
+                    print(
+                        f"[{len(outcomes)}/{len(paths)}] {path.name} "
+                        f"-- resumed from checkpoint ({outcome.counters.retained_ways:,} ways)",
+                        flush=True,
+                    )
+                continue
+
+            if progress:
+                print(f"[{len(outcomes) + 1}/{len(paths)}] {path.name}", flush=True)
+            outcome = run_pass_one_file(
+                path, windows, store, progress=progress,
+                closure=closure, emitted=emitted,
             )
+            outcomes.append(outcome)
+            if not marker.exists():
+                checkpoints.publish_named_object(
+                    _checkpoint_payload(outcome), marker.name
+                )
 
         if two_pass:
             # §2.2: S is published BEFORE pass 2 consumes it, so pass 2's input
@@ -722,13 +922,32 @@ def run(
                     flush=True,
                 )
             for index, path in enumerate(paths, 1):
-                if progress:
-                    print(f"[{index}/{len(paths)}] pass 2 {Path(path).name}", flush=True)
-                closures.append(
-                    run_pass_two_file(
-                        path, windows, closure, emitted, store, progress=progress
-                    )
+                path = Path(path)
+                origin, region = origin_and_region(path)
+                marker = checkpoints.root / pass_two_checkpoint_name(
+                    closure_digest, region, origin
                 )
+                if resume and marker.exists():
+                    closures.append(
+                        _closure_outcome_from_checkpoint(json.loads(marker.read_bytes()))
+                    )
+                    if progress:
+                        print(
+                            f"[{index}/{len(paths)}] pass 2 {path.name} "
+                            f"-- resumed from checkpoint",
+                            flush=True,
+                        )
+                    continue
+                if progress:
+                    print(f"[{index}/{len(paths)}] pass 2 {path.name}", flush=True)
+                closure_outcome = run_pass_two_file(
+                    path, windows, closure, emitted, store, progress=progress
+                )
+                closures.append(closure_outcome)
+                if not marker.exists():
+                    checkpoints.publish_named_object(
+                        _pass_two_checkpoint_payload(closure_outcome), marker.name
+                    )
 
         by_origin: dict[str, list[str]] = {}
         for outcome in outcomes:
@@ -806,6 +1025,7 @@ def run(
         "outcomes": outcomes,
         "closures": closures,
         "closure_pairs": len(closure),
+        "resumed": tuple(resumed),
         "closure_digest": closure_digest,
         "evidence": evidence,
         "report": report,
@@ -847,6 +1067,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="also run §2.2's closure pass, which is what measures the pass-2 gate row",
     )
+    parser.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="re-parse every file even where a §4.6 region checkpoint exists",
+    )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 
@@ -874,6 +1099,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         command=("python", "-m", "forecast.osm_pipeline", *argv),
         progress=not args.quiet,
         two_pass=args.two_pass,
+        resume=not args.no_resume,
     )
 
     report = result["report"]

@@ -636,6 +636,156 @@ def test_a_two_pass_run_measures_the_pass_two_gate_row(local_root, site):
 
 
 # --------------------------------------------------------------------------
+# §4.6 region checkpoints and resume
+# --------------------------------------------------------------------------
+
+
+def _corpus(local_root, site):
+    lon, lat = inside(site)
+    return [
+        write_pbf(
+            local_root / "in" / f"testland-{yy}0101.osm.pbf",
+            [(200, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"})],
+            origin_year=f"20{yy}",
+        )
+        for yy in ("20", "22")
+    ]
+
+
+def test_a_resumed_run_skips_committed_files_and_matches_the_first(local_root, site):
+    """§10.1: the whole input file is the restart boundary.
+
+    A file whose region is already committed is not re-parsed -- and the run
+    must reach the same published state either way, or resume is a different
+    pipeline wearing the same name.
+    """
+
+    extracts = _corpus(local_root, site)
+    common = dict(
+        sites=[site],
+        store_root=local_root / "store",
+        repo_root=REPO_ROOT,
+        command=("python", "-m", "forecast.osm_pipeline"),
+        two_pass=True,
+    )
+
+    first = run(extracts, **common)
+    assert first["resumed"] == (), "nothing to resume on a fresh store"
+
+    second = run(extracts, **common)
+    assert len(second["resumed"]) == len(extracts), "every file must resume"
+    assert second["stage"] == first["stage"], (
+        "a resumed run must publish the identical stage, not merely a valid one"
+    )
+    assert second["closure_pairs"] == first["closure_pairs"]
+    assert second["closure_digest"] == first["closure_digest"]
+
+
+def test_resume_rebuilds_the_closure_from_committed_parts(local_root, site):
+    """The failure this would otherwise hide.
+
+    If a resumed file's closure contribution were skipped along with its parse,
+    `S` would be silently short and pass 2 would stop recovering exactly the
+    counterparts it exists for -- with nothing raised anywhere.
+    """
+
+    from forecast.osm_closure import ClosureTable, RecordKey
+    from forecast.osm_pipeline import restore_closure_from_parts
+
+    lon, lat = inside(site)
+    pbf = write_pbf(
+        local_root / "in" / "testland-200101.osm.pbf",
+        [
+            (201, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"}),
+            (202, [(lon, lat + 0.002), (lon + 0.001, lat + 0.002)], {"highway": "service"}),
+        ],
+        origin_year="2020",
+    )
+    store = ContentStore(local_root / "objects")
+    parsed_closure, parsed_emitted = ClosureTable(), set()
+    outcome = run_pass_one_file(
+        pbf, build_site_windows([site]), store,
+        closure=parsed_closure, emitted=parsed_emitted,
+    )
+
+    restored_closure, restored_emitted = ClosureTable(), set()
+    restore_closure_from_parts(store, outcome, restored_closure, restored_emitted)
+
+    assert len(restored_closure) == 2
+    assert list(restored_closure) == list(parsed_closure)
+    assert restored_emitted == parsed_emitted
+
+
+def test_a_checkpoint_from_different_site_windows_is_not_reused(local_root, sites):
+    """§8.1: an artifact built for different site windows must not validate.
+
+    Resume keys on a digest of the windows, so a checkpoint written under one
+    site set cannot be silently reused under another.
+    """
+
+    from forecast.osm_pipeline import checkpoint_name, windows_digest
+
+    one = windows_digest(build_site_windows([sites[0]]))
+    two = windows_digest(build_site_windows([sites[0], sites[1]]))
+
+    assert one != two
+    assert checkpoint_name(one, "norte", "2020") != checkpoint_name(two, "norte", "2020")
+    assert windows_digest(build_site_windows([sites[0]])) == one, "and it is stable"
+
+
+def test_pass_two_checkpoints_are_keyed_on_the_complete_closure(local_root, site):
+    """A checkpoint from a different `S` is not reusable.
+
+    Pass 2's output is exactly the set of counterparts `S` happened to claim, so
+    reusing one built under a partial closure would silently under-recover.
+    """
+
+    from forecast.osm_pipeline import pass_two_checkpoint_name
+
+    a = pass_two_checkpoint_name("a" * 64, "norte", "2020")
+    b = pass_two_checkpoint_name("b" * 64, "norte", "2020")
+    assert a != b
+    assert a != pass_two_checkpoint_name("a" * 64, "norte", "2021")
+
+
+def test_a_resumed_two_pass_run_reuses_pass_two_and_still_scores_the_gate(
+    local_root, site
+):
+    """Resume must not cost the pass-2 gate row its measurement."""
+
+    extracts = _corpus(local_root, site)
+    common = dict(
+        sites=[site],
+        store_root=local_root / "store",
+        repo_root=REPO_ROOT,
+        command=("python", "-m", "forecast.osm_pipeline"),
+        two_pass=True,
+    )
+    first = run(extracts, **common)
+    second = run(extracts, **common)
+
+    assert [c.manifest for c in second["closures"]] == [
+        c.manifest for c in first["closures"]
+    ]
+    unmeasured = {c.name for c in second["report"].not_assessed}
+    assert "peak commit charge with S resident, pass 2" not in unmeasured
+    assert second["stage"] == first["stage"]
+
+
+def test_no_resume_reparses_everything(local_root, site):
+    extracts = _corpus(local_root, site)
+    common = dict(
+        sites=[site],
+        store_root=local_root / "store",
+        repo_root=REPO_ROOT,
+        command=("python", "-m", "forecast.osm_pipeline"),
+    )
+    run(extracts, **common)
+    again = run(extracts, resume=False, **common)
+    assert again["resumed"] == ()
+
+
+# --------------------------------------------------------------------------
 # The parser-only baseline
 # --------------------------------------------------------------------------
 
