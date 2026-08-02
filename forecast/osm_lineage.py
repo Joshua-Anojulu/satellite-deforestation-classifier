@@ -69,8 +69,13 @@ well-defined for a zero-length way -- a coincident-node way sitting on top of a
 road really is 0 m from it.  The stated hazard is division by zero, and nulling
 these would discard real measurements no hazard requires discarding.  Where a
 geometry cannot be built at all (fewer than two coordinates) every metric is
-null, because there is nothing to measure.  **This is a deviation from a literal
-reading of "null metrics" and is flagged for review.**
+null, because there is nothing to measure.
+
+**This deviation from a literal reading of "null metrics" was raised with the
+owner and RULED ON (2026-08-01): the two measurements stay.**  The plan's hazard
+is division by zero, these two carry none, and `degenerate_flag` already tells a
+consumer exactly which rows to treat carefully.  The literal reading remains a
+one-line revert in :func:`edge_metrics` if it is ever wanted.
 """
 
 from __future__ import annotations
