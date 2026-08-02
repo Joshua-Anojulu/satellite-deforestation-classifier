@@ -56,8 +56,21 @@ from forecast.manifests import (
     Manifest,
     publish_manifest,
 )
+from forecast.osm_closure import (
+    ClosureKey,
+    ClosureTable,
+    RecordKey,
+    SiteRecord,
+    pass_two_records,
+)
 from forecast.osm_lineage import UnbuildableGeometry, build_geometry
-from forecast.osm_stream import InvalidWayGeometry, stream_retained_ways
+from forecast.osm_normalise import retains
+from forecast.osm_stream import (
+    InvalidWayGeometry,
+    build_retained_way,
+    stream_retained_ways,
+    way_processor,
+)
 from forecast.osm_windows import SiteWindow, WindowDispatch, build_site_windows
 from forecast.process_memory import MemorySample, process_memory
 
@@ -237,6 +250,8 @@ def run_pass_one_file(
     sample_every: int = 20_000,
     ways_per_part: int = WAYS_PER_PART,
     progress: bool = False,
+    closure: ClosureTable | None = None,
+    emitted: set[RecordKey] | None = None,
 ) -> FileOutcome:
     """Stream one extract through the full path and commit its region.
 
@@ -303,6 +318,17 @@ def run_pass_one_file(
             for site_id in dispatch.sites_touching(geometry):
                 buffer.append((site_id, way))
                 buffered_sites.add(site_id)
+                # §2.2: S is accumulated during pass 1 and published, so pass 2's
+                # input is a versioned artifact rather than process state.  The
+                # emitted set is keyed on the RECORD, not the pair -- suppressing
+                # on the pair would make pass 2 inert, since every pair in S is
+                # there because pass 1 emitted it somewhere.
+                if closure is not None:
+                    closure.add(site_id, way.osm_id)
+                if emitted is not None:
+                    emitted.add(
+                        RecordKey(site_id, int(origin), region, way.osm_id)
+                    )
 
             if len(buffer) >= ways_per_part:
                 flush()
@@ -376,6 +402,238 @@ def run_pass_one_file(
     )
 
 
+@dataclass(frozen=True)
+class ClosureOutcome:
+    """What pass 2 recovered from one extract, and what it cost.
+
+    `peak_commit_bytes` here is the figure §3's second gate row wants: commit
+    charge **with `S` resident**, which pass 1 cannot produce because `S` does
+    not exist yet while pass 1 is building it.
+    """
+
+    name: str
+    origin: str
+    region: str
+    ways_considered: int
+    ways_claimed: int
+    records: int
+    closure_only_records: int
+    wall_clock_s: float
+    peak_commit_bytes: int
+    peak_working_set_bytes: int
+    manifest: str
+    parts: tuple[PartFile, ...]
+
+
+def _closure_part_payload(origin: str, region: str, records: Sequence[SiteRecord]) -> bytes:
+    document = {
+        "origin": origin,
+        "region": region,
+        "records": [
+            {
+                "site_id": r.key.site_id,
+                "osm_id": r.key.osm_id,
+                "intersects_window": r.intersects_window,
+                "selected_by_predicate": r.selected_by_predicate,
+                "closure_only": r.closure_only,
+                "in_road_supply": r.in_road_supply,
+            }
+            for r in records
+        ],
+    }
+    return (
+        json.dumps(document, indent=None, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        + "\n"
+    ).encode("utf-8")
+
+
+def run_pass_two_file(
+    path: str | Path,
+    windows: Sequence[SiteWindow],
+    closure: ClosureTable,
+    emitted: set[RecordKey],
+    store: ContentStore,
+    *,
+    sample_every: int = 200_000,
+    ways_per_part: int = WAYS_PER_PART,
+    progress: bool = False,
+) -> ClosureOutcome:
+    """Recover the counterparts pass 1 could not see (§2.2).
+
+    **Pass 2 must consider ways the predicate did NOT select**, because a
+    tag-changed counterpart -- still present, no longer tagged a road -- is
+    exactly the case identity edges exist to catch.  So this streams every way in
+    the extract rather than `stream_retained_ways`.
+
+    **The claim check comes first, and that is what makes it affordable.**
+    `closure.claims` is a dict lookup answered for every way; only the tiny
+    minority in `S` then pay for validation, geometry and per-site window tests.
+    Reversing that order would build geometry for all 43 M ways in an extract.
+
+    **The window relationship is computed per `(site, way)` pair.**  A way can be
+    inside one claiming site's window and outside another's, and emitting one
+    boolean for both would put a road in a site's supply that is not in its
+    window.
+    """
+
+    path = Path(path)
+    origin, region = origin_and_region(path)
+    origin_int = int(origin)
+    by_site = {window.site_id: window for window in windows}
+    trace = ResourceTrace()
+    trace.sample()
+
+    considered = 0
+    claimed = 0
+    records: list[SiteRecord] = []
+    parts: list[PartFile] = []
+    buffer: list[SiteRecord] = []
+
+    started = time.perf_counter()
+
+    def flush() -> None:
+        nonlocal buffer
+        if not buffer:
+            return
+        result = store.publish_content_object(
+            _closure_part_payload(origin, region, buffer)
+        )
+        if not result.committed:
+            raise ProductionPathError(
+                f"closure part of {path.name} did not commit: {result.outcome}"
+            )
+        parts.append(
+            PartFile(
+                result.digest,
+                len(buffer),
+                tuple(sorted({r.key.site_id for r in buffer})),
+            )
+        )
+        buffer = []
+
+    for way in way_processor(str(path)):
+        considered += 1
+        if considered % sample_every == 0:
+            trace.sample()
+            if progress:
+                print(
+                    f"  {path.name} pass 2: {considered:,} ways, {claimed:,} claimed, "
+                    f"{time.perf_counter() - started:,.0f}s, "
+                    f"commit {trace.peak_commit_bytes / 1024**3:.2f} GB",
+                    flush=True,
+                )
+
+        if not closure.claims(way.id):
+            continue
+        claimed += 1
+
+        selected = retains(way.tags)
+        try:
+            built = build_retained_way(way)
+            geometry = build_geometry(built.coordinates)
+        except (InvalidWayGeometry, UnbuildableGeometry):
+            # No geometry means no window relationship can be established; the
+            # counterpart is still recorded, as closure-only for every claimant.
+            geometry = None
+
+        claiming = closure.sites_claiming(way.id)
+        relationships = {
+            site_id: (
+                False
+                if geometry is None
+                else by_site[site_id].intersects_window(geometry)
+            )
+            for site_id in claiming
+        }
+
+        for record in pass_two_records(
+            origin=origin_int,
+            source_region=region,
+            closure=closure,
+            emitted=emitted,
+            ways=[(way.id, relationships, selected)],
+        ):
+            buffer.append(record)
+            records.append(record)
+        if len(buffer) >= ways_per_part:
+            flush()
+
+    flush()
+    trace.sample()
+    wall_clock = time.perf_counter() - started
+
+    shard_digests = [
+        publish_manifest(
+            store,
+            Manifest(
+                SHARD,
+                f"closure-{region}-{origin}-{index:05d}",
+                (part.digest,),
+                schema_digest=CLOSURE_SCHEMA_DIGEST,
+                cache_key="pass-2",
+                bindings={"records": part.ways, "site_ids": list(part.site_ids)},
+            ),
+        )
+        for index, part in enumerate(parts)
+    ]
+    manifest = publish_manifest(
+        store,
+        Manifest(
+            REGION,
+            f"closure-{region}-{origin}",
+            tuple(shard_digests),
+            schema_digest=CLOSURE_SCHEMA_DIGEST,
+            cache_key="pass-2",
+            bindings={"origin": origin, "region": region, "records": len(records)},
+        ),
+    )
+
+    return ClosureOutcome(
+        name=path.stem,
+        origin=origin,
+        region=region,
+        ways_considered=considered,
+        ways_claimed=claimed,
+        records=len(records),
+        closure_only_records=sum(1 for r in records if r.closure_only),
+        wall_clock_s=wall_clock,
+        peak_commit_bytes=trace.peak_commit_bytes,
+        peak_working_set_bytes=trace.peak_working_set_bytes,
+        manifest=manifest,
+        parts=tuple(parts),
+    )
+
+
+#: The closure record schema, distinct from pass 1's row schema.
+CLOSURE_SCHEMA_DIGEST = hashlib.sha256(
+    b"site_id,osm_id,intersects_window,selected_by_predicate,closure_only,in_road_supply"
+).hexdigest()
+
+
+def closure_payload(closure: ClosureTable) -> bytes:
+    """Serialise `S` for publication as a first-class artifact (§2.2).
+
+    Sorted, so the artifact's digest is a function of the closure's content and
+    not of the order pass 1 happened to discover it in.
+    """
+
+    return (
+        json.dumps(
+            {"pairs": [[k.site_id, k.osm_id] for k in closure]},
+            indent=None,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def load_closure(payload: bytes) -> ClosureTable:
+    document = json.loads(payload)
+    return ClosureTable(ClosureKey(site_id, osm_id) for site_id, osm_id in document["pairs"])
+
+
 def build_evidence(
     outcomes: Sequence[FileOutcome],
     *,
@@ -421,6 +679,7 @@ def run(
     repo_root: Path,
     command: Sequence[str],
     progress: bool = False,
+    two_pass: bool = False,
 ) -> dict[str, object]:
     """Run the production path over `paths` and publish one generation.
 
@@ -434,14 +693,42 @@ def run(
     store = generations.store
 
     outcomes: list[FileOutcome] = []
+    closure = ClosureTable()
+    emitted: set[RecordKey] = set()
+    closures: list[ClosureOutcome] = []
+    closure_digest: str | None = None
+
     lease = generations.shared_lease()
     try:
         for path in paths:
             if progress:
                 print(f"[{len(outcomes) + 1}/{len(paths)}] {Path(path).name}", flush=True)
             outcomes.append(
-                run_pass_one_file(path, windows, store, progress=progress)
+                run_pass_one_file(
+                    path, windows, store, progress=progress,
+                    closure=closure, emitted=emitted,
+                )
             )
+
+        if two_pass:
+            # §2.2: S is published BEFORE pass 2 consumes it, so pass 2's input
+            # is a versioned artifact bound into the DAG rather than incidental
+            # process state that no manifest describes.
+            closure_digest = store.publish_content_object(closure_payload(closure)).digest
+            if progress:
+                print(
+                    f"\nclosure S published: {len(closure)} pairs, "
+                    f"{len(emitted)} pass-1 records\n",
+                    flush=True,
+                )
+            for index, path in enumerate(paths, 1):
+                if progress:
+                    print(f"[{index}/{len(paths)}] pass 2 {Path(path).name}", flush=True)
+                closures.append(
+                    run_pass_two_file(
+                        path, windows, closure, emitted, store, progress=progress
+                    )
+                )
 
         by_origin: dict[str, list[str]] = {}
         for outcome in outcomes:
@@ -467,7 +754,9 @@ def run(
             Manifest(
                 STAGE,
                 "osm-normalisation-pass-1",
-                tuple(origin_digests),
+                tuple(origin_digests)
+                + tuple(sorted(c.manifest for c in closures))
+                + ((closure_digest,) if closure_digest else ()),
                 schema_digest=SCHEMA_DIGEST,
                 cache_key="pass-1",
                 bindings={
@@ -478,6 +767,8 @@ def run(
                     "identity_edges": None,
                     "presence_table": None,
                     "duplicate_group_preflight": None,
+                    "closure_table": closure_digest,
+                    "closure_regions": sorted(c.manifest for c in closures),
                     "coverage_margins": {
                         w.site_id: w.max_processing_radius_m for w in windows
                     },
@@ -500,12 +791,22 @@ def run(
     evidence = build_evidence(
         outcomes, repo_root=repo_root, command=command, stage_digest=stage_digest
     )
-    report = evaluate_gate([o.counters for o in outcomes], evidence=evidence)
+    pass_two_commit = (
+        max(c.peak_commit_bytes for c in closures) if closures else None
+    )
+    report = evaluate_gate(
+        [o.counters for o in outcomes],
+        evidence=evidence,
+        pass_two_peak_commit_bytes=pass_two_commit,
+    )
 
     return {
         "generation": record.number,
         "stage": stage_digest,
         "outcomes": outcomes,
+        "closures": closures,
+        "closure_pairs": len(closure),
+        "closure_digest": closure_digest,
         "evidence": evidence,
         "report": report,
     }
@@ -541,6 +842,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="write the §3 production-path evidence artifact here",
     )
+    parser.add_argument(
+        "--two-pass",
+        action="store_true",
+        help="also run §2.2's closure pass, which is what measures the pass-2 gate row",
+    )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 
@@ -567,6 +873,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         repo_root=repo_root,
         command=("python", "-m", "forecast.osm_pipeline", *argv),
         progress=not args.quiet,
+        two_pass=args.two_pass,
     )
 
     report = result["report"]
@@ -599,6 +906,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                         }
                         for o in result["outcomes"]
                     ],
+                    "closure": {
+                        "pairs": result["closure_pairs"],
+                        "digest": result["closure_digest"],
+                        # The pass-2 gate row is scored on the maximum of these,
+                        # so recording only the maximum would make the artifact
+                        # unable to show which file produced it.
+                        "files": [
+                            {
+                                "name": c.name,
+                                "origin": c.origin,
+                                "region": c.region,
+                                "ways_considered": c.ways_considered,
+                                "ways_claimed": c.ways_claimed,
+                                "records": c.records,
+                                "closure_only_records": c.closure_only_records,
+                                "wall_clock_s": c.wall_clock_s,
+                                "peak_commit_bytes": c.peak_commit_bytes,
+                                "peak_working_set_bytes": c.peak_working_set_bytes,
+                                "manifest": c.manifest,
+                            }
+                            for c in result["closures"]
+                        ],
+                    },
                     "generation": result["generation"],
                     "authorises_corpus_run": report.authorises_corpus_run,
                     "not_assessed": [c.name for c in report.not_assessed],

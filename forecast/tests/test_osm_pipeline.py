@@ -27,6 +27,7 @@ from forecast.osm_pipeline import (
     origin_and_region,
     run,
     run_pass_one_file,
+    run_pass_two_file,
 )
 from forecast.osm_windows import build_site_windows
 from forecast.content_store import ContentStore
@@ -404,6 +405,234 @@ def test_the_parser_source_digest_changes_when_the_parser_changes(local_root):
     edited = fake_root / PARSER_SOURCE_MODULES[0]
     edited.write_bytes(edited.read_bytes() + b"\n# an edit that changes behaviour\n")
     assert parser_source_digest(fake_root) != baseline
+
+
+# --------------------------------------------------------------------------
+# Pass 2: the closure (§2.2)
+# --------------------------------------------------------------------------
+
+
+def test_pass_two_recovers_a_counterpart_that_left_the_window(local_root, site):
+    """The case the whole second pass exists for (§6.1).
+
+    Way 100 is inside the window in 2020 and 8 km away in 2022.  Pass 1 sees it
+    only in 2020; a window-only pipeline would leave 2022 with no record and the
+    identity edge would simply be absent, with nothing raised anywhere.
+    """
+
+    from forecast.osm_closure import ClosureTable, RecordKey
+
+    lon, lat = inside(site)
+    near = write_pbf(
+        local_root / "in" / "testland-200101.osm.pbf",
+        [(100, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"})],
+        origin_year="2020",
+    )
+    # Clear of the box AND of §2.1's 5 km extraction guard -- measuring from the
+    # centre would not have escaped either, the box being 0.25 degrees wide.
+    far_lon = float(site["east"]) + 0.10
+    far = write_pbf(
+        local_root / "far" / "testland-220101.osm.pbf",
+        [(100, [(far_lon, lat), (far_lon + 0.001, lat)], {"highway": "residential"})],
+        origin_year="2022",
+    )
+
+    store = ContentStore(local_root / "objects")
+    windows = build_site_windows([site])
+    from shapely.geometry import LineString
+
+    assert not windows[0].intersects_window(
+        LineString([(far_lon, lat), (far_lon + 0.001, lat)])
+    ), "the fixture must actually place the 2022 way outside the window"
+    closure = ClosureTable()
+    emitted: set[RecordKey] = set()
+
+    first = run_pass_one_file(near, windows, store, closure=closure, emitted=emitted)
+    second = run_pass_one_file(far, windows, store, closure=closure, emitted=emitted)
+
+    assert first.parts != (), "the 2020 way is inside the window"
+    assert second.parts == (), "the 2022 way has moved outside it"
+    assert len(closure) == 1
+
+    recovered = run_pass_two_file(far, windows, closure, emitted, store)
+
+    assert recovered.ways_claimed == 1
+    assert recovered.records == 1, "pass 2 must recover the other-origin counterpart"
+    assert recovered.closure_only_records == 1
+    payload = json.loads(store.read_validated(recovered.parts[0].digest))
+    row = payload["records"][0]
+    assert row["osm_id"] == 100
+    assert row["intersects_window"] is False
+    assert row["selected_by_predicate"] is True
+    assert row["closure_only"] is True
+    assert row["in_road_supply"] is False
+
+
+def test_pass_two_recovers_a_tag_changed_counterpart(local_root, site):
+    """Still in the window, no longer tagged a road.
+
+    Pass 1 never sees it because the predicate rejects it, so only pass 2 can
+    record that this site's way stopped being a road rather than disappearing.
+    """
+
+    from forecast.osm_closure import ClosureTable, RecordKey
+
+    lon, lat = inside(site)
+    road = write_pbf(
+        local_root / "a" / "testland-200101.osm.pbf",
+        [(101, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"})],
+        origin_year="2020",
+    )
+    no_longer = write_pbf(
+        local_root / "b" / "testland-220101.osm.pbf",
+        [(101, [(lon, lat), (lon + 0.001, lat)], {"waterway": "ditch"})],
+        origin_year="2022",
+    )
+
+    store = ContentStore(local_root / "objects")
+    windows = build_site_windows([site])
+    closure = ClosureTable()
+    emitted: set[RecordKey] = set()
+
+    run_pass_one_file(road, windows, store, closure=closure, emitted=emitted)
+    later = run_pass_one_file(no_longer, windows, store, closure=closure, emitted=emitted)
+    assert later.counters.retained_ways == 0, "the predicate rejects it in 2022"
+
+    recovered = run_pass_two_file(no_longer, windows, closure, emitted, store)
+
+    assert recovered.records == 1
+    row = json.loads(store.read_validated(recovered.parts[0].digest))["records"][0]
+    assert row["intersects_window"] is True
+    assert row["selected_by_predicate"] is False
+    assert row["closure_only"] is True
+    assert row["in_road_supply"] is False, (
+        "a way inside the window that is no longer a road is not road supply"
+    )
+
+
+def test_pass_two_does_not_duplicate_the_exact_pass_one_record(local_root, site):
+    """Suppression is on the record, not the pair (§2.2).
+
+    Suppressing on `(site_id, osm_id)` would make pass 2 inert, because every
+    pair in S is there precisely because pass 1 emitted it somewhere.
+    """
+
+    from forecast.osm_closure import ClosureTable, RecordKey
+
+    lon, lat = inside(site)
+    pbf = write_pbf(
+        local_root / "in" / "testland-200101.osm.pbf",
+        [(102, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"})],
+        origin_year="2020",
+    )
+    store = ContentStore(local_root / "objects")
+    windows = build_site_windows([site])
+    closure = ClosureTable()
+    emitted: set[RecordKey] = set()
+
+    run_pass_one_file(pbf, windows, store, closure=closure, emitted=emitted)
+    again = run_pass_two_file(pbf, windows, closure, emitted, store)
+
+    assert again.ways_claimed == 1, "the way is in S and is examined"
+    assert again.records == 0, "but its exact pass-1 record is already written"
+
+
+def test_pass_two_skips_ways_no_site_claims(local_root, site):
+    """The dict lookup that makes the pass affordable at corpus scale."""
+
+    from forecast.osm_closure import ClosureTable, RecordKey
+
+    lon, lat = inside(site)
+    pbf = write_pbf(
+        local_root / "in" / "testland-200101.osm.pbf",
+        [
+            (103, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"}),
+            (104, [(0.0, 0.0), (0.001, 0.0)], {"highway": "track"}),
+        ],
+        origin_year="2020",
+    )
+    store = ContentStore(local_root / "objects")
+    windows = build_site_windows([site])
+    closure = ClosureTable()
+    emitted: set[RecordKey] = set()
+
+    run_pass_one_file(pbf, windows, store, closure=closure, emitted=emitted)
+    result = run_pass_two_file(pbf, windows, closure, emitted, store)
+
+    assert result.ways_considered == 2, "every way is examined"
+    assert result.ways_claimed == 1, "only the claimed one pays for geometry"
+
+
+def test_the_closure_table_round_trips_through_its_artifact(local_root, site):
+    """§2.2: S is published, so pass 2's input is versioned, not process state."""
+
+    from forecast.osm_closure import ClosureTable, RecordKey
+    from forecast.osm_pipeline import closure_payload, load_closure
+
+    lon, lat = inside(site)
+    pbf = write_pbf(
+        local_root / "in" / "testland-200101.osm.pbf",
+        [(105, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"})],
+        origin_year="2020",
+    )
+    store = ContentStore(local_root / "objects")
+    closure = ClosureTable()
+    run_pass_one_file(
+        pbf, build_site_windows([site]), store, closure=closure, emitted=set()
+    )
+
+    payload = closure_payload(closure)
+    assert closure_payload(load_closure(payload)) == payload, "digest-stable round trip"
+    assert list(load_closure(payload)) == list(closure)
+
+
+def test_a_two_pass_run_measures_the_pass_two_gate_row(local_root, site):
+    """The row that has been NOT_ASSESSED since §3 was written.
+
+    Pass 1 cannot produce it: commit charge "with S resident" is undefined while
+    pass 1 is still building S.
+    """
+
+    lon, lat = inside(site)
+    extracts = [
+        write_pbf(
+            local_root / "in" / f"testland-{yy}0101.osm.pbf",
+            [(106, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"})],
+            origin_year=f"20{yy}",
+        )
+        for yy in ("20", "22")
+    ]
+
+    result = run(
+        extracts,
+        sites=[site],
+        store_root=local_root / "store",
+        repo_root=REPO_ROOT,
+        command=("python", "-m", "forecast.osm_pipeline", "--two-pass"),
+        two_pass=True,
+    )
+    report = result["report"]
+
+    unmeasured = {c.name for c in report.not_assessed}
+    assert "peak commit charge with S resident, pass 2" not in unmeasured, (
+        "the two-pass run must actually measure the row it exists to measure"
+    )
+    assert unmeasured == {"projected corpus wall-clock, both passes"}
+    assert result["closure_digest"] is not None
+    assert result["closure_pairs"] == 1
+
+    # The closure artifact and every pass-2 manifest are reachable from the stage.
+    generations = GenerationStore(local_root / "store")
+    identity = DatasetIdentity(
+        dataset="osm-normalisation-pass-1",
+        schema_digest=SCHEMA_DIGEST,
+        cache_key="pass-1",
+    )
+    selection = generations.select(identity)
+    reachable = generations.reachable_objects()
+    assert result["closure_digest"] in reachable
+    for closure_outcome in result["closures"]:
+        assert closure_outcome.manifest in reachable
 
 
 # --------------------------------------------------------------------------

@@ -1,0 +1,139 @@
+{
+  "authorises_corpus_run": false,
+  "closure": {
+    "digest": "ccea2c9b7a640cba63a7e874dd7b4612b3aa3569fd8b0fd4eca3742414eec0da",
+    "files": [
+      {
+        "closure_only_records": 0,
+        "manifest": "5f9c52927ce66df3ae960ac5269ea5a61fcc1c1edb748301d056f1bdbebd42ea",
+        "name": "norte-200101.osm",
+        "origin": "2020",
+        "peak_commit_bytes": 1165017088,
+        "peak_working_set_bytes": 474976256,
+        "records": 0,
+        "region": "norte",
+        "wall_clock_s": 1.8917529999889666,
+        "ways_claimed": 53,
+        "ways_considered": 468769
+      },
+      {
+        "closure_only_records": 0,
+        "manifest": "8309188f6529d70137d0e4bde5453958a310fd37d2947b4e84c6b236905a3f3d",
+        "name": "norte-210101.osm",
+        "origin": "2021",
+        "peak_commit_bytes": 1271599104,
+        "peak_working_set_bytes": 478523392,
+        "records": 0,
+        "region": "norte",
+        "wall_clock_s": 2.581327300009434,
+        "ways_claimed": 56,
+        "ways_considered": 594987
+      },
+      {
+        "closure_only_records": 0,
+        "manifest": "a47b8fea2e3e74dbc48422d93b527672e4ecb1f0d220a17f85cfe7ec2bdb0341",
+        "name": "norte-220101.osm",
+        "origin": "2022",
+        "peak_commit_bytes": 1270525952,
+        "peak_working_set_bytes": 479469568,
+        "records": 0,
+        "region": "norte",
+        "wall_clock_s": 3.0634270000009565,
+        "ways_claimed": 60,
+        "ways_considered": 803724
+      }
+    ],
+    "pairs": 60
+  },
+  "evidence": {
+    "command": [
+      "python",
+      "-m",
+      "forecast.osm_pipeline",
+      "--osm-dir",
+      "C:/Users/josha/ml-data/deforestation-risk/external/static/osm",
+      "--store",
+      "C:/Users/josha/ml-data/deforestation-risk/osm-store-twopass2",
+      "--files",
+      "norte-200101.osm.pbf",
+      "norte-210101.osm.pbf",
+      "norte-220101.osm.pbf",
+      "--two-pass",
+      "--quiet",
+      "--evidence-out",
+      "C:/Users/josha/ml-data/deforestation-risk/evidence-norte-twopass.json"
+    ],
+    "covers_full_production_path": true,
+    "dependency_versions": {
+      "geopandas": "1.1.4",
+      "osmium": "4.3.1",
+      "pyarrow": "25.0.0",
+      "pyproj": "3.7.2",
+      "python": "3.14.5",
+      "shapely": "2.1.2"
+    },
+    "input_digests": {
+      "norte-200101.osm": "6002c3a22e4608faa314225f7a567b6d7cd202d5c64cff954e870b2ea8dc872a",
+      "norte-210101.osm": "bfb61281b191338248276b41d3b1061cd82722b78c7a3df196d6a7938372b4b3",
+      "norte-220101.osm": "e86d71546862fab3577a38221507ab5973ca3c93e57c9e54bc45a07d1813ce9a"
+    },
+    "output_digests": {
+      "region:norte-2020": "823711f9aa3a625866cfa8f9f1db075f557cd706735fc87eb7bbdba83471c89d",
+      "region:norte-2021": "07156812fec57c66234088173b866e97e5d3d8313d7d1efcc921c2a9ac18a3af",
+      "region:norte-2022": "5b1bc1c8e2f3f0d9a720b5be7263d8e400e4ef387d164d8c534ba5702386bc54",
+      "stage": "bd5f29d10f2fc44af17192dde6e1f77572527ce0fecba56751df38ccdc24b3f6"
+    },
+    "parser_source_sha256": "235ce19bffacfad808e198e32161fc214ef0ce608d6cc40f52f280b9f6648d1f"
+  },
+  "files": [
+    {
+      "geometry_availability": 1.0,
+      "invalid_node_locations": 0,
+      "max_node_id": 7100050260,
+      "name": "norte-200101.osm",
+      "node_cardinality": 4169303,
+      "origin": "2020",
+      "parts": 1,
+      "peak_commit_bytes": 1159712768,
+      "peak_working_set_bytes": 344723456,
+      "region": "norte",
+      "region_manifest": "823711f9aa3a625866cfa8f9f1db075f557cd706735fc87eb7bbdba83471c89d",
+      "retained_ways": 280916,
+      "wall_clock_s": 24.61270460000378
+    },
+    {
+      "geometry_availability": 1.0,
+      "invalid_node_locations": 0,
+      "max_node_id": 8277754712,
+      "name": "norte-210101.osm",
+      "node_cardinality": 6229916,
+      "origin": "2021",
+      "parts": 1,
+      "peak_commit_bytes": 1265176576,
+      "peak_working_set_bytes": 473096192,
+      "region": "norte",
+      "region_manifest": "07156812fec57c66234088173b866e97e5d3d8313d7d1efcc921c2a9ac18a3af",
+      "retained_ways": 330927,
+      "wall_clock_s": 31.55174170000828
+    },
+    {
+      "geometry_availability": 1.0,
+      "invalid_node_locations": 0,
+      "max_node_id": 9382368167,
+      "name": "norte-220101.osm",
+      "node_cardinality": 6551212,
+      "origin": "2022",
+      "parts": 1,
+      "peak_commit_bytes": 1267625984,
+      "peak_working_set_bytes": 474976256,
+      "region": "norte",
+      "region_manifest": "5b1bc1c8e2f3f0d9a720b5be7263d8e400e4ef387d164d8c534ba5702386bc54",
+      "retained_ways": 355552,
+      "wall_clock_s": 36.29438749999099
+    }
+  ],
+  "generation": 1,
+  "not_assessed": [
+    "projected corpus wall-clock, both passes"
+  ]
+}

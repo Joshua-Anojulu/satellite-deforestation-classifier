@@ -86,18 +86,38 @@ class ClosureTable:
 
     Accumulated during pass 1 and published as a first-class artifact, so pass 2's
     input is versioned rather than incidental process state.
+
+    **Indexed by `osm_id`, because pass 2 asks once per way.**  The first version
+    scanned every pair on every call, which is correct and unusable: measured at
+    480 us per call for `|S|` = 10,000 and 91 ms at 500,000, against 43.25 M ways
+    in one extract alone -- 5.8 hours and 1,090 hours respectively, for a single
+    file of thirty-six.  The lookup is the inner loop of the whole second pass, so
+    it is a dict.  Semantics are unchanged; only the cost is.
     """
 
     def __init__(self, pairs: Iterable[ClosureKey] = ()) -> None:
-        self._pairs: set[ClosureKey] = set(pairs)
+        self._pairs: set[ClosureKey] = set()
+        self._by_osm_id: dict[int, set[str]] = {}
+        for pair in pairs:
+            self.add(pair.site_id, pair.osm_id)
 
     def add(self, site_id: str, osm_id: int) -> None:
         self._pairs.add(ClosureKey(site_id, osm_id))
+        self._by_osm_id.setdefault(osm_id, set()).add(site_id)
+
+    def claims(self, osm_id: int) -> bool:
+        """Whether any site claims this way, without building a tuple.
+
+        Pass 2 rejects the overwhelming majority of ways on this question, so it
+        is answered without sorting or allocating.
+        """
+
+        return osm_id in self._by_osm_id
 
     def sites_claiming(self, osm_id: int) -> tuple[str, ...]:
         """Sites that claim this way -- never "all sites"."""
 
-        return tuple(sorted(k.site_id for k in self._pairs if k.osm_id == osm_id))
+        return tuple(sorted(self._by_osm_id.get(osm_id, ())))
 
     def __contains__(self, key: object) -> bool:
         return key in self._pairs
@@ -143,22 +163,43 @@ def pass_two_records(
 ) -> Iterator[SiteRecord]:
     """Emit the counterparts pass 1 could not see.
 
-    `ways` is `(osm_id, intersects_window, selected_by_predicate)` for every way
+    `ways` is `(osm_id, intersects_by_site, selected_by_predicate)` for every way
     in the extract -- pass 2 must consider ways the predicate did *not* select,
     because a tag-changed counterpart is exactly the case identity edges exist to
     catch.
+
+    **`intersects_by_site` is a mapping, not a boolean, and that is this
+    module's own rule finally applied here.**  The header says a way can be
+    inside site A's window and outside site B's, so "outside window" is a
+    property of the `(site, way)` pair and *"a single boolean on the record
+    cannot express it"* -- yet this function took one boolean and stamped it onto
+    every claiming site.  A way selected by the predicate, inside A and outside
+    B, was emitted as `in_road_supply` for **B**: a road in B's supply that is not
+    in B's window, which is precisely what the three flags exist to prevent.  The
+    existing tests never caught it because none of them gave two claiming sites
+    different window relationships.
+
+    A missing site in the mapping raises rather than defaulting: a default would
+    reintroduce the same silent mislabelling one level down.
 
     A record is emitted iff its `(site_id, osm_id)` is in `S` **and** its exact
     `(site_id, origin, source_region, osm_id)` was not already written by pass 1.
     """
 
-    for osm_id, intersects, selected in ways:
+    for osm_id, intersects_by_site, selected in ways:
         for site_id in closure.sites_claiming(osm_id):
             key = RecordKey(site_id, origin, source_region, osm_id)
             if key in emitted:
                 continue
+            try:
+                intersects = intersects_by_site[site_id]
+            except (TypeError, KeyError):
+                raise ValueError(
+                    f"way {osm_id}: no window relationship given for claiming site "
+                    f"{site_id!r}; pass 2 needs one per (site, way) pair"
+                ) from None
             yield SiteRecord(
                 key=key,
-                intersects_window=intersects,
+                intersects_window=bool(intersects),
                 selected_by_predicate=selected,
             )

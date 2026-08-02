@@ -125,7 +125,7 @@ class TestPassTwoClosure:
                 source_region="norte",
                 closure=closure,
                 emitted=emitted,
-                ways=[(42, False, True)],  # far outside the window now
+                ways=[(42, {SITE_A: False}, True)],  # far outside the window now
             )
         )
 
@@ -159,7 +159,7 @@ class TestPassTwoClosure:
                 source_region="norte",
                 closure=closure,
                 emitted={RecordKey(SITE_A, 2020, "norte", 42)},
-                ways=[(42, False, True)],
+                ways=[(42, {SITE_A: False, SITE_B: False}, True)],
             )
         )
         assert [r.key.osm_id for r in out] == [42]
@@ -173,7 +173,7 @@ class TestPassTwoClosure:
                 source_region="norte",
                 closure=closure,
                 emitted=emitted,
-                ways=[(42, True, True)],
+                ways=[(42, {SITE_A: True, SITE_B: True}, True)],
             )
         )
         assert out == [], "pass 2 must not duplicate the exact pass-1 record"
@@ -189,7 +189,7 @@ class TestPassTwoClosure:
                 source_region="nordeste",
                 closure=closure,
                 emitted=emitted,
-                ways=[(42, True, True)],
+                ways=[(42, {SITE_A: True, SITE_B: True}, True)],
             )
         )
         assert [r.key.source_region for r in out] == ["nordeste"]
@@ -202,7 +202,7 @@ class TestPassTwoClosure:
                 source_region="norte",
                 closure=closure,
                 emitted=set(),
-                ways=[(999, True, True)],
+                ways=[(999, {SITE_A: True}, True)],
             )
         )
         assert out == []
@@ -217,7 +217,7 @@ class TestPassTwoClosure:
                 source_region="norte",
                 closure=closure,
                 emitted=set(),
-                ways=[(42, True, False)],  # still there, no longer tagged a road
+                ways=[(42, {SITE_A: True}, False)],  # still there, no longer tagged a road
             )
         )
         assert len(out) == 1
@@ -233,7 +233,7 @@ class TestPassTwoClosure:
                 source_region="norte",
                 closure=closure,
                 emitted=set(),
-                ways=[(42, False, True)],
+                ways=[(42, {SITE_A: False, SITE_B: False}, True)],
             )
         )
         assert [r.key.site_id for r in out] == [SITE_A]
@@ -246,7 +246,54 @@ class TestPassTwoClosure:
                 source_region="norte",
                 closure=closure,
                 emitted=set(),
-                ways=[(42, False, True)],
+                ways=[(42, {SITE_A: False, SITE_B: False}, True)],
             )
         )
         assert sorted(r.key.site_id for r in out) == sorted([SITE_A, SITE_B])
+
+    def test_two_claiming_sites_get_their_own_window_relationship(self) -> None:
+        """The case the other fifteen tests never constructed.
+
+        A way inside site A's window and outside site B's is exactly what the
+        module header says a single boolean cannot express -- and `pass_two_records`
+        took a single boolean and stamped it onto every claiming site.  With the
+        way still tagged a road, B was emitted as `in_road_supply`: a road in B's
+        supply that is not in B's window.
+        """
+
+        closure = ClosureTable([ClosureKey(SITE_A, 42), ClosureKey(SITE_B, 42)])
+        out = {
+            r.key.site_id: r
+            for r in pass_two_records(
+                origin=2021,
+                source_region="norte",
+                closure=closure,
+                emitted=set(),
+                ways=[(42, {SITE_A: True, SITE_B: False}, True)],
+            )
+        }
+
+        assert out[SITE_A].intersects_window is True
+        assert out[SITE_A].in_road_supply is True
+        assert out[SITE_A].closure_only is False
+
+        assert out[SITE_B].intersects_window is False
+        assert out[SITE_B].in_road_supply is False, (
+            "B's window does not contain this way, so it is not in B's road supply"
+        )
+        assert out[SITE_B].closure_only is True
+
+    def test_a_missing_site_relationship_raises_rather_than_defaulting(self) -> None:
+        """Defaulting would reintroduce the mislabelling one level down."""
+
+        closure = ClosureTable([ClosureKey(SITE_A, 42), ClosureKey(SITE_B, 42)])
+        with pytest.raises(ValueError, match="no window relationship"):
+            list(
+                pass_two_records(
+                    origin=2021,
+                    source_region="norte",
+                    closure=closure,
+                    emitted=set(),
+                    ways=[(42, {SITE_A: True}, True)],
+                )
+            )
