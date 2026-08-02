@@ -736,6 +736,16 @@ identity edges + GeoParquet geometry + coverage margins + preflight report ─�
     the **shared store lease before snapshot selection** and holds it until **every returned handle is
     closed**. That subsumes the separate reader-root handshake, which no longer exists.
 
+    **The requirement is a HELD lease, not specifically a shared one** — corrected by the crash harness,
+    2026-08-02. Selection was first implemented to *reject* an exclusive lease, which made it impossible to
+    select from inside a sweep: `LockFileEx` ranges are per handle, so a process holding the exclusive
+    lease cannot also take a shared one, **not even against itself**. That is a constraint of the API, not
+    a policy choice, and it made anchor establishment (§5.6) unimplementable without a private shim.
+    Exclusive is strictly stronger than shared for this purpose — nothing else can be collecting — so a
+    caller already holding it selects under it directly. What selection never does is *acquire* an
+    exclusive lease on its own behalf: a reader must not lock out publishers, so the lease it takes for
+    itself is always shared.
+
     **Build pins are the mutable state v13 claimed not to have** (round-13 #5). Pins are created and
     removed, so "no mutable files" was false. Frozen: a pin is an **atomically published root record**
     (same write primitive), **created and removed only while holding the shared store lease**, and
@@ -1110,17 +1120,31 @@ node ID, and output hashes.
 
 ## Proof
 
-> **As-built status (2026-08-01, `8d94585`): item 1 is green at 396 passed**, of which 44 are §5's.
-> Items 2–4 are **NOT satisfied and are not claimed to be** — they need real runs, not more code:
+> **As-built status (2026-08-02): item 1 is green at 440 passed**, of which 87 are §5's — 44 mechanism
+> tests plus **43 crash-injection, interrupted-sweep and power-loss tests**, which were the outstanding
+> gap when §5 was first built and are now closed.
 >
-> - **§3's gate is built but not passed.** `authorises_corpus_run` is `False` today: two rows are
->   `NOT_ASSESSED` (corpus projection, pass-2 commit with `S` resident) and the production-path evidence
->   artifact does not exist. Building the gate and passing it are separate jobs.
-> - Within item 1, the §5 obligations requiring **injected kills, an interrupted sweep, and a simulated
->   reordered-namespace power loss** are **not yet written**. What is proven is every mechanism those
->   scenarios depend on, exercised against real NTFS — the live-handle rename, non-replacing semantics,
->   the orphan branch, lease exclusion and release-on-death, the derived high-water mark, and the
->   ABA-immune predecessor token. The crash-injection harness remains outstanding and is the honest gap.
+> The kill is a **separate process calling `os._exit` inside the real Win32 call**, never an exception in
+> the test process — an exception unwinds, runs `finally` blocks and closes handles, which is exactly the
+> tidying a killed process does not get to do. Kills are injected at eight points and produce eight
+> genuinely distinct store states, in the order §5.2 predicts:
+>
+> | kill point | objects | generations | orphaned temporaries | a reader sees |
+> |---|---|---|---|---|
+> | `after_create` / `after_write` / `after_flush` | 0 | 0 | 1 | hard error |
+> | `after_rename` | 1 | 0 | 0 | hard error |
+> | `after_objects` / `before_generation_rename` | 3 | 0 | 0 | hard error |
+> | `after_generation_rename` / `after_generation` | 3 | 1 | 0 | **generation 1** |
+>
+> That progression **is** the ordering guarantee: the generation name appears only after every artifact it
+> transitively references is durable, so a reader gets a complete validated DAG or a hard error — never a
+> partial read. The orphans left by a pre-rename kill are reaped by a later sweep, closing the loop
+> between a crash and GC.
+>
+> **Item 2 is still NOT satisfied and is not claimed to be.** §3's gate is built but unpassed:
+> `authorises_corpus_run` is `False` today, with two `NOT_ASSESSED` rows (corpus projection, pass-2 commit
+> with `S` resident) and no production-path evidence artifact. Building the gate and passing it are
+> separate jobs, and passing it needs a real run rather than more code.
 >
 > **Use the project venv.** Bare `python` on this machine is a separate 3.14 install without the geo
 > stack; the interpreter named below is the one the numbers come from.

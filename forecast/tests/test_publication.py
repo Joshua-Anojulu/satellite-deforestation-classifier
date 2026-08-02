@@ -658,14 +658,39 @@ def test_no_valid_generation_is_a_hard_error_not_an_empty_success(generations):
         generations.select(IDENTITY)
 
 
-def test_selection_requires_the_shared_lease_not_the_exclusive_one(generations):
-    """Round-13 #4: the lease precedes selection, and it is the shared one."""
+def test_selection_refuses_a_lease_that_is_not_held(generations):
+    """Round-13 #4: the hazard is selecting with NO lease.
+
+    v13 let a reader select and then install a lease, so a sweep could collect
+    the selection in the gap.  A released lease is that same gap wearing a
+    lease-shaped object, so it is refused.
+    """
+
+    _publish(generations, b"content")
+    lease = generations.shared_lease()
+    lease.release()
+
+    with pytest.raises(StoreError) as excinfo:
+        generations.select(IDENTITY, lease=lease)
+    assert "HELD" in str(excinfo.value)
+
+
+def test_a_sweeper_can_select_under_its_own_exclusive_lease(generations):
+    """Shared is not a requirement; a HELD lease is.
+
+    `LockFileEx` ranges are per handle, so a process holding the exclusive lease
+    cannot also take a shared one -- insisting on shared made selection
+    impossible from inside a sweep, which is where establishing an anchor
+    happens.  Exclusive is strictly stronger here: nothing else can be
+    collecting.
+    """
 
     _publish(generations, b"content")
     exclusive = generations.exclusive_lease()
     try:
-        with pytest.raises(StoreError):
-            generations.select(IDENTITY, lease=exclusive)
+        selection = generations.select(IDENTITY, lease=exclusive)
+        assert selection.number == 1
+        assert selection.outcome == CURRENT
     finally:
         exclusive.release()
 

@@ -339,14 +339,30 @@ class GenerationStore:
 
         **The lease precedes selection** (round-13 #4).  v13 let a reader select
         and *then* install a lease, so a sweep could collect the selection in the
-        gap.  The shared lease is taken here before the candidate set is even
-        snapshotted, and the caller holds it until every returned handle closes.
+        gap.  A lease is taken here before the candidate set is even snapshotted,
+        and the caller holds it until every returned handle closes.
+
+        **The requirement is that a lease is HELD, not that it is shared.**  An
+        earlier version of this insisted on the shared lease and refused an
+        exclusive one, which made selection impossible from inside a sweep --
+        `LockFileEx` ranges are per handle, so a process holding the exclusive
+        lease cannot also take a shared one, not even against itself.  That is a
+        real constraint of the API rather than a policy choice.  Exclusive is
+        strictly stronger than shared for this purpose (nothing else can be
+        collecting), so a caller that already holds it selects under it directly.
+        What selection never does is *acquire* an exclusive lease on its own
+        behalf: a reader must not lock out publishers, so the lease it takes for
+        itself is always shared.
         """
 
         owned = lease is None
         lease = self.shared_lease() if owned else lease
-        if lease.exclusive:
-            raise StoreError("selection requires the SHARED store lease")
+        if not lease.held:
+            raise StoreError(
+                "selection requires a HELD store lease; selecting without one lets a "
+                "sweep collect the selection before its handles are opened "
+                "(round-13 #4)"
+            )
         try:
             rejected: list[Rejection] = []
             for number in self._candidates():
@@ -510,7 +526,7 @@ class GenerationStore:
         if not lease.held or not lease.exclusive:
             raise StoreError("anchor establishment requires the EXCLUSIVE store lease")
         try:
-            selection = self.select(identity, lease=_PermissiveLease(lease))
+            selection = self.select(identity, lease=lease)
         except NoValidGeneration:
             return None
         path = self.pins_dir / ANCHOR_NAME
@@ -595,30 +611,6 @@ class GenerationStore:
             "freed_bytes": freed,
             "orphans_reaped": reaped,
         }
-
-
-class _PermissiveLease:
-    """Adapter letting :meth:`select` run under an already-held exclusive lease.
-
-    Selection normally insists on the shared lease so a reader cannot lock out
-    the store.  Anchor establishment is the one caller that legitimately holds
-    the exclusive lease already, and dropping it to re-acquire shared would open
-    exactly the window round-13 #4 closed.
-    """
-
-    def __init__(self, inner: StoreLease):
-        self._inner = inner
-
-    @property
-    def held(self) -> bool:
-        return self._inner.held
-
-    @property
-    def exclusive(self) -> bool:
-        return False
-
-    def release(self) -> None:  # pragma: no cover - never owned by select()
-        raise AssertionError("the borrowed lease is released by its owner")
 
 
 def _collect_reachable(
