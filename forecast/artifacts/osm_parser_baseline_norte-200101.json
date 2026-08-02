@@ -1,0 +1,10 @@
+{
+  "max_node_id": 7100050260,
+  "name": "norte-200101.osm",
+  "node_cardinality": 4169303,
+  "peak_commit_bytes": 285749248,
+  "peak_working_set_bytes": 296296448,
+  "retained_ways": 280916,
+  "total_ways": 468769,
+  "wall_clock_s": 20.511599699995713
+}

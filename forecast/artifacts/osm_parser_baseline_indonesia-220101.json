@@ -1,0 +1,10 @@
+{
+  "max_node_id": 9384279734,
+  "name": "indonesia-220101.osm",
+  "node_cardinality": 60983173,
+  "peak_commit_bytes": 4999712768,
+  "peak_working_set_bytes": 6580568064,
+  "retained_ways": 4839240,
+  "total_ways": 43250208,
+  "wall_clock_s": 677.3099937999941
+}

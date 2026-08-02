@@ -464,28 +464,41 @@ but no criterion, which is not a gate.
 > this: *"Rerun the gate through the production parser-to-committed-region path and record its source hash,
 > command, input digest, dependency versions, counters, resource trace, and output digest."*
 >
-> **The old 22.5 min / 8.22 GB figures are RETIRED as non-comparable, not beaten.** The production path
-> does strictly more work than the harness that produced them — it additionally builds every `LineString`,
-> intersects masks, dispatches, serialises, hashes and publishes — so it **cannot legitimately be faster
-> and lighter on the same input.** Two things are certain and one is not:
+> **The old 22.5 min / 8.22 GB figures are RETIRED as non-reproducible, not beaten.** The production path
+> does strictly more work than the harness that produced them, so it cannot legitimately be faster and
+> lighter on the same input. That result was treated as a defect to explain rather than a win to bank, and
+> a parser-only baseline was **checked in** (`forecast/osm_parser_baseline.py`) and re-run on the same
+> extract to isolate the cause. Measured, on `indonesia-220101`:
 >
-> - **The two runs did not select the same ways.** 4,839,240 retained against the recorded 4,839,062.
->   The +178 is explained: the disposition table was re-frozen from a full-corpus census (`6dd87e1`, after
->   the benchmark) adding four lifecycle prefixes — `destroyed:`, `former:`, `removed:`, `disabled:` — that
->   the earlier five-extract table missed, worth +309 ways corpus-wide.
-> - **Peak working set agrees closely** (6.17 GB against 6.58 GB), so the `flex_mem` index really is the
->   same size in both runs. Private commit nonetheless differs by 2.8 GB.
-> - **Why wall clock and private commit diverge is UNKNOWN.** The pattern — matching working set, far
->   lower private commit, far lower wall clock — is consistent with the old harness accumulating retained
->   ways in memory where this path streams them to committed parts, but that is a hypothesis and it cannot
->   be tested, **because the old harness was never checked in.** That is precisely the exposure round-4 #3
->   named: *"no checked-in harness or immutable measurement artifact binds the result to future parser
->   code."* The consequence has now been paid.
+> | | recorded 2026-08-01 | **parser-only, today** | **production path, today** |
+> |---|---|---|---|
+> | total ways parsed | 43,250,208 | **43,250,208** | 43,250,208 |
+> | retained ways | 4,839,062 | 4,839,240 | 4,839,240 |
+> | wall clock | 1348 s | **677.3 s** | **859.7 s** |
+> | peak commit | 8.22 GB | **4.66 GB** | **5.45 GB** |
+> | peak working set | 6.58 GB | 6.13 GB | 6.17 GB |
 >
-> **The new numbers do not have that problem.** The harness is `forecast/osm_pipeline.py`, committed; the
-> artifact records the parser source digest, the exact command, input digests, resolved dependency
-> versions, per-file counters, the resource trace and output digests. Any of it can be reproduced or
-> contradicted.
+> **Total ways parsed match exactly**, so the parsing workload is identical and the comparison is valid.
+> **Peak working set matches within 7 %**, so the `flex_mem` index is genuinely the same size in all three
+> runs — that is the control, and it holds. Against that fixed workload the recorded run took **1.99× the
+> wall clock and 1.77× the private commit** of today's run of the same path.
+>
+> **So the production path is not anomalous — the recorded baseline is.** 859.7 s is simply today's parser
+> (677.3 s) plus the six stages. Round-4 #3's actual question is now answered with a controlled
+> measurement rather than an estimate: **building every `LineString`, intersecting masks, dispatching,
+> serialising, hashing and publishing costs +182.4 s (+26.9 %) of wall clock and +0.80 GB (+17.1 %) of
+> private commit.** The retained-way counts differ by +178 because the disposition table was re-frozen from
+> a full-corpus census (`6dd87e1`, after the benchmark) adding `destroyed:`, `former:`, `removed:` and
+> `disabled:` — worth +309 corpus-wide — which is far too small to move either figure.
+>
+> **What remains unproven is why the recorded run cost what it did.** Index-dominated working set held
+> constant while private commit and wall clock both inflated is the signature of extra *private
+> allocation* on top of the same parse — consistent with a harness accumulating retained ways where these
+> stream them — but it cannot be confirmed, **because that harness was never checked in.** That is exactly
+> the exposure round-4 #3 named: *"no checked-in harness or immutable measurement artifact binds the result
+> to future parser code."* The bill has now been paid, and the fix is structural: both harnesses here are
+> committed, and every figure above has an artifact under `forecast/artifacts/` recording the parser source
+> digest, exact command, input digests, resolved dependency versions, counters and resource trace.
 >
 > **Neither figure authorises anything.** Both remaining `NOT_ASSESSED` rows are untouched by this run, and
 > the pass-2 row cannot be measured at all until §2.2's closure pass is built.

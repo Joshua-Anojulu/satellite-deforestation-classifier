@@ -406,6 +406,69 @@ def test_the_parser_source_digest_changes_when_the_parser_changes(local_root):
     assert parser_source_digest(fake_root) != baseline
 
 
+# --------------------------------------------------------------------------
+# The parser-only baseline
+# --------------------------------------------------------------------------
+
+
+def test_the_baseline_counts_total_ways_and_retained_ways_separately(local_root, site):
+    """Both counts matter, and conflating them is how the old figures got lost.
+
+    Comparing two runs' timings is meaningless unless they parsed the same
+    amount of file, so the baseline reports how many ways it saw as well as how
+    many it kept.
+    """
+
+    from forecast.osm_parser_baseline import measure
+
+    lon, lat = inside(site)
+    pbf = write_pbf(
+        local_root / "in" / "testland-220101.osm.pbf",
+        [
+            (60, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"}),
+            (61, [(lon, lat + 0.002), (lon + 0.001, lat + 0.002)], {"waterway": "river"}),
+            (62, [(lon, lat + 0.004), (lon + 0.001, lat + 0.004)], {"highway": "track"}),
+        ],
+        origin_year="2022",
+    )
+
+    result = measure(pbf, progress=False)
+
+    assert result.total_ways == 3
+    assert result.retained_ways == 2, "the waterway is parsed but not retained"
+    assert result.node_cardinality == 4, "only retained ways contribute node refs"
+    assert result.wall_clock_s > 0
+    assert result.peak_commit_bytes > 0
+
+
+def test_the_baseline_and_the_production_path_retain_identical_ways(local_root, site):
+    """The precondition for comparing their costs at all.
+
+    If these two ever disagreed, the difference in their wall clocks would be a
+    difference in workload rather than the cost of the six extra stages.
+    """
+
+    from forecast.osm_parser_baseline import measure
+
+    lon, lat = inside(site)
+    ways = [
+        (70, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"}),
+        (71, [(lon, lat + 0.002), (lon + 0.001, lat + 0.002)], {"waterway": "river"}),
+        (72, [(lon, lat + 0.004), (lon + 0.001, lat + 0.004)], {"highway": "service"}),
+        (73, [(0.0, 0.0), (0.001, 0.0)], {"highway": "track"}),
+    ]
+    pbf = write_pbf(local_root / "in" / "testland-220101.osm.pbf", ways)
+
+    baseline = measure(pbf, progress=False)
+    produced = run_pass_one_file(
+        pbf, build_site_windows([site]), ContentStore(local_root / "objects")
+    )
+
+    assert baseline.retained_ways == produced.counters.retained_ways
+    assert baseline.node_cardinality == produced.counters.node_cardinality
+    assert baseline.max_node_id == produced.counters.max_node_id
+
+
 def test_dependency_versions_record_what_actually_resolved():
     versions = dependency_versions()
     assert versions["python"].startswith("3.")
