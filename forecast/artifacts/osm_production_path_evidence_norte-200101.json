@@ -1,0 +1,57 @@
+{
+  "authorises_corpus_run": false,
+  "evidence": {
+    "command": [
+      "python",
+      "-m",
+      "forecast.osm_pipeline",
+      "--osm-dir",
+      "C:/Users/josha/ml-data/deforestation-risk/external/static/osm",
+      "--store",
+      "C:/Users/josha/ml-data/deforestation-risk/osm-store-smoke",
+      "--files",
+      "norte-200101.osm.pbf",
+      "--evidence-out",
+      "C:/Users/josha/ml-data/deforestation-risk/osm-store-smoke/evidence-norte.json"
+    ],
+    "covers_full_production_path": true,
+    "dependency_versions": {
+      "geopandas": "1.1.4",
+      "osmium": "4.3.1",
+      "pyarrow": "25.0.0",
+      "pyproj": "3.7.2",
+      "python": "3.14.5",
+      "shapely": "2.1.2"
+    },
+    "input_digests": {
+      "norte-200101.osm": "6002c3a22e4608faa314225f7a567b6d7cd202d5c64cff954e870b2ea8dc872a"
+    },
+    "output_digests": {
+      "region:norte-2020": "823711f9aa3a625866cfa8f9f1db075f557cd706735fc87eb7bbdba83471c89d",
+      "stage": "c1e46eb9f3fb40a0db77de79e5c6e31ec57d45447795c58bac892357dae45133"
+    },
+    "parser_source_sha256": "c286b09a02d7e26efb57555ed4ba9ed62ce36a17e45e73fdcb0f833af19abcd3"
+  },
+  "files": [
+    {
+      "geometry_availability": 1.0,
+      "invalid_node_locations": 0,
+      "max_node_id": 7100050260,
+      "name": "norte-200101.osm",
+      "node_cardinality": 4169303,
+      "origin": "2020",
+      "parts": 1,
+      "peak_commit_bytes": 1158787072,
+      "peak_working_set_bytes": 342716416,
+      "region": "norte",
+      "region_manifest": "823711f9aa3a625866cfa8f9f1db075f557cd706735fc87eb7bbdba83471c89d",
+      "retained_ways": 280916,
+      "wall_clock_s": 30.331005500003812
+    }
+  ],
+  "generation": 1,
+  "not_assessed": [
+    "projected corpus wall-clock, both passes",
+    "peak commit charge with S resident, pass 2"
+  ]
+}

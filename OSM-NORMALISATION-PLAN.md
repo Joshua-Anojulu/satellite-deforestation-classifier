@@ -449,14 +449,46 @@ but no criterion, which is not a gate.
 
 | condition | ceiling | measured on `indonesia-220101`, fully validating | |
 |---|---|---|---|
-| `indonesia-220101` **parser** wall-clock, pass 1 | ≤ 45 min | **22.5 min** | PASS |
-| projected corpus wall-clock, **both passes** (§2.2) | ≤ 12 h | *≈ 4.5 h — EXTRAPOLATED, not measured* | **NOT ASSESSED** |
-| peak commit charge (`PrivateUsage`) | ≤ 50 % of machine RAM (17.0 GB) | **8.22 GB (24.1 %)** — pass 1 only | PASS, pass 1 |
+| `indonesia-220101` **production path**, pass 1 | ≤ 45 min | **14.3 min** (859.7 s) | PASS |
+| projected corpus wall-clock, **both passes** (§2.2) | ≤ 12 h | *EXTRAPOLATED, not measured* | **NOT ASSESSED** |
+| peak commit charge (`PrivateUsage`) | ≤ 50 % of machine RAM (17.0 GB) | **5.45 GB (16.0 %)** — pass 1 only | PASS, pass 1 |
 | peak commit charge **with `S` resident** (pass 2) | ≤ 17.0 GB | *never measured* | **NOT ASSESSED** |
-| peak working set *(observability only)* | — | 6.58 GB | not a gate |
-| geometry availability | 100 % of retained ways | **100 %** (4,839,062 / 4,839,062) | PASS |
+| peak working set *(observability only)* | — | 6.17 GB | not a gate |
+| geometry availability | 100 % of retained ways | **100 %** (4,839,240 / 4,839,240) | PASS |
 | ways with a missing or invalid node location | 0 | **0** | PASS |
 | temporary index disk | n/a — no index file | 0 bytes | PASS |
+
+> **These are production-path numbers as of 2026-08-02, and they REPLACE the parser-only figures rather
+> than improve on them** (`d93c064`; evidence artifact
+> `forecast/artifacts/osm_production_path_evidence_indonesia-220101.json`). Round-4 #3 required exactly
+> this: *"Rerun the gate through the production parser-to-committed-region path and record its source hash,
+> command, input digest, dependency versions, counters, resource trace, and output digest."*
+>
+> **The old 22.5 min / 8.22 GB figures are RETIRED as non-comparable, not beaten.** The production path
+> does strictly more work than the harness that produced them — it additionally builds every `LineString`,
+> intersects masks, dispatches, serialises, hashes and publishes — so it **cannot legitimately be faster
+> and lighter on the same input.** Two things are certain and one is not:
+>
+> - **The two runs did not select the same ways.** 4,839,240 retained against the recorded 4,839,062.
+>   The +178 is explained: the disposition table was re-frozen from a full-corpus census (`6dd87e1`, after
+>   the benchmark) adding four lifecycle prefixes — `destroyed:`, `former:`, `removed:`, `disabled:` — that
+>   the earlier five-extract table missed, worth +309 ways corpus-wide.
+> - **Peak working set agrees closely** (6.17 GB against 6.58 GB), so the `flex_mem` index really is the
+>   same size in both runs. Private commit nonetheless differs by 2.8 GB.
+> - **Why wall clock and private commit diverge is UNKNOWN.** The pattern — matching working set, far
+>   lower private commit, far lower wall clock — is consistent with the old harness accumulating retained
+>   ways in memory where this path streams them to committed parts, but that is a hypothesis and it cannot
+>   be tested, **because the old harness was never checked in.** That is precisely the exposure round-4 #3
+>   named: *"no checked-in harness or immutable measurement artifact binds the result to future parser
+>   code."* The consequence has now been paid.
+>
+> **The new numbers do not have that problem.** The harness is `forecast/osm_pipeline.py`, committed; the
+> artifact records the parser source digest, the exact command, input digests, resolved dependency
+> versions, per-file counters, the resource trace and output digests. Any of it can be reproduced or
+> contradicted.
+>
+> **Neither figure authorises anything.** Both remaining `NOT_ASSESSED` rows are untouched by this run, and
+> the pass-2 row cannot be measured at all until §2.2's closure pass is built.
 
 **These rows measure the PARSER, and they are a floor — not an authorisation** (round-4 #3). The harness
 performed node decoding, index construction, the retain-predicate and per-node validation. It did **not**

@@ -1,0 +1,57 @@
+{
+  "authorises_corpus_run": false,
+  "evidence": {
+    "command": [
+      "python",
+      "-m",
+      "forecast.osm_pipeline",
+      "--osm-dir",
+      "C:/Users/josha/ml-data/deforestation-risk/external/static/osm",
+      "--store",
+      "C:/Users/josha/ml-data/deforestation-risk/osm-store-indonesia",
+      "--files",
+      "indonesia-220101.osm.pbf",
+      "--evidence-out",
+      "C:/Users/josha/ml-data/deforestation-risk/osm-store-indonesia/evidence-indonesia.json"
+    ],
+    "covers_full_production_path": true,
+    "dependency_versions": {
+      "geopandas": "1.1.4",
+      "osmium": "4.3.1",
+      "pyarrow": "25.0.0",
+      "pyproj": "3.7.2",
+      "python": "3.14.5",
+      "shapely": "2.1.2"
+    },
+    "input_digests": {
+      "indonesia-220101.osm": "d2ee9f56b16c39e6c378b6580d38420058d8f7e94f31e90c1a00e253be69d346"
+    },
+    "output_digests": {
+      "region:indonesia-2022": "30e1b498d3030a01813d0268cac0670f5ebd545354c3cd8bb5c557f063f9f4d7",
+      "stage": "3a5a4122b2a3b594c0ca758d2b61d5674126aedceec3d6bd6d0808577071f553"
+    },
+    "parser_source_sha256": "c286b09a02d7e26efb57555ed4ba9ed62ce36a17e45e73fdcb0f833af19abcd3"
+  },
+  "files": [
+    {
+      "geometry_availability": 1.0,
+      "invalid_node_locations": 0,
+      "max_node_id": 9384279734,
+      "name": "indonesia-220101.osm",
+      "node_cardinality": 60983173,
+      "origin": "2022",
+      "parts": 1,
+      "peak_commit_bytes": 5856489472,
+      "peak_working_set_bytes": 6627201024,
+      "region": "indonesia",
+      "region_manifest": "30e1b498d3030a01813d0268cac0670f5ebd545354c3cd8bb5c557f063f9f4d7",
+      "retained_ways": 4839240,
+      "wall_clock_s": 859.6787470000127
+    }
+  ],
+  "generation": 1,
+  "not_assessed": [
+    "projected corpus wall-clock, both passes",
+    "peak commit charge with S resident, pass 2"
+  ]
+}
