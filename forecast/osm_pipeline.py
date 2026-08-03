@@ -425,7 +425,20 @@ class ClosureOutcome:
     parts: tuple[PartFile, ...]
 
 
-def _closure_part_payload(origin: str, region: str, records: Sequence[SiteRecord]) -> bytes:
+def _closure_part_payload(
+    origin: str,
+    region: str,
+    records: Sequence[SiteRecord],
+    geometry: Mapping[int, Mapping[str, object]],
+) -> bytes:
+    """Closure records CARRY THEIR GEOMETRY.
+
+    §6 measures an edge between a way and the counterpart pass 2 recovered, and
+    a counterpart that moved 8 km is measurable only from its *new* coordinates.
+    An earlier version stored flags alone, which made §6 unbuildable for exactly
+    the records pass 2 exists to produce.
+    """
+
     document = {
         "origin": origin,
         "region": region,
@@ -437,6 +450,7 @@ def _closure_part_payload(origin: str, region: str, records: Sequence[SiteRecord
                 "selected_by_predicate": r.selected_by_predicate,
                 "closure_only": r.closure_only,
                 "in_road_supply": r.in_road_supply,
+                **geometry[r.key.osm_id],
             }
             for r in records
         ],
@@ -488,6 +502,7 @@ def run_pass_two_file(
     records: list[SiteRecord] = []
     parts: list[PartFile] = []
     buffer: list[SiteRecord] = []
+    geometry_by_id: dict[int, dict[str, object]] = {}
 
     started = time.perf_counter()
 
@@ -496,7 +511,7 @@ def run_pass_two_file(
         if not buffer:
             return
         result = store.publish_content_object(
-            _closure_part_payload(origin, region, buffer)
+            _closure_part_payload(origin, region, buffer, geometry_by_id)
         )
         if not result.committed:
             raise ProductionPathError(
@@ -528,6 +543,7 @@ def run_pass_two_file(
         claimed += 1
 
         selected = retains(way.tags)
+        built = None
         try:
             built = build_retained_way(way)
             geometry = build_geometry(built.coordinates)
@@ -535,6 +551,14 @@ def run_pass_two_file(
             # No geometry means no window relationship can be established; the
             # counterpart is still recorded, as closure-only for every claimant.
             geometry = None
+        geometry_by_id[way.id] = {
+            "version": built.version if built else 0,
+            "timestamp": built.timestamp if built else "",
+            "tags": dict(sorted(built.tags.items())) if built else {},
+            "node_refs": list(built.node_refs) if built else [],
+            "coordinates": [list(c) for c in built.coordinates] if built else [],
+            "is_closed": built.is_closed if built else False,
+        }
 
         claiming = closure.sites_claiming(way.id)
         relationships = {
@@ -606,7 +630,8 @@ def run_pass_two_file(
 
 #: The closure record schema, distinct from pass 1's row schema.
 CLOSURE_SCHEMA_DIGEST = hashlib.sha256(
-    b"site_id,osm_id,intersects_window,selected_by_predicate,closure_only,in_road_supply"
+    b"site_id,osm_id,intersects_window,selected_by_predicate,closure_only,"
+    b"in_road_supply,version,timestamp,tags,node_refs,coordinates,is_closed"
 ).hexdigest()
 
 
@@ -750,7 +775,10 @@ def pass_two_checkpoint_name(closure_digest: str, region: str, origin: str) -> s
     counterparts it recovered are exactly the ones that `S` happened to claim.
     """
 
-    return f"pass2.{closure_digest[:16]}.{region}-{origin}.json"
+    return (
+        f"pass2.{closure_digest[:16]}.{CLOSURE_SCHEMA_DIGEST[:8]}."
+        f"{region}-{origin}.json"
+    )
 
 
 def _pass_two_checkpoint_payload(outcome: ClosureOutcome) -> bytes:
