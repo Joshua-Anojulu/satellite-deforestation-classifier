@@ -1,0 +1,333 @@
+{
+  "authoritative_regions": 24,
+  "origins_without_authority": [
+    "2020"
+  ],
+  "regions": [
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "argentina-200101.osm",
+      "origin": "2020",
+      "region": "argentina",
+      "replication_base_url": "http://download.geofabrik.de/south-america/argentina-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "argentina-210101.osm",
+      "origin": "2021",
+      "region": "argentina",
+      "replication_base_url": "http://download.geofabrik.de/south-america/argentina-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "argentina-220101.osm",
+      "origin": "2022",
+      "region": "argentina",
+      "replication_base_url": "http://download.geofabrik.de/south-america/argentina-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "bolivia-200101.osm",
+      "origin": "2020",
+      "region": "bolivia",
+      "replication_base_url": "http://download.geofabrik.de/south-america/bolivia-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "bolivia-210101.osm",
+      "origin": "2021",
+      "region": "bolivia",
+      "replication_base_url": "http://download.geofabrik.de/south-america/bolivia-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "bolivia-220101.osm",
+      "origin": "2022",
+      "region": "bolivia",
+      "replication_base_url": "http://download.geofabrik.de/south-america/bolivia-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "centro-oeste-200101.osm",
+      "origin": "2020",
+      "region": "centro-oeste",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/centro-oeste-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "centro-oeste-210101.osm",
+      "origin": "2021",
+      "region": "centro-oeste",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/centro-oeste-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "centro-oeste-220101.osm",
+      "origin": "2022",
+      "region": "centro-oeste",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/centro-oeste-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "colombia-200101.osm",
+      "origin": "2020",
+      "region": "colombia",
+      "replication_base_url": "http://download.geofabrik.de/south-america/colombia-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "colombia-210101.osm",
+      "origin": "2021",
+      "region": "colombia",
+      "replication_base_url": "http://download.geofabrik.de/south-america/colombia-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "colombia-220101.osm",
+      "origin": "2022",
+      "region": "colombia",
+      "replication_base_url": "http://download.geofabrik.de/south-america/colombia-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "congo-democratic-republic-200101.osm",
+      "origin": "2020",
+      "region": "congo-democratic-republic",
+      "replication_base_url": "http://download.geofabrik.de/africa/congo-democratic-republic-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "congo-democratic-republic-210101.osm",
+      "origin": "2021",
+      "region": "congo-democratic-republic",
+      "replication_base_url": "http://download.geofabrik.de/africa/congo-democratic-republic-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "congo-democratic-republic-220101.osm",
+      "origin": "2022",
+      "region": "congo-democratic-republic",
+      "replication_base_url": "http://download.geofabrik.de/africa/congo-democratic-republic-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "haiti-and-domrep-200101.osm",
+      "origin": "2020",
+      "region": "haiti-and-domrep",
+      "replication_base_url": "http://download.geofabrik.de/central-america/haiti-and-domrep-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "haiti-and-domrep-210101.osm",
+      "origin": "2021",
+      "region": "haiti-and-domrep",
+      "replication_base_url": "http://download.geofabrik.de/central-america/haiti-and-domrep-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "haiti-and-domrep-220101.osm",
+      "origin": "2022",
+      "region": "haiti-and-domrep",
+      "replication_base_url": "http://download.geofabrik.de/central-america/haiti-and-domrep-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "indonesia-200101.osm",
+      "origin": "2020",
+      "region": "indonesia",
+      "replication_base_url": "http://download.geofabrik.de/asia/indonesia-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "indonesia-210101.osm",
+      "origin": "2021",
+      "region": "indonesia",
+      "replication_base_url": "http://download.geofabrik.de/asia/indonesia-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "indonesia-220101.osm",
+      "origin": "2022",
+      "region": "indonesia",
+      "replication_base_url": "http://download.geofabrik.de/asia/indonesia-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "malaysia-singapore-brunei-200101.osm",
+      "origin": "2020",
+      "region": "malaysia-singapore-brunei",
+      "replication_base_url": "http://download.geofabrik.de/asia/malaysia-singapore-brunei-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "malaysia-singapore-brunei-210101.osm",
+      "origin": "2021",
+      "region": "malaysia-singapore-brunei",
+      "replication_base_url": "http://download.geofabrik.de/asia/malaysia-singapore-brunei-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "malaysia-singapore-brunei-220101.osm",
+      "origin": "2022",
+      "region": "malaysia-singapore-brunei",
+      "replication_base_url": "http://download.geofabrik.de/asia/malaysia-singapore-brunei-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "nordeste-200101.osm",
+      "origin": "2020",
+      "region": "nordeste",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/nordeste-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "nordeste-210101.osm",
+      "origin": "2021",
+      "region": "nordeste",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/nordeste-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "nordeste-220101.osm",
+      "origin": "2022",
+      "region": "nordeste",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/nordeste-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "norte-200101.osm",
+      "origin": "2020",
+      "region": "norte",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/norte-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "norte-210101.osm",
+      "origin": "2021",
+      "region": "norte",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/norte-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "norte-220101.osm",
+      "origin": "2022",
+      "region": "norte",
+      "replication_base_url": "http://download.geofabrik.de/south-america/brazil/norte-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "paraguay-200101.osm",
+      "origin": "2020",
+      "region": "paraguay",
+      "replication_base_url": "http://download.geofabrik.de/south-america/paraguay-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "paraguay-210101.osm",
+      "origin": "2021",
+      "region": "paraguay",
+      "replication_base_url": "http://download.geofabrik.de/south-america/paraguay-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "paraguay-220101.osm",
+      "origin": "2022",
+      "region": "paraguay",
+      "replication_base_url": "http://download.geofabrik.de/south-america/paraguay-updates"
+    },
+    {
+      "authoritative": false,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "ABSENT",
+      "name": "peru-200101.osm",
+      "origin": "2020",
+      "region": "peru",
+      "replication_base_url": "http://download.geofabrik.de/south-america/peru-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2021-01-01T21:42:03Z",
+      "name": "peru-210101.osm",
+      "origin": "2021",
+      "region": "peru",
+      "replication_base_url": "http://download.geofabrik.de/south-america/peru-updates"
+    },
+    {
+      "authoritative": true,
+      "generator": "osmium/1.14.0",
+      "header_timestamp": "2022-01-01T21:21:26Z",
+      "name": "peru-220101.osm",
+      "origin": "2022",
+      "region": "peru",
+      "replication_base_url": "http://download.geofabrik.de/south-america/peru-updates"
+    }
+  ],
+  "total_regions": 36
+}
