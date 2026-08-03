@@ -155,8 +155,11 @@ review_provenance:
   degraded_rounds: []
   as_built:
     status: built
-    reconciled_at: 2026-08-01
+    reconciled_at: 2026-08-03
     commit: 8d94585
+    sweep_run_note: "Section 5.5 (the seal) was added 2026-08-03 after running section 5.4's sweep
+      against the real corpus store as a dry run: it would have collected the entire deliverable,
+      101.1 MB, and been correct to. See the section 5 'As built' block."
     note: "Loop 4 closed by owner decision (build, do not chase a clean verdict). All sections are
       implemented; the forecast suite is at 396 passing. Section 5 was settled by kill-tests against
       real NTFS rather than a fifteenth prose revision, and THREE FROZEN CLAIMS DID NOT SURVIVE --
@@ -697,6 +700,49 @@ v4's claim that "if `indonesia-220101` fits, every other file fits" is withdrawn
 >
 > Implemented by `forecast/content_store.py`, `forecast/manifests.py` and `forecast/generations.py`;
 > 44 tests in `forecast/tests/test_publication.py`, each named for the finding it kills.
+
+> **§5.5 THE SEAL — added 2026-08-03, after running §5.4's sweep against the real corpus store.**
+> Every §5 test published the whole DAG under one generation, so nothing exercised what the drivers
+> actually do. §4 and §6 publish their manifests **straight into the object store**, and no later stage
+> ever re-binds them. A dry run of the sweep over the corpus store reported that it would collect ten
+> objects totalling **101.1 MB** — §4's three origin-dataset manifests, §6's identity-edges and
+> presence-table shards, and their five content leaves. That is the entire deliverable, and the sweep
+> would have been **correct** to delete it, because no root named it.
+>
+> Nothing here was broken. §5.1 already requires a stage manifest to bind `origin_datasets`,
+> `identity_edges`, `presence_table`, `duplicate_group_preflight` and `coverage_margins` — exactly the
+> deliverable. Pass 1 binds the lineage keys to `null` **deliberately and correctly**, so a consumer can
+> tell "not built yet" from "built and empty". The gap is that no step ever published the stage where
+> they are **not** null. `REQUIRED_STAGE_BINDINGS` did not catch it because it checks that the *keys* are
+> present, never that they name anything: `{"identity_edges": null}` satisfies it, and so does
+> `{"origin_datasets": ["2020","2021","2022"]}` — year labels where §5.1 means digests, the same omission
+> in a second costume.
+>
+> `forecast/osm_seal.py` closes it. The sealed stage binds real digests, refuses to publish unless every
+> required binding **resolves to an object in the store**, and takes its children *from the bound digests
+> themselves*, so binding and reachability cannot drift apart. It is published as a generation under its
+> own identity (`osm-normalisation-deliverable`) via §5.2's predecessor protocol, and anchors itself.
+>
+> **The lesson generalises beyond this store:** an invariant can be enforced perfectly and still be one
+> call away from destroying the thing it protects, when the caller was never obliged to look first.
+> `forecast/osm_sweep.py` therefore makes collection two steps — `survey` writes nothing and names any
+> protected digest that is collectable; `collect` refuses a survey that came back unsafe, and re-derives
+> the collectable set to refuse one taken against a different store state.
+>
+> **Corpus results (2026-08-03, artifacts `osm_seal_corpus.json`, `osm_sweep_corpus.json`):** sealed as
+> generation 5, anchor 5, 267/267 objects reachable. Generations 1–3 then retired as superseded — all
+> three share one root, and their pass-2 records predate the geometry columns §6 needs — and the sweep
+> collected **71 objects for 58,862 bytes** (54 closure manifests, 17 leaves), **0 orphans reaped** across
+> the whole corpus run. Store 267 → 196 objects; `validate_dag` from the seal then walks **135 manifests +
+> 61 leaves = 196**, so every surviving object is reachable from the seal and nothing else remains.
+> The edges and presence table read back at 65,534 and 95,700 rows, unchanged.
+>
+> **One further defect, exposed only because the seal gave the store a second dataset:** selection
+> reported `DEGRADED_FALLBACK` for pass-1's own current generation, purely because the seal sat above it
+> with a different identity. Left uncorrected, every dataset but the most recently published would look
+> degraded forever, and the signal meaning "something below the high-water mark is broken" would fire
+> permanently on a healthy store. Rejections are now marked `identity_mismatch`; they are still reported
+> in full, but skipping another dataset is not falling past one. Both datasets now select `CURRENT`.
 
 **A hash-linked DAG, in which no node is reachable until its children validate** (round-3 #5). v3 named a
 manifest hierarchy but bound none of its edges, so the "hierarchy" carried no integrity claim.

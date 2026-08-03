@@ -223,6 +223,14 @@ class Rejection:
 
     number: int
     reason: str
+    #: A generation belonging to a *different dataset* is not degradation.
+    #: Measured on the corpus store once §5.5's seal gave it a second dataset:
+    #: pass-1's own current generation reported `DEGRADED_FALLBACK` purely
+    #: because the seal sat above it.  Left uncorrected, every dataset but the
+    #: most recently published would look degraded forever, and the signal that
+    #: is supposed to mean "something is broken below the high-water mark"
+    #: would fire on a healthy store.
+    identity_mismatch: bool = False
 
 
 @dataclass(frozen=True)
@@ -240,9 +248,13 @@ class Selection:
 
     @property
     def fallback_depth(self) -> int:
-        """§5.2's observability: how far below the high-water mark we landed."""
+        """§5.2's observability: how far below this dataset's own top we landed.
 
-        return len(self.rejected)
+        Generations of other datasets are skipped, not fallen past, so they do
+        not count.  Every rejection is still reported in :attr:`rejected`.
+        """
+
+        return sum(1 for r in self.rejected if not r.identity_mismatch)
 
 
 class GenerationStore:
@@ -373,12 +385,15 @@ class GenerationStore:
                     continue
 
                 if record.identity != identity:
-                    # Round-13 #8: valid digests, wrong dataset.  Still rejected.
+                    # Round-13 #8: valid digests, wrong dataset.  Still rejected,
+                    # and still reported -- but marked, because skipping another
+                    # dataset is not falling back within this one.
                     rejected.append(
                         Rejection(
                             number,
                             "identity mismatch: "
                             f"{record.identity.document()} != {identity.document()}",
+                            identity_mismatch=True,
                         )
                     )
                     continue
@@ -389,7 +404,8 @@ class GenerationStore:
                     rejected.append(Rejection(number, f"DAG invalid: {exc}"))
                     continue
 
-                outcome = CURRENT if not rejected else DEGRADED_FALLBACK
+                degraded = any(not r.identity_mismatch for r in rejected)
+                outcome = DEGRADED_FALLBACK if degraded else CURRENT
                 return Selection(outcome, number, record.root_digest, tuple(rejected))
 
             raise NoValidGeneration(

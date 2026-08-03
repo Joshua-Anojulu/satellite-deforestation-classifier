@@ -646,11 +646,50 @@ def test_a_cryptographically_valid_generation_with_the_wrong_identity_is_rejecte
 
     selection = generations.select(IDENTITY)
     assert selection.number == 1
-    assert selection.outcome == DEGRADED_FALLBACK
     assert "identity mismatch" in selection.rejected[0].reason
+    assert selection.rejected[0].identity_mismatch is True
 
     # And the store is perfectly usable for the other consumer.
     assert generations.select(other).number == 2
+
+
+def test_another_dataset_above_this_one_is_not_degradation(generations):
+    """Measured on the corpus store once §5.5's seal gave it a second dataset.
+
+    Generation 4 is pass-1's own current generation and nothing about it is
+    broken; the seal simply sits above it.  Reporting `DEGRADED_FALLBACK` there
+    would make the signal that means "something below the high-water mark is
+    broken" fire permanently on a healthy store -- for every dataset except
+    whichever was published last.
+    """
+
+    other = DatasetIdentity("specification_w_osm", "schema-v2", "cache-key-v2")
+    _publish(generations, b"mine", identity=IDENTITY)
+    _publish(generations, b"theirs", identity=other)
+
+    selection = generations.select(IDENTITY)
+
+    assert selection.outcome == CURRENT
+    assert selection.degraded is False
+    assert selection.fallback_depth == 0, "skipped, not fallen past"
+    assert len(selection.rejected) == 1, "and still reported, in full"
+
+
+def test_a_real_fallback_is_still_degraded_with_another_dataset_present(generations):
+    """The correction must not suppress the signal it exists to preserve."""
+
+    other = DatasetIdentity("specification_w_osm", "schema-v2", "cache-key-v2")
+    _publish(generations, b"good")
+    broken = _publish(generations, b"broken")
+    generations.store.path_for(broken.root_digest).unlink()
+    _publish(generations, b"theirs", identity=other)
+
+    selection = generations.select(IDENTITY)
+
+    assert selection.outcome == DEGRADED_FALLBACK
+    assert selection.number == 1
+    assert selection.fallback_depth == 1, "one real fallback; the other dataset is not one"
+    assert len(selection.rejected) == 2
 
 
 def test_no_valid_generation_is_a_hard_error_not_an_empty_success(generations):
