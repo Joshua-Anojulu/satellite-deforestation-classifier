@@ -243,7 +243,11 @@ def evaluate_gate(
             projected_corpus_wall_clock_s,
             CORPUS_WALL_CLOCK_CEILING_S,
             extrapolated=corpus_projection_is_extrapolated,
-            note="an estimate; way density varies by region",
+            note=(
+                "an estimate; way density varies by region"
+                if corpus_projection_is_extrapolated
+                else "MEASURED over the full corpus, both passes; not a projection"
+            ),
         )
     )
 

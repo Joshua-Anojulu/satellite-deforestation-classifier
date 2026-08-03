@@ -617,7 +617,19 @@ def test_a_two_pass_run_measures_the_pass_two_gate_row(local_root, site):
     assert "peak commit charge with S resident, pass 2" not in unmeasured, (
         "the two-pass run must actually measure the row it exists to measure"
     )
-    assert unmeasured == {"projected corpus wall-clock, both passes"}
+    assert unmeasured == set(), (
+        "a COMPLETE two-pass run leaves nothing unmeasured -- both passes have "
+        "run over every file, so the corpus wall clock is a measurement rather "
+        "than a projection"
+    )
+    corpus = report.conditions[1]
+    assert corpus.name == "projected corpus wall-clock, both passes"
+    assert corpus.extrapolated is False
+    assert "MEASURED" in corpus.note
+    assert result["corpus_wall_clock_s"] == pytest.approx(
+        sum(o.counters.wall_clock_s for o in result["outcomes"])
+        + sum(c.wall_clock_s for c in result["closures"])
+    )
     assert result["closure_digest"] is not None
     assert result["closure_pairs"] == 1
 
@@ -633,6 +645,35 @@ def test_a_two_pass_run_measures_the_pass_two_gate_row(local_root, site):
     assert result["closure_digest"] in reachable
     for closure_outcome in result["closures"]:
         assert closure_outcome.manifest in reachable
+
+
+def test_a_pass_one_only_run_leaves_the_corpus_row_a_projection(local_root, site):
+    """Without pass 2 there is no corpus total, and none is invented.
+
+    A pass-1 sum labelled as the both-passes measurement would be an
+    extrapolation wearing a measurement's label -- precisely the confusion §3
+    exists to prevent.
+    """
+
+    lon, lat = inside(site)
+    pbf = write_pbf(
+        local_root / "in" / "testland-200101.osm.pbf",
+        [(210, [(lon, lat), (lon + 0.001, lat)], {"highway": "residential"})],
+        origin_year="2020",
+    )
+    result = run(
+        [pbf],
+        sites=[site],
+        store_root=local_root / "store",
+        repo_root=REPO_ROOT,
+        command=("python", "-m", "forecast.osm_pipeline"),
+    )
+
+    assert result["corpus_wall_clock_s"] is None
+    corpus = result["report"].conditions[1]
+    assert corpus.outcome is Outcome.NOT_ASSESSED
+    assert corpus.extrapolated is True
+    assert not result["report"].authorises_corpus_run
 
 
 # --------------------------------------------------------------------------

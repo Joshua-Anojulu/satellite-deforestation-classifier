@@ -1013,10 +1013,23 @@ def run(
     pass_two_commit = (
         max(c.peak_commit_bytes for c in closures) if closures else None
     )
+    # The corpus row stops being a projection the moment BOTH passes have run
+    # over the whole corpus.  It is only fed as measured when that is actually
+    # true -- a partial run's total would be an extrapolation wearing a
+    # measurement's label, which is the exact confusion §3 exists to prevent.
+    corpus_complete = bool(closures) and len(closures) == len(outcomes) == len(paths)
+    corpus_wall_clock = (
+        sum(o.counters.wall_clock_s for o in outcomes)
+        + sum(c.wall_clock_s for c in closures)
+        if corpus_complete
+        else None
+    )
     report = evaluate_gate(
         [o.counters for o in outcomes],
         evidence=evidence,
         pass_two_peak_commit_bytes=pass_two_commit,
+        projected_corpus_wall_clock_s=corpus_wall_clock,
+        corpus_projection_is_extrapolated=not corpus_complete,
     )
 
     return {
@@ -1025,6 +1038,7 @@ def run(
         "outcomes": outcomes,
         "closures": closures,
         "closure_pairs": len(closure),
+        "corpus_wall_clock_s": corpus_wall_clock,
         "resumed": tuple(resumed),
         "closure_digest": closure_digest,
         "evidence": evidence,
