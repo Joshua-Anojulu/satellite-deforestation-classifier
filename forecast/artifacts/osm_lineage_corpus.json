@@ -1,0 +1,26 @@
+{
+  "closure_only_endpoints": 208,
+  "degenerate_edges": 0,
+  "edges_beyond_5km_guard": 11,
+  "edges_digest": "8bff554af9ccfef34d520afa219e8d37ec276d1d6e48d1947a4a940a9c1aaf8b",
+  "edges_manifest": "e8c4e49550594eb0fc8cbf9e74228fca0fa788736367615d9807d7b7c8460213",
+  "edges_with_closure_only_endpoint": 256,
+  "endpoints": 78624,
+  "identity_edges": 65534,
+  "min_distance_m": {
+    "max": 7489.902634377911,
+    "median": 0.0,
+    "min": 0.0,
+    "p99": 7.25438426908928
+  },
+  "origins": [
+    2020,
+    2021,
+    2022
+  ],
+  "orphaned_membership_rows": 0,
+  "presence_absent_rows": 17076,
+  "presence_digest": "6ac5cf9eae86a6a964df888a3cc63914aa62d803fbe98bb1e1d0a9f7b83cf5d6",
+  "presence_manifest": "5e39a8b72df3c07426f4dbfe5d196396af75c35dc5c1fcd0e745a2dd38811b8d",
+  "presence_rows": 95700
+}
