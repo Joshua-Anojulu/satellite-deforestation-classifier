@@ -1,0 +1,25 @@
+{
+  "attribute_conflicts": 0,
+  "clean": true,
+  "duplicate_groups": 34,
+  "geometry_conflicts": 0,
+  "groups_checked": 78416,
+  "membership_conflicts": 0,
+  "origin_header_timestamps": {
+    "2020": "ABSENT",
+    "2021": "2021-01-01T21:42:03Z",
+    "2022": "2022-01-01T21:21:26Z"
+  },
+  "origin_manifests": {
+    "2020": "29f5a600fadec3c960336cdbf4164aabff3802f7bae3bef298616d0e91d174c6",
+    "2021": "8699f4e58ad32ee25405377982bb5e459931c61d91d5ebd4fb093a5ab30f6581",
+    "2022": "00774e78ef6ea50f4410d2ad31663d38caaf2be7cfab7ee894140be66f17dd6c"
+  },
+  "origin_ways": {
+    "2020": 19125,
+    "2021": 27819,
+    "2022": 31472
+  },
+  "region_records": 78450,
+  "site_records": 78658
+}
