@@ -215,6 +215,47 @@ class TestPerFileEnforcement:
         assert "geometry availability" in failed
         assert "ways with a missing or invalid node location" in failed
 
+    def test_the_measured_corpus_worst_case_passes_the_geometry_floor(self) -> None:
+        """The real observation the floor was set against (owner ruling).
+
+        `indonesia-200101`: 8 highway-tagged ways with exactly one node, out of
+        3,577,130.  Their locations resolve and they still form no `LineString`.
+        """
+
+        report = evaluate_gate(
+            [counters(retained=3_577_130, complete=3_577_122)],
+            evidence=evidence(),
+            projected_corpus_wall_clock_s=1.36 * 3600,
+            pass_two_peak_commit_bytes=int(5.52 * GB),
+        )
+        assert report.failed == ()
+        assert report.authorises_corpus_run
+        geometry = next(c for c in report.conditions if c.name == "geometry availability")
+        assert geometry.outcome is Outcome.PASS
+        assert "8 unbuildable" in geometry.note, (
+            "the absolute dropped count must be reported, not just the ratio"
+        )
+
+    def test_the_geometry_floor_still_fails_a_real_regression(self) -> None:
+        """A relaxed ceiling that accepted anything would be worse than none.
+
+        One dropped way in a thousand is ~45x the worst real observation, and it
+        must still fail.
+        """
+
+        report = evaluate_gate(
+            [counters(retained=100_000, complete=99_900)],
+            evidence=evidence(),
+            projected_corpus_wall_clock_s=1.36 * 3600,
+            pass_two_peak_commit_bytes=int(5.52 * GB),
+        )
+        assert "geometry availability" in {c.name for c in report.failed}
+        assert not report.authorises_corpus_run
+
+    def test_unbuildable_ways_are_counted_absolutely(self) -> None:
+        assert counters(retained=3_577_130, complete=3_577_122).unbuildable_ways == 8
+        assert counters(retained=100, complete=100).unbuildable_ways == 0
+
     def test_the_gate_needs_at_least_one_measured_file(self) -> None:
         with pytest.raises(ValueError, match="at least one measured file"):
             evaluate_gate([])

@@ -251,6 +251,17 @@ not before. This exact pipeline is the one benchmarked above.
     is adopted literally.
 
     **The census is COMPLETE: all 36 extracts, 34,764,774 retained ways, 18 distinct `:highway` keys.**
+
+    > **That total is PRE-DECISION and is superseded — corrected 2026-08-02 from a measured corpus run.**
+    > The full production path retains **34,767,501** ways, which is **+2,727**. The difference is not a
+    > discrepancy: it is exactly the set-difference ways *this table below decides to retain*, and it
+    > reconciles to the digit. `area:highway` 2,403 + `destroyed:` 278 + `was:` 15 + `former:` 25 +
+    > `removed:` 3 + `disabled:` 3 = **2,727 retained**, plus `not:highway` 13 **excluded** = **2,740**,
+    > the total set difference stated above. So `34,764,774 + 2,727 = 34,767,501`.
+    >
+    > The census figure was recorded and then never updated by the very table that follows it, and
+    > `forecast/osm_normalise.py`'s docstring inherited it. Both now carry the post-decision total.
+    > Evidence: `forecast/artifacts/osm_corpus_two_pass_evidence.json`.
     The exact **set difference** — ways a suffix predicate retains that the frozen predicate does not —
     is **2,740**. That difference is the only population whose retention actually changes; a way carrying
     `source:highway` *and* `highway` is retained either way. (My first attempt at this accounting counted
@@ -449,14 +460,34 @@ but no criterion, which is not a gate.
 
 | condition | ceiling | measured on `indonesia-220101`, fully validating | |
 |---|---|---|---|
-| `indonesia-220101` **production path**, pass 1 | ≤ 45 min | **14.3 min** (859.7 s) | PASS |
-| projected corpus wall-clock, **both passes** (§2.2) | ≤ 12 h | *EXTRAPOLATED, not measured* | **NOT ASSESSED** |
-| peak commit charge (`PrivateUsage`) | ≤ 50 % of machine RAM (17.0 GB) | **5.45 GB (16.0 %)** — pass 1 only | PASS, pass 1 |
-| peak commit charge **with `S` resident** (pass 2) | ≤ 17.0 GB | *never measured* | **NOT ASSESSED** |
+**GATE SATISFIED 2026-08-02 — `authorises_corpus_run = True`.** Measured over **all 36 extracts, both
+passes**, through the production path, evidence at
+`forecast/artifacts/osm_corpus_two_pass_evidence.json`:
+
+| condition | ceiling | **measured (full corpus)** | |
+|---|---|---|---|
+| parser wall-clock, pass 1 (worst file) | ≤ 45 min | **13.0 min** — `indonesia-220101` | PASS |
+| corpus wall-clock, **both passes** (§2.2) | ≤ 12 h | **1.36 h** (72.0 min + 9.5 min) — **measured, not projected** | PASS |
+| peak commit charge (`PrivateUsage`), pass 1 | ≤ 14.0 GB authorisation | **5.49 GB** — `indonesia-220101` | PASS |
+| peak commit charge **with `S` resident** (pass 2) | ≤ 14.0 GB | **5.52 GB** — `indonesia-220101`, `S` = 31,900 pairs | PASS |
 | peak working set *(observability only)* | — | 6.17 GB | not a gate |
-| geometry availability | 100 % of retained ways | **100 %** (4,839,240 / 4,839,240) | PASS |
-| ways with a missing or invalid node location | 0 | **0** | PASS |
+| geometry availability | ≥ 0.99999 *(see below)* | **0.999997764** — `indonesia-200101`, **8 unbuildable** corpus-wide | PASS |
+| ways with a missing or invalid node location | 0 | **0** across 34,767,501 retained ways | PASS |
 | temporary index disk | n/a — no index file | 0 bytes | PASS |
+
+> **The geometry ceiling was moved from 1.0, by owner ruling, and that is why this row passes.** The
+> corpus does not reach 100 % under the row's strict reading: `indonesia-200101` carries **8
+> highway-tagged ways with exactly one node** out of 3,577,130 — their locations resolve, and they still
+> form no `LineString`. The original "100 %" was measured by a harness that never built geometry, so it
+> meant *every node location resolved*, which is the row beneath it; these 8 ways satisfy that and always
+> did. Rather than relax the row into a duplicate of its neighbour, the definition stays strict, the floor
+> moves to **0.99999** (~4.5× headroom over the worst real observation, so a genuine regression still
+> fails), and the **absolute dropped count is reported on the condition** so it cannot be absorbed
+> silently as the corpus grows.
+>
+> This is also round-4 #4 vindicated with data — *"one file passing does not order the other 35."*
+> `indonesia-220101`, the only file ever measured before, passes this row at 1.0; the file that does not
+> had never been measured.
 
 > **These are production-path numbers as of 2026-08-02, and they REPLACE the parser-only figures rather
 > than improve on them** (`d93c064`; evidence artifact

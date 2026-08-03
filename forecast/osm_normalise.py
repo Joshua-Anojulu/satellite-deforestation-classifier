@@ -14,6 +14,15 @@ depends on the choice.  An earlier table frozen from only five extracts was
 missing four standard lifecycle prefixes (`destroyed:`, `former:`, `removed:`,
 `disabled:`), which would have **silently dropped 309 ways**.
 
+**34,764,774 is the PRE-DECISION census total, and this predicate retains more.**
+Measured over the full corpus on the production path (2026-08-02):
+**34,767,501**, which is `34,764,774 + 2,727` -- exactly the set-difference ways
+the table below decides to **retain** (`area:` 2,403, `destroyed:` 278, `was:`
+15, `former:` 25, `removed:` 3, `disabled:` 3), the remaining 13 of the 2,740
+being `not:highway`, which is excluded.  The census figure was recorded and never
+updated by the decisions taken beneath it; both numbers are correct for what they
+count, and only the second describes what this module actually retains.
+
 **The assertion is on KEY MEMBERSHIP, not on predicate equality.**  Comparing a
 frozen predicate against a `:highway`-suffix reference predicate compares two
 *booleans*, so a way carrying `mystery:highway` **and** an ordinary `highway` tag

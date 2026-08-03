@@ -1,5 +1,5 @@
 {
-  "authorises_corpus_run": false,
+  "authorises_corpus_run": true,
   "closure": {
     "digest": "3a0705d4a62e727a444dfd33c30f8e5d9cc1afe020a60b2fc524521e7deacf4d",
     "files": [
@@ -574,7 +574,7 @@
       "region:peru-2022": "b3280cb05fc0825b3190580979ed34ec5e66bf73e83d70a26dbea7f23d7e65cf",
       "stage": "7c5c5c5a680afbfc16258f0ea002545ebd660ab257d91a306fa3318fa943ed12"
     },
-    "parser_source_sha256": "78d919b56ed22a99fbf552a51c5b88157acc32fd44eee41058a36f62cbd77be9"
+    "parser_source_sha256": "1d7f23fd0a7f1d8e4bedc16b2b9d2d02e23f76e0fd5b6cb094d1bce7b55982b7"
   },
   "files": [
     {
@@ -1118,6 +1118,6 @@
       "wall_clock_s": 83.36310560000129
     }
   ],
-  "generation": 2,
+  "generation": 3,
   "not_assessed": []
 }

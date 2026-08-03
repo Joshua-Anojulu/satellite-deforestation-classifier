@@ -59,6 +59,28 @@ from forecast.memory_supervisor import (
 PARSER_WALL_CLOCK_CEILING_S = 45 * 60
 CORPUS_WALL_CLOCK_CEILING_S = 12 * 3600
 
+#: Geometry availability floor, and why it is not 1.0 (owner ruling, 2026-08-02).
+#:
+#: The row was written as "100 % of retained ways" against a figure produced by a
+#: harness that never built geometry -- its 100 % meant *every node location
+#: resolved*, which is the row immediately below this one.  Measured on the full
+#: production path, the corpus does **not** reach 100 % under the stricter
+#: reading: `indonesia-200101` carries **8 highway-tagged ways with exactly one
+#: node**, out of 3,577,130.  Their locations resolve; they cannot form a
+#: `LineString`.
+#:
+#: Keeping the row strict and the ceiling at 1.0 would block the corpus run on 8
+#: ways in 34.7 M that no spatial operation could ever use.  Relaxing the row to
+#: mean "locations resolved" would make it a duplicate of the next row and hide
+#: the drop.  So the definition stays strict and the ceiling moves, with the
+#: **absolute dropped count reported on the condition** so a change is visible
+#: rather than absorbed.
+#:
+#: Worst observed: 0.999997764 (8 / 3,577,130).  The floor gives ~4.5x headroom
+#: over that, so a real regression still fails.
+GEOMETRY_AVAILABILITY_FLOOR = 0.99999
+WORST_OBSERVED_GEOMETRY_AVAILABILITY = 8 / 3_577_130
+
 #: The file the parser measurement was taken on.
 REFERENCE_FILE = "indonesia-220101"
 
@@ -111,6 +133,16 @@ class FileCounters:
         if not self.retained_ways:
             return 1.0
         return self.ways_with_complete_geometry / self.retained_ways
+
+    @property
+    def unbuildable_ways(self) -> int:
+        """Retained ways whose locations resolved but which form no `LineString`.
+
+        Reported as an absolute count beside the ratio, because a ratio alone
+        shrinks as the corpus grows and would eventually hide a real increase.
+        """
+
+        return self.retained_ways - self.ways_with_complete_geometry
 
 
 @dataclass(frozen=True)
@@ -271,17 +303,24 @@ def evaluate_gate(
     )
 
     worst_geometry = min(files, key=lambda f: f.geometry_availability)
+    dropped = sum(f.unbuildable_ways for f in files)
     conditions.append(
         GateCondition(
             name="geometry availability",
-            ceiling=1.0,
+            ceiling=GEOMETRY_AVAILABILITY_FLOOR,
             observed=worst_geometry.geometry_availability,
             outcome=(
                 Outcome.PASS
-                if worst_geometry.geometry_availability >= 1.0
+                if worst_geometry.geometry_availability >= GEOMETRY_AVAILABILITY_FLOOR
                 else Outcome.FAIL
             ),
-            note=f"{worst_geometry.name}",
+            # The absolute count is on the condition deliberately: a ratio floor
+            # alone would let a growing number of dropped ways pass unnoticed on
+            # a growing corpus.
+            note=(
+                f"{worst_geometry.name}; {worst_geometry.unbuildable_ways} unbuildable "
+                f"in that file, {dropped} across the run"
+            ),
         )
     )
 
